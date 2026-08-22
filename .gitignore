@@ -1,0 +1,14 @@
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
+renv/library/
+renv/local/
+renv/staging/
+renv/python/
+renv/sandbox/
+
+.Renviron
+.env
+.env.*
+.claude/
