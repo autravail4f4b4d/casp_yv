@@ -40,6 +40,11 @@ edition is PSA's current one or an archived reference.
 
 ## 3. Screen/view inventory
 
+> **Visual system:** the unified design approved in
+> `unified-app-primary.dc.html` / `HANDOFF-CLAUDE-CODE.md` is implemented.
+> Visible tab labels changed; `main_nav` values did not. See §16 for the
+> label mapping and §17 for the visual system.
+
 | Screen | Status |
 |---|---|
 | Search | Implemented — also serves as Browse (spec section 5.2 chose to combine them into one screen) |
@@ -71,12 +76,13 @@ server logic in the same change.
 | ID | Type | Meaning |
 |---|---|---|
 | `classification_system` | input (select) | Selected system id (`psgc`, `psic`, `psoc`, `psced`, `pcoicop`, `pcpc`, `psccs`) |
-| `classification_version` | input (select) | Selected edition/release id for the current system |
+| `classification_version` | input (**radioButtons**) | Selected edition/release id for the current system. Rendered as a radio group so every edition and its Current/Archived status is visible at once — this is where Browse/Archive lives, so archived editions must not be hidden inside a closed dropdown. The ID and the value it yields are unchanged; only the widget type differs, so `app.R` updates it with `updateRadioButtons()` (rich `choiceNames` carrying the status badge, plain `choiceValues`) rather than `updateSelectInput()` |
 | `classification_level` | input (select) | Selected hierarchy level id, or `""` (the "All levels" sentinel, `ALL_LEVELS_VALUE` in `app.R`) |
 | `classification_query` | input (text) | Free-text search query; blank = browse |
 | `classification_results` | output (DT table) | Results table; row selection drives the detail card |
 | `selected_entry` | output (uiOutput) | The "Selected entry" detail card body |
-| `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"about"` |
+| `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"rm_assistant"` / `"about"` |
+| `classification_result_count` | output (uiOutput) | Result count above the results table; reads the same reactive as the table so the two can never disagree |
 | `sources_panel` | output (uiOutput) | The About/Data Sources panel body |
 | `dual_search_query` | input (text) | Shared query searched against both PSOC and PSIC |
 | `dual_search_psoc_version` | input (select) | PSOC edition for the dual-search panel (default: current, "2022") |
@@ -397,3 +403,99 @@ support this; switching `classification_version` between `"2022"` and
 - Claude Design must not have to invent any of the above statistical or
   provenance semantics — restyle the badges, cards, and arrows freely, but
   the underlying facts they display come entirely from the service layer.
+
+## 16. Visible labels vs. `main_nav` values (unified UI milestone)
+
+Presentation labels changed; navigation identities did **not**. Every
+`req(input$main_nav == ...)` gate in `app.R` is unchanged, and every
+bookmarkable value is stable.
+
+| `main_nav` value | Visible label | Previous label |
+|---|---|---|
+| `search` | Search | Search |
+| `dual_search` | PSOC + PSIC | Dual Search |
+| `correspondence` | Compare Editions | Compare PSIC Editions |
+| `rm_assistant` | RM Assistant | RM Assistant |
+| `about` | Sources | About / Data Sources |
+
+Browse/Archive remains **not** a separate value — it is expressed inside
+`search` by the edition control + level select + blank-query browse.
+
+## 17. Visual system (unified UI milestone)
+
+Implemented in `www/app.css` against the approved dark ("nocturne")
+direction. Theme colours are set on `bslib::bs_theme()` in `app.R`
+(`bg`/`fg`/`primary`/`card-bg`) so every Bootstrap component — form
+controls, cards, tables, DT — inherits a coherent dark palette rather than
+needing per-component overrides.
+
+**Two colours carry meaning and are never decorative:**
+
+- **accent** (teal) — current edition, verified result, active nav.
+- **ochre** (`oklch(0.66 0.125 70)` line / `oklch(0.80 0.10 70)` text) —
+  archived edition, caution, statistical-safety warning. Used as line,
+  border and text only; **never as a background flood**.
+
+Both always ship with visible text (`Current` / `Archived`), satisfying
+§10's "status conveyed through text, not colour alone".
+
+**Icons.** Phosphor, but **vendored locally** at `www/Phosphor.woff2` with
+only the eleven glyphs the design uses declared in `app.css` — not loaded
+from a CDN. A public government-facing deployment should not make a
+third-party request per visitor or disclose visitor IPs to unpkg, and the
+app must work on restricted networks. Every icon is paired with a visible
+text label, so a failed font load degrades to readable text.
+
+**Key metrics** (from the handoff): Search hero input `min-height: 56px` /
+`font-size: 19px` / `padding-left: 46px`, max-width 820px centred; sidebar
+260px; results/detail `1fr : 380px`. On mobile the hero drops to 50px/16px
+— 16px is the iOS zoom-on-focus floor and must not be reduced.
+
+**Breakpoints** — bslib/Bootstrap 5 defaults plus a 375px floor. No others
+were invented. ≥992px desktop; 576–991px tablet (single-column Search body);
+≤575px mobile (single column, hero shrinks, correspondence row stacks with
+the arrow rotated, reserved Ask RM slots hidden).
+
+**Mobile navigation.** bslib's collapsible top nav, restyled. This is the
+fallback the handoff explicitly permits (§5) rather than the bottom tab
+bar; it sets the same five `main_nav` values through the same mechanism,
+and its links measure ~275×53px. The toggler is floored at 44×44px.
+
+### Reserved "Ask RM" slots — inert, and must stay inert
+
+Two positions (Search detail header; Compare Editions relationship-detail
+header) render `<span class="psa-askrm-reserved" aria-hidden="true">`.
+They are **not** `<a>`/`<button>`, carry no `tabindex`, no cursor
+affordance and no hover state, and are confirmed absent from the
+accessibility tree. An inert-but-focusable control would be a worse
+accessibility outcome than omitting it.
+
+Their text is deliberately kept at the design's 35% opacity (2.94:1),
+below WCAG AA — permissible only because the element is `aria-hidden` and
+conveys no content. **When these are wired into real controls they must
+gain button semantics AND be raised to at least 50% opacity (4.76:1).**
+
+### Focus visibility
+
+2px accent outline at 2px offset on every interactive element, via
+`:focus-visible`. Marked `!important` because Bootstrap ships
+`.form-control:focus { outline: 0 }`, which outranks a bare element
+selector — a visible focus indicator is an accessibility requirement and
+must not be silently removable by a component library's reset.
+
+### Measured contrast (against `#0f1119`)
+
+| Token | Ratio | Verdict |
+|---|---|---|
+| Body text | 16.29:1 | AAA |
+| accent-300 | 11.95:1 | AAA |
+| accent | 8.62:1 | AAA |
+| Archived ochre text | 9.96:1 | AAA |
+| Muted 62% / 55% | 6.74 / 5.51:1 | AA |
+| Muted 45% | 4.08:1 | **fails AA — not used for content** |
+
+The design's "~45% opacity" helper text measured 4.08:1, under AA for
+normal-size text (13px is not "large"). It was raised to 55% wherever it
+carries content — an intentional, documented divergence from the handoff's
+exact opacity value, taken because the handoff also requires WCAG-conscious
+states and accessibility wins the tie.

@@ -1,34 +1,62 @@
-# Dual Search screen — one query, independent PSOC (occupations) and PSIC
-# (industries) result panels. Presentation only; all ranking/version/
-# failure-isolation logic lives in R/parallel_search.R and
-# R/repository.R.
+# PSOC + PSIC screen (main_nav value "dual_search", relabelled from
+# "Dual Search" per HANDOFF §2) — one query, two INDEPENDENT result sets.
 #
-# Stable IDs defined here: dual_search_query, dual_search_psoc_version,
-# dual_search_psic_version, dual_search_psoc_results, dual_search_psic_results.
+# PRESENTATION ONLY. All ranking, version handling and per-system failure
+# isolation live in R/parallel_search.R and R/repository.R.
+#
+# Stable IDs, unchanged: dual_search_query, dual_search_psoc_version,
+# dual_search_psic_version, dual_search_psoc_results,
+# dual_search_psic_results, dual_search_psoc_state, dual_search_psic_state.
+#
+# The two panel headings "Occupations — PSOC" and "Industries — PSIC" are
+# MANDATORY and must not be removed or reworded (docs/UI_CONTRACT.md §14).
+# The visual design unifies presentation, but the two systems remain
+# semantically and technically independent: a PSOC code never implies a
+# PSIC code, and neither determines the other.
+
 dual_search_ui <- function() {
-  bslib::layout_sidebar(
-    sidebar = bslib::sidebar(
-      title = "Search occupations and industries",
-      width = 300,
-      shiny::textInput(
-        "dual_search_query", "Search",
-        placeholder = "e.g. accountant, software developer, farmer"
+  shiny::tagList(
+    shiny::tags$div(
+      class = "psa-hero",
+      style = "align-items: flex-start; padding-bottom: 8px;",
+      shiny::tags$h2(
+        style = "margin: 0 0 6px; font-size: 20px;",
+        "PSOC + PSIC"
       ),
-      shiny::helpText(
-        "One query searches PSOC (occupations) and PSIC (industries) at ",
-        "the same time, as two independent result sets. A PSOC code and a ",
-        "PSIC code are never the same kind of thing -- see the note below."
-      ),
-      shiny::tags$hr(),
-      shiny::selectInput("dual_search_psoc_version", "PSOC edition", choices = NULL),
-      shiny::selectInput("dual_search_psic_version", "PSIC edition", choices = NULL)
+      shiny::tags$p(
+        class = "psa-dual-intro",
+        "One query, searched against both systems at once — occupation ",
+        "(PSOC) on the left, industry (PSIC) on the right. ",
+        shiny::tags$strong("They never determine each other.")
+      )
     ),
+
+    shiny::tags$div(
+      style = "max-width: 640px; margin-bottom: 22px;",
+      shiny::textInput(
+        "dual_search_query",
+        "Search occupations and industries together",
+        placeholder = "e.g. accountant, software developer, farmer",
+        width = "100%"
+      )
+    ),
+
     bslib::layout_columns(
       col_widths = c(6, 6),
       bslib::card(
-        bslib::card_header("Occupations — PSOC"),
         bslib::card_body(
-          shiny::p(
+          shiny::tags$div(
+            class = "psa-panel-head",
+            shiny::tags$h6("Occupations — PSOC"),
+            shiny::tags$div(
+              style = "min-width: 150px;",
+              shiny::selectInput(
+                "dual_search_psoc_version", NULL,
+                choices = NULL, width = "100%"
+              )
+            )
+          ),
+          shiny::tags$p(
             class = "text-muted small",
             "PSOC classifies the kind of work a person does."
           ),
@@ -37,9 +65,19 @@ dual_search_ui <- function() {
         )
       ),
       bslib::card(
-        bslib::card_header("Industries — PSIC"),
         bslib::card_body(
-          shiny::p(
+          shiny::tags$div(
+            class = "psa-panel-head",
+            shiny::tags$h6("Industries — PSIC"),
+            shiny::tags$div(
+              style = "min-width: 150px;",
+              shiny::selectInput(
+                "dual_search_psic_version", NULL,
+                choices = NULL, width = "100%"
+              )
+            )
+          ),
+          shiny::tags$p(
             class = "text-muted small",
             "PSIC classifies the primary economic activity of an establishment or enterprise."
           ),
@@ -48,10 +86,11 @@ dual_search_ui <- function() {
         )
       )
     ),
+
     shiny::tags$p(
       class = "text-muted small mt-2",
       shiny::tags$strong("Occupations and industries are not the same classification. "),
-      "A PSOC code never implies an equivalent PSIC code, and vice versa -- ",
+      "A PSOC code never implies an equivalent PSIC code, and vice versa — ",
       "they describe different things (what a person does vs. what an ",
       "establishment does)."
     )

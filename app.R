@@ -15,9 +15,37 @@ library(bslib)
 
 ALL_LEVELS_VALUE <- ""  # sentinel for the "All levels" select choice
 
+#' Tab label: Phosphor glyph + visible text.
+#'
+#' The icon is decorative and `aria-hidden`; the visible text is the tab's
+#' accessible name. bslib's navset supplies the role="tab"/aria-selected
+#' semantics around this, which the restyle preserves.
+nav_label <- function(icon, text) {
+  shiny::tagList(
+    shiny::tags$i(class = paste("ph", icon), `aria-hidden` = "true"),
+    text
+  )
+}
+
 ui <- bslib::page_navbar(
-  title = "PSA Statistical Classifications Search",
-  theme = bslib::bs_theme(version = 5),
+  title = "Statistical Classifications",
+  # Dark ("nocturne") theme from the approved design. Setting bg/fg/primary
+  # on bs_theme rather than overriding a light Bootstrap in CSS means every
+  # Bootstrap component -- form controls, cards, tables, DT -- inherits a
+  # coherent dark palette instead of needing per-component overrides.
+  theme = bslib::bs_theme(
+    version = 5,
+    bg = "#0f1119",
+    fg = "#eef0f7",
+    primary = "#3ec8d0",
+    "body-bg" = "#0f1119",
+    "card-bg" = "#151824",
+    # System font stack deliberately -- no webfont download, so the app has
+    # no third-party runtime dependency and no first-paint font swap.
+    base_font = bslib::font_collection(
+      "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"
+    )
+  ),
   # `id` makes the active tab available server-side as `input$main_nav`,
   # a real, reliably-updating Shiny input -- unlike Shiny's implicit
   # per-output suspend/resume-on-visibility mechanism, which was found to
@@ -29,9 +57,19 @@ ui <- bslib::page_navbar(
   # throughout this server function instead.
   id = "main_nav",
   header = shiny::tags$head(shiny::tags$link(rel = "stylesheet", href = "app.css")),
-  bslib::nav_panel("Search", value = "search", search_ui()),
-  bslib::nav_panel("Dual Search", value = "dual_search", dual_search_ui()),
-  bslib::nav_panel("Compare PSIC Editions", value = "correspondence", correspondence_ui()),
+  # Visible tab LABELS change per HANDOFF §2; the `value =` identities that
+  # drive input$main_nav are deliberately untouched, so every existing
+  # req(input$main_nav == ...) gate below keeps working unchanged.
+  #
+  # nav_label() pairs each label with its Phosphor glyph. The icon is
+  # aria-hidden -- the visible text is the accessible name, so the tab is
+  # never announced as an icon and never relies on the glyph loading.
+  bslib::nav_panel(nav_label("ph-magnifying-glass", "Search"),
+                   value = "search", search_ui()),
+  bslib::nav_panel(nav_label("ph-arrows-left-right", "PSOC + PSIC"),
+                   value = "dual_search", dual_search_ui()),
+  bslib::nav_panel(nav_label("ph-arrows-split", "Compare Editions"),
+                   value = "correspondence", correspondence_ui()),
   # RM Assistant. Which panel body is built is decided ONCE at startup from
   # the deployment's provider configuration: a deployment either has a
   # working assistant configuration or it does not (spec 21). When it does
@@ -39,7 +77,7 @@ ui <- bslib::page_navbar(
   # completely unaffected -- that independence is the whole point, and is
   # asserted by tests/testthat/test-assistant-integration.R.
   bslib::nav_panel(
-    "RM Assistant", value = "rm_assistant",
+    nav_label("ph-sparkle", "RM Assistant"), value = "rm_assistant",
     local({
       st <- rm_assistant_status()
       if (isTRUE(st$enabled) && isTRUE(st$available)) {
@@ -49,7 +87,8 @@ ui <- bslib::page_navbar(
       }
     })
   ),
-  bslib::nav_panel("About / Data Sources", value = "about", shiny::uiOutput("sources_panel")),
+  bslib::nav_panel(nav_label("ph-info", "Sources"),
+                   value = "about", shiny::uiOutput("sources_panel")),
   footer = shiny::tags$footer(
     class = "text-muted small p-2 border-top mt-2",
     "Source: Philippine Statistics Authority (PSA). This is a read-only reference tool; PSA is the authoritative classification source."
@@ -65,11 +104,35 @@ server <- function(input, output, session) {
   updateSelectInput(session, "classification_system", choices = system_choices, selected = system_choices[[1]])
 
   # --- Edition/release choices follow the selected system. ---
+  #
+  # Rendered as a radio group (approved design) rather than a select, so
+  # every available edition AND its current/archived status are visible at
+  # once -- this is where Browse/Archive lives, so hiding the archived
+  # editions behind a closed dropdown would bury the feature.
+  #
+  # The input ID and the value it yields are unchanged; only the widget
+  # type differs, hence updateRadioButtons() here instead of
+  # updateSelectInput(). choiceNames carries rich HTML (edition + status
+  # badge) while choiceValues stays the plain version string the whole
+  # service layer already expects.
   observeEvent(input$classification_system, {
     req(input$classification_system)
     versions <- classification_versions(input$classification_system)
     current <- registry$current_version[registry$id == input$classification_system][[1]]
-    updateSelectInput(session, "classification_version", choices = versions, selected = current)
+
+    choice_names <- lapply(versions, function(v) {
+      shiny::tagList(
+        shiny::tags$span(class = "psa-edition-name", v),
+        status_badge(if (identical(v, current)) "current" else "archived")
+      )
+    })
+
+    updateRadioButtons(
+      session, "classification_version",
+      choiceNames = choice_names,
+      choiceValues = as.list(versions),
+      selected = current
+    )
   }, ignoreNULL = TRUE)
 
   # --- Level choices follow the selected system+version. Resetting to
@@ -86,7 +149,7 @@ server <- function(input, output, session) {
     # version "2022" arriving while classification_system still reads
     # "psgc"). classification_levels() would otherwise raise an uncaught
     # validation error and crash this observer. Silently skip: the
-    # system-change observer's own updateSelectInput() call will shortly
+    # system-change observer's own updateRadioButtons() call will shortly
     # settle classification_version (and re-trigger this observer) to a
     # value that's actually valid for the current system.
     if (!input$classification_version %in% classification_versions(input$classification_system)) {
@@ -116,6 +179,18 @@ server <- function(input, output, session) {
       query = query_debounced(),
       level = current_level(),
       limit = 200
+    )
+  })
+
+  # Result count above the table (approved design). Reads the same
+  # reactive as the table itself, so the two can never disagree.
+  output$classification_result_count <- renderUI({
+    n <- nrow(results())
+    tags$div(
+      class = "psa-result-count",
+      tags$strong(format(n, big.mark = ",")),
+      if (n == 1L) " result" else " results",
+      if (!nzchar(trimws(query_debounced() %||% ""))) " · browsing" else NULL
     )
   })
 

@@ -1,10 +1,11 @@
 # Implementation Status — PSA Statistical Classifications Search
 
-> **Latest milestone: RM Classification Assistant** — see
-> [RM Assistant Status](#rm-assistant-status) and the sections after it.
-> Regression: **1103 / 1103 passing** (previous baseline 485).
+> **Latest milestone: Unified visual redesign** — see
+> [Unified UI milestone](#unified-ui-milestone) at the end of this document.
+> Regression: **1103 / 1103 passing**, unchanged from the pre-redesign
+> baseline (presentation-only milestone; no functional tests added).
 
-This document covers **three milestones**:
+This document covers **four milestones**:
 
 1. The original functionality-first MVP (`PSA_CLASSIFICATIONS_4_HOUR_CLAUDE_CODE_BUILD.md`)
    — complete, preserved as the known-good baseline. See git commit
@@ -14,8 +15,10 @@ This document covers **three milestones**:
    PSOC 2022, parallel PSOC/PSIC search, and PSIC 2019↔Revision 5
    correspondence. Complete; committed as `23c4d6a`.
 3. The RM Classification Assistant
-   (`PSA_CLASSIFICATIONS_RM_ASSISTANT_INTEGRATION.md`) — the subject of
-   this update.
+   (`PSA_CLASSIFICATIONS_RM_ASSISTANT_INTEGRATION.md`). Complete;
+   committed as `c9dfbb5`.
+4. The unified visual redesign (`HANDOFF-CLAUDE-CODE.md` /
+   `unified-app-primary.dc.html`) — the subject of this update.
 
 ## Recovery from interrupted session
 
@@ -587,3 +590,198 @@ README.md              -- updated feature summary and rebuild commands
 No MVP files were destructively rewritten — every change above is either
 a new file or a narrow, targeted edit to an existing one, with the
 specific reason documented inline at each edit site.
+
+---
+
+# Unified UI milestone
+
+Presentation-only implementation of the approved design in
+`unified-app-primary.dc.html`, per `HANDOFF-CLAUDE-CODE.md`.
+
+## Audit before changes
+
+- Branch `feature/unified-ui`, clean tree, RM milestone committed (`c9dfbb5`).
+- **Baseline verified by execution: 1103 / 1103 passing**, 0 failures.
+- Both handoff artifacts present. The mockup references a design-system
+  stylesheet (`_ds/nocturne-.../styles.css`) that was **not** part of the
+  bundle, so token values were derived from the mockup's own inline usage
+  plus the values fixed explicitly in the handoff (archived ochre, hero
+  metrics, verified-card spec).
+- No contract mismatch found. Every change landed in `app.R`, `R/ui/*` and
+  `www/app.css` as the handoff intended; no adapter, repository, search,
+  correspondence or RM-grounding file was touched.
+
+## Files changed
+
+```
+app.R                      -- tab LABELS only (values untouched), dark
+                              bs_theme, nav_label() helper, edition radio
+                              group update, result-count output
+R/ui/ui_search.R           -- hero search, sidebar, reserved Ask RM slot,
+                              visually-hidden H2
+R/ui/ui_details.R          -- status vocabulary, detail panel, compact
+                              source line, verified-result card
+R/ui/ui_dual_search.R      -- restyle; mandatory panel headings preserved
+R/ui/ui_correspondence.R   -- 3-column relationship row, cardinality-aware
+                              arrows, provenance+confidence pairing,
+                              statistical warning, reserved Ask RM slot
+R/ui/ui_assistant.R        -- header badge, unavailable copy, aria-label on
+                              New chat, inert failure component
+R/ui/ui_sources.R          -- editions column, PSA authority statement,
+                              correspondence audit section
+www/app.css                -- full replacement with the new visual system
+www/Phosphor.woff2         -- NEW, vendored icon font (11 glyphs declared)
+docs/UI_CONTRACT.md        -- section 16 label mapping, section 17 visual system
+IMPLEMENTATION_STATUS.md
+```
+
+Not touched, as required: `R/schema.R`, `R/registry.R`, `R/repository.R`,
+`R/search.R`, `R/parallel_search.R`, `R/correspondence/*`, `R/adapters/*`,
+`R/assistant/*`, `prompts/`, `data/`, `data-raw/`, `tests/`.
+
+## Design elements implemented
+
+Five relabelled tabs (Search, PSOC + PSIC, Compare Editions, RM Assistant,
+Sources) over unchanged `main_nav` values; 56px hero search; 260px sidebar
+with the edition radio group; 1fr : 380px results/detail split; the single
+Current/Archived status vocabulary (accent fill vs. ochre outline, always
+with text); the verified-result card shared by Search and RM; the
+3-column correspondence row with split/merge iconography and the verbatim
+statistical-safety warning; both inert Ask RM slots; the dark theme applied
+through `bs_theme` so DT and Bootstrap components inherit it.
+
+## Intentional divergences from the handoff
+
+1. **Icons vendored, not CDN.** The mockup loads Phosphor from unpkg;
+   `www/Phosphor.woff2` is served locally instead. A public
+   government-facing app should not make a third-party request per visitor,
+   disclose visitor IPs to a CDN, or break on restricted networks. Visual
+   result is identical; every icon is paired with a text label so a font
+   failure degrades to readable text.
+2. **Muted text raised from ~45% to 55% where it carries content.** The
+   handoff's opacity measured 4.08:1, under WCAG AA for 13px text. The
+   handoff also mandates WCAG-conscious states, so accessibility won the
+   tie. The one deliberate exception is the Ask RM placeholder, kept at 35%
+   because it is `aria-hidden` and conveys no content — flagged in the UI
+   contract to be raised when wired.
+3. **Edition control is a radio group, not a select.** The approved design
+   shows radios with per-edition status; the handoff separately said "same
+   reactive wiring". Same input ID and same yielded value, so the service
+   contract is untouched — only `updateSelectInput()` became
+   `updateRadioButtons()`. PSGC's 13 releases scroll inside the bordered
+   group.
+4. **Mobile nav is the restyled collapsible top nav, not a bottom tab bar** —
+   explicitly permitted by handoff section 5 as a non-blocking fallback.
+5. **No webfont for body text** (system stack), for the same
+   no-third-party-request reason as the icons.
+
+## Test counts
+
+| Point | Result |
+|---|---|
+| Baseline before this milestone (verified by execution) | **1103 / 1103** |
+| After this milestone | **1103 / 1103**, 0 failures, 0 warnings, 0 skips |
+
+No tests were added or modified — this milestone changed presentation only,
+and `tests/` was off-limits per the handoff. One test
+(`test-assistant-integration.R`, degraded-state copy) initially failed
+because the redesigned unavailable panel reworded its message; rather than
+edit a forbidden file, the copy was written to carry both the design's
+guidance and the phrase the contract test asserts.
+
+## Browser UAT
+
+Verified live at desktop, 375px and 320px. Screenshots were unavailable in
+this environment (Browser pane not compositing), so verification was by DOM
+inspection, computed styles and the accessibility tree.
+
+| Check | Result |
+|---|---|
+| Five destinations render | Pass |
+| Hero metrics (56px / 19px / 46px) | Pass |
+| Blank-query browse | Pass — "200 results · browsing" |
+| Edition control, PSGC (13) and PSIC (2) | Pass — correct Current/Archived tags |
+| Archived edition selection | Pass — outlined ochre, transparent fill |
+| Classification detail | Pass — eyebrow, 40px code, PSA source line, rel=noopener |
+| Dual independent results | Pass — PSOC hit, PSIC independently "No results." |
+| Mandatory PSOC/PSIC headings | Pass |
+| Split correspondence | Pass — split icon, provenance+confidence, verbatim warning |
+| Reverse correspondence | Pass — 2026 to 2019, tags flipped |
+| RM disabled state | Pass |
+| RM static greeting | Pass — "Madayaw! I am RM.", no provider call |
+| Sources | Pass — PSA authority stated, all external links rel=noopener |
+| Mobile nav | Pass — 5 labels, ~275x53px, sets `main_nav` correctly |
+
+**Live provider RM behaviour was NOT tested** — no valid credentials. RM was
+exercised with a fake key, which verifies UI states only. No multilingual or
+grounding behaviour claims are made for this milestone.
+
+## RM mobile composer verification (the regression floor)
+
+| Viewport | Send button | Textarea | Overflow | A11y tree |
+|---|---|---|---|---|
+| 375px | 44x44, right 338 | 317px, `min-width: 0` | none | "Chat message" + "Send message" present |
+| 320px | 44x44, right 283 | 262px | none | both present |
+
+Both the `minmax(0, 1fr)` grid override and `min-width: 0` on the flex
+input are in place, as the handoff requires.
+
+## Regressions found and fixed during this milestone
+
+1. **Tabs lost their accessible names.** Wrapping the label in a `<span>`
+   alongside the aria-hidden icon suppressed accessible-name computation —
+   all five tabs read as unnamed. Fixed by using a direct text node;
+   re-verified all five are named.
+2. **RM composer pushed below the fold at 375px.** The card sized to its
+   content (966px against an 812px viewport), leaving the send control
+   reachable only by scrolling and absent from the in-view accessibility
+   tree — a softer recurrence of the original 375px bug. Fixed by capping
+   the card to `calc(100dvh - 150px)` so the transcript scrolls internally
+   and the composer stays anchored.
+3. **New chat clipped at 320px.** The long header descriptor pushed it to a
+   right edge of 415px inside a clipped card. Fixed by wrapping the header
+   and hiding that descriptor at phone width.
+4. **Focus ring suppressed by Bootstrap.** `.form-control:focus { outline: 0 }`
+   outranked the focus-visible rule, so keyboard focus was invisible on
+   inputs. Fixed with a higher-specificity `!important` rule; verified
+   `solid 2px` accent at 2px offset under real keyboard Tab.
+5. **Sub-AA muted text** (divergence 2 above).
+6. **Search panel had no top-level heading** — added a visually-hidden H2
+   so the heading hierarchy is not missing its first rung.
+
+## Accessibility findings
+
+Measured contrast against `#0f1119`: body 16.29:1, accent-300 11.95:1,
+accent 8.62:1, archived ochre 9.96:1, muted-55% 5.51:1 — all AA or better.
+Status is always conveyed by text as well as colour. Tabs keep bslib's
+`role="tab"` / `aria-selected` semantics. All inputs keep real `<label>`
+elements (the hero label is visually hidden, not removed). Icon-only and
+ambiguous controls carry `aria-label`. Tap targets are at least 44px,
+including the nav toggler which was floored from bslib's 40px. Reserved
+Ask RM slots are confirmed absent from the accessibility tree.
+`prefers-reduced-motion` is honoured.
+
+## Known limitations
+
+- No live provider RM evaluation (no credentials) — unchanged from the RM
+  milestone.
+- Mid-stream provider-failure surfacing remains unwired; the presentation
+  component now exists (`rm_assistant_failure_ui()`) but detection is still
+  blocked upstream (`docs/ASSISTANT_CONTRACT.md` section 12). Explicitly
+  deferred by handoff section 13.
+- Both Ask RM slots are inert by design; wiring is a future milestone.
+- Mobile navigation is the collapsible fallback, not the bottom tab bar.
+- Screenshots could not be captured in this environment; visual verification
+  was via DOM/computed-style/accessibility-tree inspection rather than by
+  eye. A human should still eyeball the result before public launch.
+
+## Staging-deployment readiness
+
+**Ready for staging on Posit Connect Cloud**, with the same caveats as
+before: `renv.lock` pins every dependency (no new R packages were added
+this milestone), the app makes no third-party runtime request, and RM stays
+off unless `RM_ASSISTANT_ENABLED` and a provider credential are set on the
+host (see `docs/DEPLOYMENT.md`). Two things should happen before a *public*
+launch rather than a staging one: a human visual review, and — if RM is to
+be enabled — a real provider key plus the live multilingual/grounding
+evaluation that has never been run.

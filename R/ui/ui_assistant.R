@@ -142,7 +142,44 @@ rm_assistant_new_chat_ui <- function(id = "rm_assistant") {
     ns("new_chat"),
     label = "New chat",
     class = "btn btn-outline-secondary btn-sm rm-assistant-new-chat",
-    title = "Clear this conversation and start a new chat"
+    title = "Clear this conversation and start a new chat",
+    # Explicit aria-label: the visible text already reads "New chat", but
+    # the title attribute alone would not be announced reliably, and
+    # docs/UI_CONTRACT.md §11 requires an accessible name on this control.
+    `aria-label` = "Clear this conversation and start a new chat"
+  )
+}
+
+#' Mid-stream provider-failure presentation (HANDOFF §9 / §13).
+#'
+#' INERT MARKUP, deliberately not rendered by the running app yet. The
+#' handoff defines this UX now so the layout exists, but wiring real
+#' failure detection to it is an unresolved upstream problem: shinychat
+#' 0.4.0 exposes no error hook on its chat module, and three separate
+#' surfacing approaches were tried and reverted (see
+#' docs/ASSISTANT_CONTRACT.md §12). Kept as a documented, ready component
+#' so the future backend fix is a wiring task, not a design task.
+#'
+#' @param message character(1). Non-technical text. Never a provider error
+#'   string or stack trace -- this is a public app.
+rm_assistant_failure_ui <- function(message = NULL) {
+  if (is.null(message)) {
+    message <- paste(
+      "RM could not finish that reply. Your question is still here."
+    )
+  }
+  shiny::tags$div(
+    class = "psa-rm-failure",
+    role = "status",
+    shiny::tags$i(class = "ph ph-warning", `aria-hidden` = "true"),
+    shiny::tags$div(
+      message,
+      shiny::tags$div(
+        class = "text-muted small",
+        style = "margin-top: 6px;",
+        "You can also search and browse every classification from the other tabs."
+      )
+    )
   )
 }
 
@@ -166,7 +203,17 @@ rm_assistant_ui <- function(id = "rm_assistant") {
     min_height = "60vh",
     bslib::card_header(
       class = "d-flex justify-content-between align-items-center gap-2 rm-assistant-header",
-      shiny::tags$h2("RM Assistant", class = "h5 mb-0"),
+      shiny::tags$div(
+        class = "psa-rm-badge-row",
+        style = "margin-bottom: 0;",
+        shiny::tags$h2("RM Assistant", class = "h5 mb-0"),
+        # States RM's standing plainly and permanently: it reads the same
+        # verified data Search does and is never itself an authority.
+        shiny::tags$span(
+          class = "psa-tag psa-tag-neutral",
+          "Assistant · reads verified data only, never a source itself"
+        )
+      ),
       rm_assistant_new_chat_ui(id)
     ),
     bslib::card_body(
@@ -219,6 +266,7 @@ rm_assistant_unavailable_ui <- function(reason = NULL) {
     ),
     bslib::card_body(
       shiny::tags$div(
+        class = "psa-rm-unavailable",
         role = "region",
         `aria-label` = "RM Assistant availability",
         # State is carried by the text, never by colour alone.
@@ -226,10 +274,13 @@ rm_assistant_unavailable_ui <- function(reason = NULL) {
           class = "mb-2",
           shiny::tags$strong("RM Assistant is temporarily unavailable.")
         ),
+        # Wording carries the approved design's guidance (name the tabs
+        # that still work) while keeping the "still search and browse"
+        # reassurance the UI contract's degraded-state test asserts.
         shiny::tags$p(
           class = "mb-2",
-          "You can still search and browse all classifications using the ",
-          "main application."
+          "Use Search, PSOC + PSIC or Compare Editions above — you can ",
+          "still search and browse every classification without the assistant."
         ),
         if (reason_ok) {
           shiny::tags$p(class = "text-muted small mb-0", trimws(reason))

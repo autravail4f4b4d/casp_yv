@@ -1,55 +1,784 @@
-/* Minimal, semantic-only styling for the functionality-first MVP.
-   Intentionally small: Claude Design owns the visual pass and may replace
-   or extend this file freely without touching any R/ code. */
+/* =========================================================================
+   PSA Statistical Classifications Search — unified visual system
+   Implements the approved design in unified-app-primary.dc.html per
+   HANDOFF-CLAUDE-CODE.md.
 
-dl.row dt {
+   PRESENTATION ONLY. Nothing here changes classification, search, version,
+   correspondence or RM grounding behavior. Stable Shiny input/output IDs
+   are documented in docs/UI_CONTRACT.md and are untouched by this file.
+
+   Two colors carry meaning and are not decorative:
+     accent  -> "current" edition / verified / active nav
+     ochre   -> "archived" edition / caution / statistical-safety warning
+   Both are ALWAYS paired with visible text (never color alone), per
+   docs/UI_CONTRACT.md §10.
+   ========================================================================= */
+
+/* ---- Phosphor icons, vendored locally -----------------------------------
+   The approved mockup pulls Phosphor from unpkg. Vendored here instead so a
+   public deployment makes no third-party request per visitor (no CDN
+   dependency, no visitor IP disclosed to unpkg, works on restricted
+   networks). Only the ten glyphs the design actually uses are declared.
+   Every icon in this app is paired with a visible text label, so even a
+   failed font load degrades to readable text rather than a blank square. */
+@font-face {
+  font-family: "Phosphor";
+  src: url("Phosphor.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.ph {
+  font-family: "Phosphor" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ph-magnifying-glass:before { content: "\e30c"; }
+.ph-arrows-left-right:before { content: "\e0a0"; }
+.ph-arrows-split:before      { content: "\ed3c"; }
+.ph-arrows-merge:before      { content: "\ed3e"; }
+.ph-sparkle:before           { content: "\e6a2"; }
+.ph-info:before              { content: "\e2ce"; }
+.ph-check-circle:before      { content: "\e184"; }
+.ph-warning:before           { content: "\e4e0"; }
+.ph-arrow-up:before          { content: "\e08e"; }
+.ph-stop:before              { content: "\e46c"; }
+.ph-arrow-clockwise:before   { content: "\e036"; }
+
+/* ---- Design tokens ------------------------------------------------------
+   The mockup referenced a design-system stylesheet that was not part of the
+   handoff bundle, so the token values below are derived from the mockup's
+   own inline usage and the explicit values fixed in HANDOFF-CLAUDE-CODE.md
+   (§8 archived ochre, §4 hero metrics, §7 verified card). */
+:root {
+  --color-bg:        #0f1119;
+  --color-surface:   #151824;
+  --color-text:      oklch(0.95 0.012 255);
+
+  --color-accent:      oklch(0.74 0.125 195);
+  --color-accent-300:  oklch(0.84 0.095 195);
+  --color-accent-800:  oklch(0.45 0.085 195);
+
+  /* Reserved exclusively for archived-state signalling: line, border and
+     text only, never a background flood (design system's "accent as line,
+     not flood" rule, extended to this second semantic color). */
+  --color-archived-line: oklch(0.66 0.125 70);
+  --color-archived-text: oklch(0.80 0.10 70);
+
+  --color-divider: color-mix(in srgb, var(--color-text) 12%, transparent);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 26px;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--color-bg);
+  font-family: var(--font-body);
+}
+
+.mono,
+.psa-code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Focus visibility (docs/UI_CONTRACT.md §11) -------------------------
+   2px accent outline with 2px offset on EVERY interactive element,
+   including nav items and starter chips — never the browser default ring.
+   :focus-visible (not :focus) so pointer users don't get a ring on click
+   while keyboard users always do.
+
+   Bootstrap ships `.form-control:focus { outline: 0 }` and similar
+   outline-suppressing rules that outrank a bare element selector, so the
+   outline is marked !important here. A visible focus indicator is an
+   accessibility requirement, not a stylistic preference -- it must not be
+   silently removable by a component library's own reset. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.nav-link:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.rm-assistant-card .suggestion:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Status vocabulary (one set, used identically everywhere) -----------
+   Search, PSOC + PSIC, Compare Editions, Sources and the RM verified card
+   all use these two classes so no surface can imply a different authority
+   than another. */
+.psa-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.psa-tag-current {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent-300);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 34%, transparent);
+}
+
+/* Outlined only — never filled. */
+.psa-tag-archived {
+  background: transparent;
+  border: 1px solid var(--color-archived-line);
+  color: var(--color-archived-text);
+}
+
+.psa-tag-neutral {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  border: 1px solid transparent;
+}
+
+/* ---- Top navigation -----------------------------------------------------
+   Restyle of bslib's navset. The underlying navset markup, its
+   role="tablist"/role="tab"/aria-selected semantics and its main_nav
+   wiring are preserved exactly — only appearance changes. */
+.navbar {
+  background: var(--color-bg) !important;
+  border-bottom: 1px solid var(--color-divider);
+  padding-block: 0;
+}
+
+.navbar-brand {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text) !important;
+  padding-block: 14px;
+}
+
+.navbar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent) !important;
+}
+
+.navbar .nav-link:hover {
+  color: color-mix(in srgb, var(--color-text) 80%, transparent) !important;
+}
+
+/* Active state is carried by color AND the underline AND aria-current /
+   aria-selected — never by color alone. */
+.navbar .nav-link.active {
+  color: var(--color-text) !important;
+  border-bottom-color: var(--color-accent);
+  background: transparent !important;
+}
+
+.navbar .nav-link .ph {
+  font-size: 17px;
+}
+
+/* ---- Search hero (HANDOFF §4) ------------------------------------------- */
+.psa-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 0 26px;
+}
+
+.psa-hero-field {
+  position: relative;
+  width: 820px;
+  max-width: 100%;
+}
+
+.psa-hero-field .ph-magnifying-glass {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Shiny wraps textInput in .form-group > label + input. The label is kept
+   in the DOM for assistive tech (never placeholder-only labelling, per
+   docs/UI_CONTRACT.md §10) and visually hidden here. */
+.psa-hero-field .form-group { margin-bottom: 0; }
+
+.psa-hero-field label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.psa-hero-field input.form-control {
+  min-height: 56px;
+  font-size: 19px;
+  padding-left: 46px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+}
+
+/* The design calls for ~45% text opacity here, which measured 4.08:1
+   against the app background -- under WCAG AA's 4.5:1 for normal-size
+   text (13px does not qualify as "large"). Raised to the nearest step
+   that passes (55% -> 5.51:1). Accessibility takes precedence over the
+   exact opacity value; the intent, a clearly secondary helper line, is
+   preserved. Same reasoning for the two other muted values below. */
+.psa-hero-help {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* ---- Search body layout (HANDOFF §4) ------------------------------------ */
+.psa-search-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: var(--space-6);
+}
+
+.psa-results-split {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-6);
+}
+
+.psa-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.psa-sidebar .form-group { margin-bottom: 0; }
+
+.psa-sidebar label {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+  margin-bottom: 6px;
+}
+
+/* Edition radio group rendered as a single bordered list, one row per
+   edition, each row carrying its own Current/Archived tag. Scrolls rather
+   than growing unbounded — PSGC legitimately has 13 releases. */
+.psa-edition-group .shiny-options-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  overflow-y: auto;
+  max-height: 232px;
+}
+
+.psa-edition-group .radio {
+  margin: 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.psa-edition-group .radio:first-child { border-top: none; }
+
+.psa-edition-group .radio label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 11px 13px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.psa-edition-group .radio:has(input:checked) {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.psa-edition-group .radio input[type="radio"] {
+  accent-color: var(--color-accent);
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.psa-edition-name { flex: 1 1 auto; }
+
+/* ---- Result tables ------------------------------------------------------ */
+.psa-result-count {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  padding-bottom: 10px;
+}
+
+.psa-result-count strong {
+  color: var(--color-text);
   font-weight: 600;
 }
 
-/* --- RM Assistant -------------------------------------------------------
-   Minimal layout-only rules for the chat panel. shinychat already ships its
-   own component styling (bubbles, input, cancel control); these rules only
-   make the chat fill its card and keep the input anchored while the message
-   list scrolls, including on narrow viewports. All selectors are prefixed
-   .rm-assistant- so nothing here can collide with existing app styles or
-   with shinychat's internals. */
+table.dataTable tbody td { padding-block: 13px; }
 
-.rm-assistant-card {
-  /* Let the card participate in bslib's fill layout without a fixed height. */
-  overflow: hidden;
+table.dataTable tbody tr:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 
+table.dataTable tbody tr.selected,
+table.dataTable tbody tr.selected td {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent) !important;
+  box-shadow: inset 2px 0 0 var(--color-accent);
+  color: var(--color-text) !important;
+}
+
+/* ---- Selected entry / verified card (HANDOFF §7) ------------------------
+   One component, used by both Search's detail panel and RM's verified
+   result, so RM can never visually claim more authority than Search. */
+.psa-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.psa-detail-head h6 {
+  margin: 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.psa-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.psa-detail-code {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.psa-detail-title {
+  margin: 10px 0 0;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.psa-detail-meta {
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--color-text) 65%, transparent);
+}
+
+/* Compact one-line provenance (HANDOFF §10): authority + citation + link.
+   Full methodology lives only on the Sources tab. */
+.psa-source-line {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.psa-source-line a { font-size: 13px; }
+
+.psa-verified-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-accent-800);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.psa-verified-card .ph-check-circle {
+  font-size: 21px;
+  color: var(--color-accent-300);
+  margin-top: 2px;
+}
+
+.psa-verified-code {
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+/* ---- Reserved "Ask RM" slot (HANDOFF §12) -------------------------------
+   VISUAL PLACEHOLDER ONLY. Deliberately a <span>, not an <a>/<button>:
+   aria-hidden, not focusable, no cursor affordance, no hover state. An
+   inert-but-focusable control would be a worse accessibility outcome than
+   omitting it, so it must stay out of the tab order and the accessibility
+   tree until it is actually wired. */
+.psa-askrm-reserved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px dashed color-mix(in srgb, var(--color-text) 20%, transparent);
+  border-radius: var(--radius-md);
+  /* Kept at the design's 35% (2.94:1). This is the one place the
+     sub-AA value is retained deliberately: the element is aria-hidden,
+     inert and conveys no information -- it exists only to reserve layout
+     space for a future control. Its low prominence IS the point, and
+     WCAG 1.4.3 does not apply to text that is not exposed as content.
+     When this slot is wired into a real control it MUST be raised to at
+     least 50% (4.76:1) along with gaining button semantics. */
+  color: color-mix(in srgb, var(--color-text) 35%, transparent);
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+}
+
+/* ---- PSOC + PSIC -------------------------------------------------------- */
+.psa-dual-intro {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  max-width: 700px;
+}
+
+.psa-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.psa-panel-head h6 {
+  margin: 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.psa-empty {
+  padding: 20px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  font-size: 14px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* ---- Compare Editions (HANDOFF §9) -------------------------------------- */
+.psa-corr-row {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 16px 18px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.psa-corr-arrow {
+  font-size: 18px;
+  color: var(--color-accent);
+  justify-self: center;
+}
+
+.psa-corr-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Statistical-safety warning. Mandatory presentation, not optional
+   styling — rendered verbatim from CORRESPONDENCE_STATISTICAL_WARNING for
+   split / merged / complex relationships. */
+.psa-stat-warning {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent);
+  border: 1px solid var(--color-archived-line);
+  font-size: 13px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+}
+
+.psa-stat-warning .ph-warning {
+  color: var(--color-archived-text);
+  margin-right: 6px;
+}
+
+/* No-match rows keep an explicit message rather than an empty cell. */
+.psa-no-counterpart {
+  font-size: 13px;
+  font-style: italic;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+
+/* ---- RM Assistant ------------------------------------------------------- */
+.rm-assistant-card { overflow: hidden; }
+
+.rm-assistant-disclaimer {
+  font-size: 12px;
+  /* 40% measured 3.47:1 -- raised to clear WCAG AA (5.51:1). This line
+     carries the "verified codes come from this application's data"
+     assurance, so it must actually be readable. */
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.psa-rm-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.psa-rm-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.psa-rm-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.psa-rm-avatar .ph {
+  font-size: 22px;
+  color: var(--color-accent);
+}
+
+/* RM unavailable state: informational, not an error screen. */
+.psa-rm-unavailable {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Mid-stream provider-failure presentation. Inert markup for now: real
+   failure detection is an unresolved upstream shinychat gap, documented in
+   docs/ASSISTANT_CONTRACT.md §12 and explicitly deferred by HANDOFF §13. */
+.psa-rm-failure {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--color-archived-line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.psa-rm-failure .ph-warning {
+  font-size: 16px;
+  color: var(--color-archived-text);
+  margin-top: 2px;
+}
+
+/* --- RM composer: THE 375px REGRESSION FLOOR (HANDOFF §6) ---------------
+   A previous real regression made the send button vanish at ~375px because
+   shinychat's shiny-chat-container is a CSS grid and a grid item's default
+   min-width:auto let a wide child size the column past its container: the
+   page did not scroll, so the overflow was silently clipped and the button
+   left both the viewport and the accessibility tree.
+
+   Two independent guards, deliberately belt-and-braces:
+     1. minmax(0, 1fr) lets the grid column shrink below content width.
+     2. min-width: 0 on the flex input, so the composer row can shrink too.
+   Do not remove either without re-verifying at 375px AND 320px that the
+   Send control is visible, keyboard reachable and present in the
+   accessibility tree. */
 .rm-assistant-card shiny-chat-container {
-  /* Fill the card body; the message list scrolls, the input stays put. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   max-height: 100%;
 }
 
-.rm-assistant-disclaimer {
-  font-size: 0.8125rem;
-  opacity: 0.75;
+.rm-assistant-card .shiny-chat-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
-/* Keep the chat grid from being widened by its own content.
-   shiny-chat-container is display:grid, and a grid item's default
-   min-width:auto lets a wide child size the column past the container. On a
-   375px viewport this produced a 579.75px column inside a 325px card: the
-   page itself did not scroll, so the overflow was silently clipped and the
-   send button ended up off-screen and absent from the accessibility tree,
-   making RM unusable on a phone. minmax(0, 1fr) lets the column shrink. */
-.rm-assistant-card shiny-chat-container {
-  grid-template-columns: minmax(0, 1fr);
+.rm-assistant-card .shiny-chat-input textarea {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
+.rm-assistant-card .shiny-chat-input button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Starter suggestion chips: ≥44px tap target, real focus ring. */
+.rm-assistant-card .suggestion {
+  display: inline-block;
+  padding: 13px 16px;
+  min-height: 44px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.rm-assistant-card .suggestion:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+/* ---- Sources ------------------------------------------------------------ */
+.psa-sources-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+
+/* Long provenance prose renders inside a scrollable region so the tab does
+   not become an endless page. */
+.psa-sources-prose {
+  max-height: 620px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.psa-sources-prose table { font-size: 13px; }
+
+/* =========================================================================
+   Responsive — HANDOFF §3. bslib/Bootstrap 5 defaults, plus a 375px floor.
+   No breakpoints beyond these were invented.
+   ========================================================================= */
+
+/* Tablet: 576–991px — single-column Search body, panels stack. */
+@media (max-width: 991.98px) {
+  .psa-search-body { grid-template-columns: 1fr; }
+  .psa-results-split { grid-template-columns: 1fr; }
+  .psa-hero { padding: 26px 0 20px; }
+}
+
+/* Mobile: ≤575px, hard floor 375px. */
 @media (max-width: 575.98px) {
-  /* On phones, reclaim the horizontal padding for message text and let the
-     panel use more of the viewport height. */
-  .rm-assistant-card {
-    min-height: 70vh;
+  .psa-hero { padding: 18px 0 14px; }
+
+  .psa-hero-field { width: 100%; }
+
+  /* 16px is the iOS zoom-on-focus floor — going below it makes Safari zoom
+     the viewport on focus, which is its own usability defect. */
+  .psa-hero-field input.form-control {
+    min-height: 50px;
+    font-size: 16px;
   }
 
+  .psa-corr-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  /* The arrow reads as a downward step once the row stacks. */
+  .psa-corr-arrow {
+    justify-self: start;
+    transform: rotate(90deg);
+  }
+
+  .psa-detail-code { font-size: 32px; }
+
+  .psa-detail-title { font-size: 18px; }
+
+  /* Anchor the composer instead of letting the card grow past the screen.
+     Left to itself the card sizes to its content (greeting + suggestions),
+     which measured 966px against an 812px viewport and pushed the send
+     control below the fold -- reachable only by scrolling, and absent from
+     the in-view accessibility tree. Capping the card makes the transcript
+     scroll INSIDE it and keeps the composer on screen, which is what the
+     approved mobile design shows.
+
+     dvh (dynamic viewport height) accounts for mobile browser chrome that
+     collapses on scroll; the vh line is the fallback for engines without
+     dvh support. The subtraction covers this app's own navbar + footer. */
+  .rm-assistant-card {
+    min-height: 0;
+    height: calc(100vh - 150px);
+    height: calc(100dvh - 150px);
+  }
+
+  /* The message list is the part that scrolls; the composer must not. */
+  .rm-assistant-card shiny-chat-messages {
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .psa-panel-head { row-gap: 6px; }
+
+  /* Let the RM header wrap rather than pushing "New chat" out of the
+     card's clipped box -- measured at 320px its right edge sat at 415px,
+     i.e. unreachable. The long "reads verified data only" descriptor is
+     dropped at phone width; the same assurance is still carried by the
+     composer footer disclaimer, so no information is lost. */
   .rm-assistant-header {
     flex-wrap: wrap;
-    row-gap: 0.5rem;
+    row-gap: 8px;
+  }
+
+  .rm-assistant-header .psa-tag-neutral { display: none; }
+
+  /* Tap targets ≥44px (docs/UI_CONTRACT.md §11). bslib's toggler ships at
+     40px high; the nav links themselves already measure ~53px. */
+  .navbar-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Reserved Ask RM slots are layout reservations, not content — at phone
+     width the space is better given to the data itself. */
+  .psa-askrm-reserved { display: none; }
+}
+
+/* Reduced motion: honour the OS preference for the streaming indicator. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

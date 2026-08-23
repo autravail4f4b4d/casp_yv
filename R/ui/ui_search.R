@@ -1,43 +1,105 @@
-# Search/Browse screen — stable input/output IDs are documented in
-# docs/UI_CONTRACT.md. This function builds the UI shell only; it contains
-# no classification/search logic (that lives in R/repository.R and
-# R/search.R and is called from the server function in app.R).
+# Search screen — the default, dominant destination.
 #
-# Stable IDs defined here: classification_system, classification_version,
-# classification_level, classification_query, classification_results,
-# selected_entry.
+# PRESENTATION ONLY. This function builds the UI shell; it contains no
+# classification/search logic (that lives in R/repository.R and R/search.R
+# and is called from the server function in app.R).
+#
+# Stable IDs defined here, unchanged from the previous layout and
+# documented in docs/UI_CONTRACT.md §4:
+#   classification_system, classification_version, classification_level,
+#   classification_query, classification_results, selected_entry
+#
+# Browse/Archive is NOT a separate destination. It lives here, exactly as
+# before, through three preserved mechanisms:
+#   1. the edition control (every edition, each tagged Current or Archived)
+#   2. the level control
+#   3. blank-query browse (an empty query lists the selected level)
+#
+# The edition control is a radio group rather than a select so that every
+# available edition and its current/archived status are visible at a
+# glance, per the approved design. The input ID and the value it yields are
+# unchanged; only the widget type differs, so app.R updates it with
+# updateRadioButtons() instead of updateSelectInput().
+
 search_ui <- function() {
-  bslib::layout_sidebar(
-    sidebar = bslib::sidebar(
-      title = "Browse & search",
-      width = 300,
-      shiny::selectInput(
-        "classification_system", "Classification system",
-        choices = NULL
+  shiny::tagList(
+    # --- Hero search (HANDOFF §4) -----------------------------------------
+    # Same `classification_query` input as before; only its size and
+    # position change. The <label> stays in the DOM for assistive tech and
+    # is visually hidden by .psa-hero-field label -- never placeholder-only
+    # labelling (docs/UI_CONTRACT.md §10).
+    shiny::tags$div(
+      class = "psa-hero",
+      # The approved Search design intentionally leads with the input
+      # rather than a visible page title, but the panel still needs a
+      # top-level heading so the document's heading hierarchy isn't
+      # missing its first rung for screen-reader users. Visually hidden,
+      # semantically present.
+      shiny::tags$h2(class = "visually-hidden", "Search classifications"),
+      shiny::tags$div(
+        class = "psa-hero-field",
+        shiny::tags$i(class = "ph ph-magnifying-glass", `aria-hidden` = "true"),
+        shiny::textInput(
+          "classification_query",
+          "Search a classification code or keyword",
+          placeholder = "Search a code or keyword",
+          width = "100%"
+        )
       ),
-      shiny::selectInput(
-        "classification_version", "Edition / release",
-        choices = NULL
-      ),
-      shiny::selectInput(
-        "classification_level", "Level",
-        choices = NULL
-      ),
-      shiny::textInput(
-        "classification_query", "Search code or keyword",
-        placeholder = "e.g. a code, or part of a title"
-      ),
-      shiny::helpText(
-        "Leave the search box blank to browse the selected level."
+      shiny::tags$p(
+        class = "psa-hero-help",
+        "Leave blank to browse the selected system and edition below."
       )
     ),
-    bslib::card(
-      bslib::card_header("Results"),
-      DT::DTOutput("classification_results")
-    ),
-    bslib::card(
-      bslib::card_header("Selected entry"),
-      shiny::uiOutput("selected_entry")
+
+    # --- Sidebar + results/detail (HANDOFF §4) ----------------------------
+    shiny::tags$div(
+      class = "psa-search-body",
+      shiny::tags$aside(
+        class = "psa-sidebar",
+        `aria-label` = "Classification filters",
+        shiny::selectInput(
+          "classification_system", "System",
+          choices = NULL, width = "100%"
+        ),
+        shiny::tags$div(
+          class = "psa-edition-group",
+          shiny::radioButtons(
+            "classification_version",
+            "Edition / release",
+            choices = character(0),
+            selected = character(0)
+          )
+        ),
+        shiny::selectInput(
+          "classification_level", "Level",
+          choices = NULL, width = "100%"
+        )
+      ),
+      shiny::tags$div(
+        class = "psa-results-split",
+        shiny::tags$div(
+          shiny::uiOutput("classification_result_count"),
+          DT::DTOutput("classification_results")
+        ),
+        shiny::tags$div(
+          shiny::tags$div(
+            class = "psa-detail-head",
+            shiny::tags$h6("Selected entry"),
+            # Reserved layout slot (HANDOFF §12) -- inert placeholder, NOT a
+            # control. A <span>, aria-hidden, not focusable, no hover or
+            # cursor affordance. Wiring it later means swapping this span
+            # for a real control in the same position; nothing else moves.
+            shiny::tags$span(
+              class = "psa-askrm-reserved",
+              `aria-hidden` = "true",
+              shiny::tags$i(class = "ph ph-sparkle"),
+              "Ask RM about this"
+            )
+          ),
+          shiny::uiOutput("selected_entry")
+        )
+      )
     )
   )
 }
