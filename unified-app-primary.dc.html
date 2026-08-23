@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/nocturne-618f2bef-5764-454e-a641-c84bbf611e06/styles.css">
+<script src="_ds/nocturne-618f2bef-5764-454e-a641-c84bbf611e06/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  body { margin: 0; background: #0f1119; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .tabitem { padding: 14px 18px; font-size: 14px; text-decoration: none; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; }
+  .tabitem.active { color: var(--color-text); border-bottom-color: var(--color-accent); }
+  .tabitem:not(.active) { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .rowhover:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+  /* Reserved layout slot for the future "Ask RM" hook — holds its position and size
+     but carries no button affordance (no border, fill, or cursor) until it is wired. */
+  .askrm-reserved { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px dashed color-mix(in srgb, var(--color-text) 20%, transparent); border-radius: var(--radius-md); color: color-mix(in srgb, var(--color-text) 35%, transparent); font-size: 12px; }
+</style>
+</helmet>
+
+<div style="padding: 56px; width: 1420px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; color: var(--color-text); font-family: var(--font-body); background: #0f1119;">
+
+  <div style="max-width: 820px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent);">Primary direction — refined from Nav B</div>
+    <h1 style="margin: 0; font-size: 36px;">Five tabs, search-first</h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.6; color: color-mix(in srgb, var(--color-text) 62%, transparent); text-wrap: pretty;">Same flat five-tab model as Direction 2 — lowest risk, one tab per <span class="mono">main_nav</span> value, fully bookmarkable. Two changes: Search is the default tab and gets Direction 1's large, hero-style search bar so it reads as the obvious entry point rather than one equal among five; and "Dual Search" / "Correspondence" are relabeled to plain user-facing names. RM stays a full, equal-weight nav destination for V1 — but two "Ask RM" hooks are designed into the Search and Compare Editions detail panels now, wired to nothing yet, so a later milestone can route a click straight into an RM conversation pre-filled with that code's context without a layout change.</p>
+  </div>
+
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 18px;">Navigation model — relabeled, Search first and default</div>
+  <div class="card" style="width: 1280px; padding: 0 28px;">
+    <div style="display: flex; align-items: center; gap: 4px;">
+      <span class="tabitem active"><i class="ph ph-magnifying-glass"></i>Search</span>
+      <span class="tabitem"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span>
+      <span class="tabitem"><i class="ph ph-arrows-split"></i>Compare Editions</span>
+      <span class="tabitem"><i class="ph ph-sparkle"></i>RM Assistant</span>
+      <span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+  </div>
+  <p style="margin: 0; max-width: 900px; font-size: 14px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Internal contract unchanged — these still map onto <span class="mono">"search" / "dual_search" / "correspondence" / "rm_assistant" / "about"</span>. Only the visible tab labels and Search's own visual weight change.</p>
+
+  <!-- 01 SEARCH TAB — HERO SEARCH -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">01 · Search tab — default landing, hero-weight search bar</div>
+  <div class="card" style="width: 1280px; padding: 0; overflow: hidden;">
+    <nav class="nav" style="padding: 14px 30px 0; border-bottom: none;"><span class="nav-brand" style="font-size: 16px;">Statistical Classifications</span></nav>
+    <div style="padding: 4px 30px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--color-divider);">
+      <span class="tabitem active"><i class="ph ph-magnifying-glass"></i>Search</span>
+      <span class="tabitem"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span>
+      <span class="tabitem"><i class="ph ph-arrows-split"></i>Compare Editions</span>
+      <span class="tabitem"><i class="ph ph-sparkle"></i>RM Assistant</span>
+      <span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+
+    <div style="padding: 40px 30px 0; display: flex; flex-direction: column; align-items: center;">
+      <div style="position: relative; width: 820px; max-width: 100%;">
+        <i class="ph ph-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 20px; color: color-mix(in srgb, var(--color-text) 50%, transparent);"></i>
+        <input class="input" type="search" value="growing of corn" style="min-height: 56px; font-size: 19px; padding-left: 46px; width: 100%; box-sizing: border-box;">
+      </div>
+      <p style="margin: 10px 0 0; font-size: 13px; color: color-mix(in srgb, var(--color-text) 45%, transparent);">Leave blank to browse the selected system and edition below.</p>
+    </div>
+
+    <div style="padding: 26px 30px 0; display: grid; grid-template-columns: 260px 1fr; gap: var(--space-6);">
+      <aside style="display: flex; flex-direction: column; gap: var(--space-4);">
+        <div class="field" style="margin: 0;"><label>System</label><select class="input" style="min-height: 40px; font-size: 14px;"><option>PSIC — Industrial</option></select></div>
+        <div class="field" style="margin: 0;">
+          <label>Edition / release</label>
+          <div style="display: flex; flex-direction: column; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden;">
+            <label style="display: flex; align-items: center; gap: 10px; padding: 11px 13px; background: color-mix(in srgb, var(--color-accent) 14%, transparent); cursor: pointer;"><span class="dot" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-accent); box-shadow: inset 0 0 0 2.5px var(--color-bg); background: var(--color-accent);"></span><span style="font-size: 14px;">Revision 5 (2026)</span><span class="tag tag-accent" style="margin-left: auto;">Current</span></label>
+            <label style="display: flex; align-items: center; gap: 10px; padding: 11px 13px; cursor: pointer; border-top: 1px solid var(--color-divider);"><span class="dot" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--color-text) 40%, transparent);"></span><span style="font-size: 14px;">2019</span><span class="tag" style="margin-left: auto; border: 1px solid oklch(0.66 0.125 70); color: oklch(0.80 0.10 70);">Archived</span></label>
+          </div>
+        </div>
+        <div class="field" style="margin: 0;"><label>Level</label><select class="input" style="min-height: 40px; font-size: 14px;"><option>All levels</option></select></div>
+      </aside>
+
+      <div>
+        <div style="display: grid; grid-template-columns: 1fr 380px; gap: var(--space-6);">
+          <div>
+            <div style="font-size: 14px; color: color-mix(in srgb, var(--color-text) 55%, transparent); padding-bottom: 10px;"><strong style="color: var(--color-text); font-weight: 600;">4 results</strong></div>
+            <table class="table">
+              <thead><tr><th style="width: 110px;">Code</th><th>Title and position</th><th style="width: 110px;">Level</th></tr></thead>
+              <tbody>
+                <tr class="rowhover" style="background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: inset 2px 0 0 var(--color-accent); cursor: pointer;"><td class="mono" style="font-size: 18px; padding-block: 13px;">01130</td><td style="padding-block: 13px;"><div style="font-size: 15px; font-weight: 600;">Growing of corn</div><div style="font-size: 13px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">A → 01 → 011 → 0113</div></td><td style="padding-block: 13px; font-size: 14px;">Sub-class</td></tr>
+                <tr class="rowhover" style="cursor: pointer;"><td class="mono" style="font-size: 18px; padding-block: 13px;">0113</td><td style="padding-block: 13px;"><div style="font-size: 15px;">Growing of corn</div><div style="font-size: 13px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">A → 01 → 011</div></td><td style="padding-block: 13px; font-size: 14px;">Class</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h6 style="margin: 0; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Selected entry</h6>
+              <span class="askrm-reserved" aria-hidden="true"><i class="ph ph-sparkle"></i>Ask RM about this</span>
+            </div>
+            <div class="mono" style="font-size: 40px; line-height: 1;">01130</div>
+            <h3 style="margin: 10px 0 0; font-size: 21px; line-height: 1.25;">Growing of corn</h3>
+            <div style="margin-top: 14px; font-size: 14px; line-height: 1.6; color: color-mix(in srgb, var(--color-text) 65%, transparent);">A → 01 → 011 → 0113</div>
+            <div style="margin-top: 14px;"><span class="tag tag-accent">Current</span></div>
+            <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--color-divider); font-size: 13px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">PSA — PSIC Revision 5, 5 Aug 2026. <a href="#" style="font-size: 13px;">Source ↗</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="height: 30px;"></div>
+  </div>
+  <p style="margin: 0; max-width: 900px; font-size: 13px; color: color-mix(in srgb, var(--color-text) 45%, transparent);"><strong style="color: color-mix(in srgb, var(--color-text) 65%, transparent);">Extensibility hook:</strong> "Ask RM about this" is present and styled now but inert — future wiring only needs to switch the active tab to RM Assistant and seed its composer with this entry's code and title, no new UI to design.</p>
+
+  <!-- 02 PSOC + PSIC TAB -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">02 · PSOC + PSIC tab (formerly "Dual Search")</div>
+  <div class="card" style="width: 1280px; padding: 0; overflow: hidden;">
+    <nav class="nav" style="padding: 14px 30px 0; border-bottom: none;"><span class="nav-brand" style="font-size: 16px;">Statistical Classifications</span></nav>
+    <div style="padding: 4px 30px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--color-divider);">
+      <span class="tabitem"><i class="ph ph-magnifying-glass"></i>Search</span>
+      <span class="tabitem active"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span>
+      <span class="tabitem"><i class="ph ph-arrows-split"></i>Compare Editions</span>
+      <span class="tabitem"><i class="ph ph-sparkle"></i>RM Assistant</span>
+      <span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+    <p style="margin: 14px 30px 0; font-size: 13px; color: color-mix(in srgb, var(--color-text) 50%, transparent); max-width: 700px;">One query, searched against both systems at once — occupation (PSOC) on the left, industry (PSIC) on the right. They never determine each other.</p>
+    <div style="padding: 18px 30px 0; max-width: 640px;">
+      <div class="field" style="margin: 0;"><label>Search occupations and industries together</label><div style="position: relative;"><i class="ph ph-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 16px; color: color-mix(in srgb, var(--color-text) 50%, transparent);"></i><input class="input" type="search" value="accountant" style="min-height: 46px; font-size: 16px; padding-left: 36px;"></div></div>
+    </div>
+    <div style="padding: 22px 30px 34px; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6);">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><h6 style="margin: 0; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Occupations — PSOC</h6><select class="input" style="min-height: 32px; font-size: 12px; width: auto; padding: 4px 8px;"><option>2022 · Current</option></select></div>
+        <div class="rowhover" style="display: grid; grid-template-columns: 90px 1fr; gap: 14px; padding: 13px 10px; border-radius: var(--radius-sm);"><span class="mono" style="font-size: 17px;">2411</span><div><div style="font-size: 15px; font-weight: 600;">Accountants</div><div style="font-size: 13px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Unit group</div></div></div>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><h6 style="margin: 0; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Industries — PSIC</h6><select class="input" style="min-height: 32px; font-size: 12px; width: auto; padding: 4px 8px;"><option>Rev. 5 (2026) · Current</option></select></div>
+        <div style="padding: 20px 10px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-text) 4%, transparent); font-size: 14px; color: color-mix(in srgb, var(--color-text) 55%, transparent);">No results — occupation, not an industry.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 COMPARE EDITIONS TAB -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">03 · Compare Editions tab (formerly "Correspondence")</div>
+  <div class="card" style="width: 1280px; padding: 0; overflow: hidden;">
+    <nav class="nav" style="padding: 14px 30px 0; border-bottom: none;"><span class="nav-brand" style="font-size: 16px;">Statistical Classifications</span></nav>
+    <div style="padding: 4px 30px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--color-divider);">
+      <span class="tabitem"><i class="ph ph-magnifying-glass"></i>Search</span>
+      <span class="tabitem"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span>
+      <span class="tabitem active"><i class="ph ph-arrows-split"></i>Compare Editions</span>
+      <span class="tabitem"><i class="ph ph-sparkle"></i>RM Assistant</span>
+      <span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+    <p style="margin: 14px 30px 0; font-size: 13px; color: color-mix(in srgb, var(--color-text) 50%, transparent); max-width: 700px;">See how a PSIC 2019 code maps to Revision 5 (2026), or the reverse.</p>
+    <div style="padding: 18px 30px 0; display: flex; align-items: center; gap: var(--space-4);">
+      <div class="seg" style="font-size: 13px;"><span class="seg-opt" aria-selected="true">2019 → 2026</span><span class="seg-opt">2026 → 2019</span></div>
+      <div style="flex: 1 1 auto; max-width: 380px; position: relative;"><i class="ph ph-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 15px; color: color-mix(in srgb, var(--color-text) 50%, transparent);"></i><input class="input" type="search" value="01179" style="min-height: 40px; font-size: 14px; padding-left: 34px;"></div>
+    </div>
+    <div style="padding: 22px 30px 30px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <span style="font-size: 13px; color: color-mix(in srgb, var(--color-text) 50%, transparent);">1 relationship found</span>
+        <span class="askrm-reserved" aria-hidden="true"><i class="ph ph-sparkle"></i>Ask RM to explain this change</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 40px 1fr; align-items: center; gap: var(--space-4); padding: 16px 18px; border: 1px solid var(--color-divider); border-radius: var(--radius-md);">
+        <div><span class="mono" style="font-size: 17px;">01179</span><div style="font-size: 13px; margin-top: 3px;">Growing of other perennial crops n.e.c.</div><span class="tag" style="border: 1px solid oklch(0.66 0.125 70); color: oklch(0.80 0.10 70); margin-top: 6px; display: inline-block;">2019 · Archived</span></div>
+        <i class="ph ph-arrows-split" style="font-size: 18px; color: var(--color-accent); justify-self: center;"></i>
+        <div style="display: flex; flex-direction: column; gap: 8px;"><div><span class="mono" style="font-size: 15px;">01171</span> <span style="font-size: 13px;">Coconut</span></div><div><span class="mono" style="font-size: 15px;">01172</span> <span style="font-size: 13px;">Oil palm</span></div></div>
+      </div>
+      <div style="margin-top: 14px; padding: 12px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent); border: 1px solid oklch(0.66 0.125 70); font-size: 13px; color: color-mix(in srgb, var(--color-text) 78%, transparent);">A split relationship — do not divide a 2019 value across these 2026 categories.</div>
+    </div>
+  </div>
+
+  <!-- 04 RM TAB — GREETING -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">04 · RM Assistant tab — full nav destination for V1, greeting state</div>
+  <div class="card" style="width: 1280px; padding: 0; overflow: hidden;">
+    <nav class="nav" style="padding: 14px 30px 0; border-bottom: none;"><span class="nav-brand" style="font-size: 16px;">Statistical Classifications</span></nav>
+    <div style="padding: 4px 30px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--color-divider);">
+      <span class="tabitem"><i class="ph ph-magnifying-glass"></i>Search</span>
+      <span class="tabitem"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span>
+      <span class="tabitem"><i class="ph ph-arrows-split"></i>Compare Editions</span>
+      <span class="tabitem active"><i class="ph ph-sparkle"></i>RM Assistant</span>
+      <span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+    <div style="padding: 6px 30px 0; display: flex; align-items: center; gap: 10px;">
+      <span class="tag" style="background: color-mix(in srgb, var(--color-text) 8%, transparent); color: color-mix(in srgb, var(--color-text) 70%, transparent); font-size: 11px;">Assistant · reads verified data only, never a source itself</span>
+    </div>
+    <div style="padding: 20px 30px 0; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 18%, transparent); display: flex; align-items: center; justify-content: center;"><i class="ph ph-sparkle" style="font-size: 22px; color: var(--color-accent);"></i></div>
+      <h2 style="margin: 8px 0 0; font-size: 24px;">Madayaw! I am RM.</h2>
+      <p style="margin: 0; font-size: 15px; line-height: 1.6; color: color-mix(in srgb, var(--color-text) 62%, transparent); max-width: 520px;">I help you find the right PSA classification code — every code I give you comes straight from the same data as Search.</p>
+    </div>
+    <div style="padding: 22px 30px 0; max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <button type="button" style="text-align: left; padding: 13px 16px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: transparent; color: var(--color-text); font-size: 14px; cursor: pointer;">Unsa ang PSOC sa usa ka accountant?</button>
+      <button type="button" style="text-align: left; padding: 13px 16px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: transparent; color: var(--color-text); font-size: 14px; cursor: pointer;">What's the PSIC code for a corn farm?</button>
+      <button type="button" style="text-align: left; padding: 13px 16px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: transparent; color: var(--color-text); font-size: 14px; cursor: pointer;">Paano nagbago ang PSIC 01179?</button>
+      <button type="button" style="text-align: left; padding: 13px 16px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: transparent; color: var(--color-text); font-size: 14px; cursor: pointer;">My business is online reselling — what's my PSIC?</button>
+    </div>
+    <div style="padding: 26px 30px 20px; max-width: 720px; margin: 0 auto; display: flex; gap: 10px; align-items: center;">
+      <input class="input" type="text" placeholder="Ask about a code, job title, or business activity — or arrive here already from an 'Ask RM about this' link" style="flex: 1 1 auto; min-width: 0; min-height: 48px; font-size: 15px;">
+      <button type="button" class="btn btn-primary" style="flex: 0 0 auto; font-size: 14px;"><i class="ph ph-arrow-up"></i>Send</button>
+    </div>
+    <div style="padding: 0 30px 22px; max-width: 720px; margin: 0 auto; text-align: center; font-size: 12px; color: color-mix(in srgb, var(--color-text) 40%, transparent);">RM can misread a question. Codes shown are always verified against PSA's own data before being presented.</div>
+  </div>
+
+  <!-- 05 RM — STREAMING / VERIFIED / MID-STREAM FAILURE / UNAVAILABLE -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">05 · RM tab — streaming, verified card, mid-stream failure, unavailable</div>
+  <div class="card" style="width: 1280px; padding: 0; overflow: hidden;">
+    <nav class="nav" style="padding: 14px 30px 0; border-bottom: none;"><span class="nav-brand" style="font-size: 16px;">Statistical Classifications</span></nav>
+    <div style="padding: 4px 30px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--color-divider);">
+      <span class="tabitem"><i class="ph ph-magnifying-glass"></i>Search</span><span class="tabitem"><i class="ph ph-arrows-left-right"></i>PSOC + PSIC</span><span class="tabitem"><i class="ph ph-arrows-split"></i>Compare Editions</span><span class="tabitem active"><i class="ph ph-sparkle"></i>RM Assistant</span><span class="tabitem"><i class="ph ph-info"></i>Sources</span>
+    </div>
+    <div style="padding: 22px 30px 30px; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6);">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="align-self: flex-end; max-width: 300px; padding: 10px 14px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-text) 8%, transparent); font-size: 14px;">corn farming psic?</div>
+        <div style="display: flex; gap: 10px;"><i class="ph ph-sparkle" style="color: var(--color-accent); margin-top: 3px;"></i><div style="font-size: 14px; line-height: 1.6;">Checking PSIC Revision 5<span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); margin-left: 6px; animation: blink 1s infinite;"></span></div></div>
+        <div style="margin-top: auto; display: flex; gap: 10px; align-items: center;">
+          <div style="flex: 1 1 auto; height: 44px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); opacity: 0.4;"></div>
+          <button type="button" class="btn btn-secondary" style="font-size: 13px;"><i class="ph ph-stop"></i>Stop generating</button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: flex-start; gap: 14px; padding: 14px; border: 1px solid var(--color-accent-800); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+          <i class="ph ph-check-circle" style="font-size: 20px; color: var(--color-accent-300); margin-top: 2px;"></i>
+          <div><div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent);">Verified · PSIC Revision 5</div><div class="mono" style="font-size: 22px; margin-top: 4px;">01130</div><div style="font-size: 14px; margin-top: 2px;">Growing of corn</div></div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid oklch(0.66 0.125 70); border-radius: var(--radius-md); background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent);">
+          <i class="ph ph-warning" style="font-size: 16px; color: oklch(0.80 0.10 70); margin-top: 2px;"></i>
+          <div style="font-size: 13px; line-height: 1.55;">RM couldn't finish that reply. Your question is still here. <button type="button" class="btn btn-ghost" style="font-size: 12px; padding: 4px 8px; margin-top: 6px;"><i class="ph ph-arrow-clockwise"></i>Try again</button></div>
+        </div>
+        <div style="padding: 14px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-text) 4%, transparent); font-size: 13px; line-height: 1.6;"><strong>RM is temporarily unavailable.</strong> Use Search, PSOC + PSIC or Compare Editions above.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 06 MOBILE -->
+  <div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent); margin-top: 20px;">06 · Mobile, 375px — Search tab default, relabeled bottom bar, RM composer verified reachable</div>
+  <div style="display: flex; gap: 26px; align-items: flex-start;">
+    <div class="card" style="width: 375px; padding: 0; overflow: hidden; height: 580px; display: flex; flex-direction: column;">
+      <nav class="nav" style="padding: 12px 16px;"><span class="nav-brand" style="font-size: 15px;">Classifications</span></nav>
+      <div style="padding: 16px; flex: 1 1 auto;">
+        <div style="position: relative;"><i class="ph ph-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 16px; color: color-mix(in srgb, var(--color-text) 50%, transparent);"></i><input class="input" type="search" placeholder="Search a code or keyword" style="min-height: 50px; font-size: 16px; padding-left: 36px;"></div>
+        <div style="margin-top: 16px;">
+          <div class="rowhover" style="display: flex; justify-content: space-between; padding: 14px 4px; border-top: 1px solid var(--color-divider);"><span class="mono" style="font-size: 16px;">01130</span><span style="font-size: 14px;">Growing of corn</span></div>
+        </div>
+      </div>
+      <div style="display: flex; border-top: 1px solid var(--color-divider); padding: 8px 4px;">
+        <div style="flex: 1; text-align: center; padding: 6px 0; color: var(--color-accent);"><i class="ph ph-magnifying-glass" style="display: block; font-size: 18px;"></i><span style="font-size: 9px;">Search</span></div>
+        <div style="flex: 1; text-align: center; padding: 6px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-arrows-left-right" style="display: block; font-size: 18px;"></i><span style="font-size: 9px;">PSOC+PSIC</span></div>
+        <div style="flex: 1; text-align: center; padding: 6px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-arrows-split" style="display: block; font-size: 18px;"></i><span style="font-size: 9px;">Editions</span></div>
+        <div style="flex: 1; text-align: center; padding: 6px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-sparkle" style="display: block; font-size: 18px;"></i><span style="font-size: 9px;">RM</span></div>
+        <div style="flex: 1; text-align: center; padding: 6px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-info" style="display: block; font-size: 18px;"></i><span style="font-size: 9px;">Sources</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="width: 375px; padding: 0; overflow: hidden; height: 580px; display: flex; flex-direction: column;">
+      <nav class="nav" style="padding: 12px 16px;"><span class="nav-brand" style="font-size: 15px;">RM Assistant</span></nav>
+      <div style="flex: 1 1 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto;">
+        <div style="align-self: flex-end; max-width: 240px; padding: 9px 12px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-text) 8%, transparent); font-size: 13px;">corn farming psic?</div>
+        <div style="font-size: 13px; line-height: 1.55; max-width: 260px;">Checking PSIC Revision 5…</div>
+      </div>
+      <!-- Composer: flex row, input min-width:0, fixed 44px send button — preserves the 375px send-button fix -->
+      <div style="padding: 10px 12px 14px; border-top: 1px solid var(--color-divider); display: flex; gap: 8px; align-items: center;">
+        <input class="input" type="text" placeholder="Ask RM…" style="flex: 1 1 auto; min-width: 0; min-height: 44px; font-size: 15px;">
+        <button type="button" class="btn btn-primary btn-icon" style="flex: 0 0 auto; width: 44px; height: 44px;" aria-label="Send"><i class="ph ph-arrow-up"></i></button>
+      </div>
+      <div style="display: flex; border-top: 1px solid var(--color-divider); padding: 6px 4px;">
+        <div style="flex: 1; text-align: center; padding: 4px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-magnifying-glass" style="display: block; font-size: 16px;"></i></div>
+        <div style="flex: 1; text-align: center; padding: 4px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-arrows-left-right" style="display: block; font-size: 16px;"></i></div>
+        <div style="flex: 1; text-align: center; padding: 4px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-arrows-split" style="display: block; font-size: 16px;"></i></div>
+        <div style="flex: 1; text-align: center; padding: 4px 0; color: var(--color-accent);"><i class="ph ph-sparkle" style="display: block; font-size: 16px;"></i></div>
+        <div style="flex: 1; text-align: center; padding: 4px 0; color: color-mix(in srgb, var(--color-text) 50%, transparent);"><i class="ph ph-info" style="display: block; font-size: 16px;"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="width: 1280px; margin-top: 22px; padding: 28px 34px; display: grid; grid-template-columns: 1fr 1fr; gap: 34px;">
+    <div>
+      <h6 style="margin: 0 0 var(--space-3); color: var(--color-accent-300);">What changed from Nav B</h6>
+      <ul style="margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+        <li>Search tab now opens with a full-width, 56px hero search bar (Direction 1's language) instead of a compact sidebar field — the same tab structure, but Search unmistakably reads as the default action.</li>
+        <li>"Dual Search" → "PSOC + PSIC"; "Correspondence" → "Compare Editions" — both in the tab bar and in every reference elsewhere in the app.</li>
+        <li>RM remains a full, equal tab for V1, unchanged in weight from Direction 2.</li>
+        <li>Two "Ask RM" positions are reserved (Search detail panel, Compare Editions detail panel) as dashed, non-interactive placeholders — no border fill, no cursor, no link semantics — so nothing clickable-looking ships unwired. Layout space holds until a later milestone wires the real control.</li>
+        <li>Browse/Archive stays folded into Search (edition radio group + level select + blank-query browse) — no separate top-level destination was added for it.</li>
+      </ul>
+    </div>
+    <div>
+      <h6 style="margin: 0 0 var(--space-3); color: oklch(0.80 0.10 70);">Notes for implementation</h6>
+      <ul style="margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.7; color: color-mix(in srgb, var(--color-text) 78%, transparent);">
+        <li>Renaming tabs is presentation-only — `main_nav` values (`"dual_search"`, `"correspondence"`) don't need to change, only the visible `tabPanel` titles.</li>
+        <li>The hero search bar is still the same `classification_query` input — only its size and position on the Search tab move.</li>
+        <li>"Ask RM about this" needs no new stable ID today; when wired, it should call the RM module's existing composer-set + `main_nav` tab-switch, not a new mechanism.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<style>@keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }</style>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1420}}"></script>
+</body>
+</html>
