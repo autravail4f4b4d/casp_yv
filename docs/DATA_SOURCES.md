@@ -1,12 +1,18 @@
-# Data Sources: PSIC Revision 5 (2026 PSIC) and PSOC 2022
+# Data Sources: supplemental PSA classifications
 
-This document covers two supplemental data sources built on the same
-pattern: PSA's own official workbook, normalized offline into a local
-runtime artifact, with no PSA network dependency at runtime.
+This document covers the supplemental data sources built on one pattern:
+PSA's own official workbook, normalized offline into a local runtime
+artifact, with **no PSA network dependency at runtime**.
 
-- [PSIC Revision 5 (2026 PSIC)](#psic-revision-5-2026-psic) — below
-- [2022 Updates to the 2012 PSOC](#2022-updates-to-the-2012-psoc) — see
-  the second half of this document
+- [PSIC Revision 5 (2026 PSIC)](#psic-revision-5-2026-psic)
+- [2022 Updates to the 2012 PSOC](#2022-updates-to-the-2012-psoc)
+- [Philippine Standard Commodity Classification (PSCC), 2022](#philippine-standard-commodity-classification-pscc-2022)
+- [Philippine Tourism Statistical Classification System (PTSCS), 2025 v2.1](#philippine-tourism-statistical-classification-system-ptscs-2025-v21)
+- [Philippine Standard Creative Classification System (PSCrCS), 2025](#philippine-standard-creative-classification-system-pscrcs-2025)
+
+PSA is the issuing authority for every classification listed here. The
+`phscs` and `psgc` packages, these normalization pipelines and the RM
+assistant are access mechanisms, never the authority.
 
 ---
 
@@ -318,3 +324,118 @@ artifacts. `R/adapters/adapter_psoc_2022.R` only ever `readRDS()`s these
 local files. To refresh the data, place an updated workbook at
 `data-raw/2022-Updates-to-the-2012-PSOC.xlsx` (manually, given the
 Cloudflare retrieval block) and re-run the build script.
+
+---
+
+## Philippine Standard Commodity Classification (PSCC), 2022
+
+**Not to be confused with PSCCS.** PSCC classifies traded commodities;
+PSCCS is the Philippine Standard Classification of Crime for Statistical
+Purposes. The two acronyms differ by one letter and name unrelated
+classifications. The registry previously carried the commodity name on the
+crime classification; that is corrected, and a regression test now asserts
+both names independently.
+
+| | |
+|---|---|
+| Official name | Philippine Standard Commodity Classification |
+| Version | 2022 (current) |
+| PSA reference | `https://psa.gov.ph/classification/pscc` |
+| Raw workbook | `data-raw/pscc.xlsx` |
+| Build script | `scripts/build_pscc_2022.R` |
+| Runtime artifacts | `data/pscc_2022.rds`, `data/pscc_2022_metadata.rds` |
+| Adapter | `R/adapters/adapter_pscc_2022.R` |
+
+Codes are strings and are preserved verbatim, including punctuation and
+leading zeros — real examples carried through the whole stack and visible
+in Search: `0301.99.49-001` (Ricefield eel) and `10.06` (Rice). Nothing in
+the pipeline numeric-coerces a code.
+
+## Philippine Tourism Statistical Classification System (PTSCS), 2025 v2.1
+
+| | |
+|---|---|
+| Official name | Philippine Tourism Statistical Classification System |
+| Version | 2025 Version 2.1 (current), internal id `2025-v2.1` |
+| PSA reference | `https://psa.gov.ph/classification/ptscs` |
+| Raw workbook | `data-raw/PTSCS-Version-2.1.xlsx` |
+| Build script | `scripts/build_ptscs_2025.R` |
+| Runtime artifacts | `data/ptscs_2025_v2_1.rds`, `data/ptscs_2025_v2_1_metadata.rds` |
+| Adapter | `R/adapters/adapter_ptscs_2025.R` |
+
+**Validated counts match PSA exactly: 176 tourism industries, 214 tourism
+characteristic products.** The workbook's own Metadata sheet states those
+figures, so they were confirmed from the source rather than taken on faith
+from a specification.
+
+The data sheets hold more physical rows than data rows (196 and 236). Every
+extra row was accounted for before any parsing decision was made:
+
+```
+Industries  176 data + 16 category headings + 1 column header + 2 blanks + 1 title = 196
+Products    214 data + 18 category headings + 1 column header + 2 blanks + 1 title = 236
+```
+
+The category headings are real PTSCS structure, not junk, so they are
+preserved as `major_category` (and `major_category_group` for the
+top-level numbered headings) rather than discarded. They are **not** emitted
+as classification records: they carry only a presentational ordinal
+("1.", "12.3."), no official code, and minting one would be fabrication.
+
+**Component provenance is part of the statistical meaning:**
+
+- Tourism Industries → **2019 Updates to the 2009 PSIC**
+- Tourism Characteristic Products → **CPC Version 2.1**
+
+PTSCS mints no codes of its own — it selects codes out of those two
+classifications and groups them thematically. The industry component is
+therefore deliberately **not** migrated to PSIC Revision 5; doing so
+silently would misstate what PSA published. The build script enforces this
+with a hard `stop()` if an industry record ever carries a source version
+other than 2019, and tests assert it independently.
+
+## Philippine Standard Creative Classification System (PSCrCS), 2025
+
+| | |
+|---|---|
+| Official name | Philippine Standard Creative Classification System |
+| Version | 2025 (current) |
+| PSA reference | `https://psa.gov.ph/classification/pscrcs/` |
+| Raw workbook | `data-raw/PSCrCS_classification.xlsx` |
+| Build script | `scripts/build_pscrcs_2025.R` |
+| Runtime artifacts | `data/pscrcs_2025.rds`, `data/pscrcs_2025_metadata.rds` |
+| Adapter | `R/adapters/adapter_pscrcs_2025.R` |
+
+**Validated counts match PSA exactly: 317 creative industries, 409 creative
+goods and services, 114 creative occupations** (840 records total). The
+workbook's Metadata sheet states these counts and their underlying
+classifications, independently confirming the specification.
+
+**Component provenance:**
+
+- Creative Industries → **2019 Updates to the 2009 PSIC**
+- Creative Goods and Services → **CPC Version 2.1**
+- Creative Occupations → **2022 Updates to the 2012 PSOC**
+
+As with PTSCS, the industry component stays on 2019 PSIC and is never
+silently converted to Revision 5.
+
+### Known characteristics of both composite systems
+
+- **No code hierarchy.** Neither workbook publishes parent/child code
+  relationships, so `parent_code` is `NA` throughout and no hierarchy was
+  manufactured. The canonical `level` field carries the component id, and
+  the meaningful control for these systems is the **Component** selector,
+  not the Level selector.
+- **Codes are not globally unique within the system.** Because each
+  component indexes a different source classification, the same 5-digit
+  string can legitimately appear in two components. PSCrCS has three such
+  collisions today (`46510`, `47610`, `47620`, shared between the PSIC and
+  CPC components); PTSCS has none at present. Uniqueness is enforced per
+  `(component, code)`, not system-wide. Anything keying on
+  `system + version + code` alone must account for this.
+- **No leading-zero codes exist in either workbook today.** The build
+  reports this honestly as a count of zero rather than asserting a fixture
+  that does not exist. String handling is enforced end to end regardless
+  (`col_types = "text"`, character assertions), so none could be lost if PSA
+  adds one.

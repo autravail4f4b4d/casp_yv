@@ -201,11 +201,14 @@ test_that("registry results are compact and omit the adapter metadata graph", {
   res <- assistant_classification_registry()
 
   expect_null(res$error)
-  expect_equal(res$count, 7L)
-  expect_equal(length(res$systems), 7L)
+  expect_equal(res$count, 10L)
+  expect_equal(length(res$systems), 10L)
 
   ids <- vapply(res$systems, function(s) s$id, character(1))
-  expect_setequal(ids, c("psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs"))
+  expect_setequal(ids, c(
+    "psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs",
+    "pscc", "ptscs", "pscrcs"
+  ))
 
   row <- res$systems[[1L]]
   expect_equal(names(row), ASSISTANT_REGISTRY_FIELDS)

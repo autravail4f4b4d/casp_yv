@@ -1,7 +1,56 @@
-test_that("classification_registry registers all 7 expected systems", {
+test_that("classification_registry registers all 10 expected systems", {
   reg <- classification_registry()
-  expect_equal(nrow(reg), 7)
-  expect_setequal(reg$id, c("psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs"))
+  expect_equal(nrow(reg), 10)
+  expect_setequal(reg$id, c(
+    "psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs",
+    # Added in the pre-staging ingestion milestone.
+    "pscc", "ptscs", "pscrcs"
+  ))
+})
+
+test_that("PSCC and PSCCS are distinct systems with their correct canonical names", {
+  # Regression guard for META-01. These two acronyms differ by one letter
+  # and name completely unrelated classifications; the registry previously
+  # carried the commodity name on the crime classification. Asserted
+  # independently, and asserted as the CANONICAL registry value rather than
+  # anything a UI layer might alias over the top of it.
+  reg <- classification_registry()
+
+  expect_equal(
+    reg$display_name[reg$id == "pscc"],
+    "Philippine Standard Commodity Classification"
+  )
+  expect_equal(
+    reg$display_name[reg$id == "psccs"],
+    "Philippine Standard Classification of Crime for Statistical Purposes"
+  )
+
+  # Neither may carry the other's wording.
+  expect_false(grepl("Crime", reg$display_name[reg$id == "pscc"], fixed = TRUE))
+  expect_false(grepl("Commodity", reg$display_name[reg$id == "psccs"], fixed = TRUE))
+
+  expect_equal(reg$current_version[reg$id == "pscc"], "2022")
+  expect_equal(reg$current_version[reg$id == "psccs"], "2018")
+})
+
+test_that("composite systems expose components; ordinary systems do not", {
+  reg <- classification_registry()
+
+  expect_true(reg$is_composite[reg$id == "ptscs"])
+  expect_true(reg$is_composite[reg$id == "pscrcs"])
+  expect_setequal(
+    reg$available_components[reg$id == "ptscs"][[1]],
+    c("tourism_industry", "tourism_product")
+  )
+  expect_setequal(
+    reg$available_components[reg$id == "pscrcs"][[1]],
+    c("creative_industry", "creative_good_service", "creative_occupation")
+  )
+
+  for (id in c("psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs", "pscc")) {
+    expect_false(reg$is_composite[reg$id == id], info = id)
+    expect_length(reg$available_components[reg$id == id][[1]], 0)
+  }
 })
 
 test_that("every system has non-empty display_name/short_name/source/source_url", {

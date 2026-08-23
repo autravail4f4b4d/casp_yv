@@ -131,3 +131,58 @@ isic_bridge_supported <- function(bridge,
   if (is.null(targets)) return(FALSE)
   psic26_class_code %in% targets
 }
+
+#' Which ISIC Rev.5 class codes does the official UN table say a given ISIC
+#' Rev.4 class went to?
+#'
+#' WHY THIS EXISTS SEPARATELY FROM `isic_bridge_supported()`
+#' ---------------------------------------------------------
+#' `isic_bridge_supported()` can only ever *corroborate* a candidate pair the
+#' caller already thought of. The original build only ever thought of
+#' candidates that shared a code prefix with the source, so for a 2019 code
+#' whose entire numeric family disappeared in Revision 5 -- Division 45,
+#' motor-vehicle/motorcycle trade and repair, is exactly that case -- the
+#' bridge was never consulted at all, even though the UN table has a perfectly
+#' explicit answer (ISIC Rev.4 4520 "Maintenance and repair of motor vehicles"
+#' -> Rev.5 9531, 9540). This accessor lets the precedence resolver use the
+#' bridge as a *candidate generator*, which is the only way that evidence can
+#' reach a source code with no positional counterpart.
+#'
+#' CONFORMANCE GATING
+#' ------------------
+#' Only the source (2019/Rev.4) side of the conformance gate described in the
+#' file header can be applied here, because the target side is precisely what
+#' is being generated. That makes a generated candidate *weaker* than a
+#' `isic_bridge_supported()` corroborated pair, and callers must treat it that
+#' way: use it to narrow the search space, then let the target-side evidence
+#' decide confidence. Pass `psic19_class_label = NULL` to skip the gate
+#' entirely (raw table lookup).
+#'
+#' @param bridge result of `load_isic_bridge()`, or NULL.
+#' @param psic19_class_code character(1), 4-digit PSIC 2019 class code.
+#' @param psic19_class_label character(1) or NULL. When supplied, the lookup
+#'   returns nothing unless the PSIC 2019 label at that class is itself close
+#'   to the ISIC Rev.4 title at the same code (i.e. PSIC followed ISIC's
+#'   numbering there), so a nationally renumbered code never borrows an
+#'   unrelated concept's change history.
+#'
+#' @return character vector of ISIC Rev.5 class codes (possibly empty). Never
+#'   NULL, never NA.
+isic_bridge_class_targets <- function(bridge, psic19_class_code,
+                                       psic19_class_label = NULL) {
+  if (is.null(bridge)) return(character(0))
+  if (length(psic19_class_code) != 1L || is.na(psic19_class_code)) return(character(0))
+  if (!psic19_class_code %in% names(bridge$bridge_4to5)) return(character(0))
+
+  if (!is.null(psic19_class_label) && !is.na(psic19_class_label)) {
+    if (!psic19_class_code %in% names(bridge$isic4_titles)) return(character(0))
+    isic4_title <- unname(bridge$isic4_titles[[psic19_class_code]])
+    conformant <- jaccard_token_similarity(psic19_class_label, isic4_title) >=
+      CORRESPONDENCE_SIMILARITY_THRESHOLDS$isic_conformance
+    if (!conformant) return(character(0))
+  }
+
+  out <- bridge$bridge_4to5[[psic19_class_code]]
+  out <- out[!is.na(out)]
+  unique(as.character(out))
+}

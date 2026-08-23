@@ -15,8 +15,19 @@ build — see `docs/DATA_SOURCES.md`).
 
 ## Bottom line
 
+**No explicit PSA 2019 ↔ Revision 5 correspondence table has been
+incorporated into this application as of this build.**
+
+That is a statement about *this repository*, deliberately — not a claim
+about PSA's publishing programme. PSA does list **Correspondence Tables**
+among its classification support products, so such a table may well exist
+or may be published later; none has been obtained and wired in here. If one
+is incorporated, only the rows it explicitly names may become `official`
+(see "Reconciling a future official PSA crosswalk" below).
+
 **No official PSA PSIC 2019↔Revision 5 correspondence/concordance table was
-found.** This is the expected outcome: PSIC Revision 5 was approved by the
+found** during the audit described here. This is the expected outcome:
+PSIC Revision 5 was approved by the
 PSA Board only on 21 May 2026 (Board Resolution No. 09, Series of 2026) and
 released 5 August 2026 — 18 days before this audit. PSA transition/
 concordance tables have historically lagged a new classification edition's
@@ -30,6 +41,113 @@ asserts `!("official" %in% correspondence$provenance)`), not merely a
 documentation claim — if PSA later publishes an official crosswalk, that
 guard is the first thing that must be revisited (see "Reconciling a future
 official PSA crosswalk" below).
+
+## Official PSA structural evidence used
+
+Two PSA materials are used as **official structural evidence**. They
+document how Revision 5 is *built*; neither is a code-to-code crosswalk,
+so neither makes any mapping `official`.
+
+### 1. PSA Revision 5 broad structure
+
+The PSA introduction material fixes each Revision 5 section and its
+division range:
+
+```
+A 01–03   B 05–09   C 10–33   D 35      E 36–39   F 41–44
+G 46–47   H 49–53   I 55–56   J 58–60   K 61–63   L 64–66
+M 68      N 69–75   O 77–82   P 84      Q 85      R 86–88
+S 90–93   T 94–96   U 97–98   V 99
+```
+
+This is what makes the section-letter restructuring deterministic rather
+than a guess: 2026 G is trade only (46–47), 2026 J and K are two distinct
+sections (58–60 and 61–63), and every section from the old K onward sits
+one letter later.
+
+### 2. PSA Section T training material
+
+PSA's Section T material places in Revision 5 Section T:
+
+```
+Division 94  Activities of Membership Organizations
+Division 95  Repair and Maintenance of Computers, Personal and Household
+             Goods, and Motor Vehicles and Motorcycles
+Division 96  Personal Service Activities
+```
+
+and identifies **Group 953 — Repair and maintenance of motor vehicles and
+motorcycles**. This is the authority for routing former Section G repair
+activity into Section T rather than leaving it with trade.
+
+### 3. PSA support products mention Correspondence Tables
+
+PSA's support material lists **Correspondence Tables** as a product
+category. Recorded here for completeness and to prevent a future reader
+concluding PSA has no correspondence programme. It does **not** evidence
+any particular mapping, and nothing in this application is marked
+`official` on the strength of it.
+
+## The three structural restructurings this application models
+
+All three are `derived`: they follow deterministically from the two
+official PSA structures above, but PSA has published no code-level table
+confirming them individually.
+
+### G trade/repair redistribution
+
+2019 Section G combined wholesale/retail trade **with** repair of motor
+vehicles and motorcycles (division 45 carried both). Revision 5 splits
+them:
+
+```
+2019 G  →  2026 G   (trade / sales, divisions 46–47)
+        →  2026 T   (repair and maintenance, division 95 / group 953)
+```
+
+Division 45 does not exist in Revision 5 at all, so *every* 2019
+division-45 code must be re-routed by what the activity actually is. Sales
+codes go to the trade structure; repair codes go to group 953 descendants.
+Sending all former division-45 descendants to T would be wrong, and so
+would leaving them unmapped.
+
+### 2019 J → 2026 J + 2026 K
+
+The old broad Section J (Information and Communication) becomes two
+sections:
+
+```
+2019 J  →  2026 J   (publishing, broadcasting, content — divisions 58–60)
+        →  2026 K   (telecommunications, computer programming,
+                     consultancy, information services — divisions 61–63)
+```
+
+At section level this is a split; at lower levels the real 1→1, 1→N, N→1
+and complex relationships are preserved rather than flattened.
+
+### K-onward section letter shift
+
+From the old Section K onward every section moves one letter later:
+
+```
+2019 K → 2026 L    2019 L → 2026 M    2019 M → 2026 N
+2019 N → 2026 O    2019 O → 2026 P    2019 P → 2026 Q
+2019 Q → 2026 R    2019 R → 2026 S    2019 S → 2026 T
+2019 T → 2026 U    2019 U → 2026 V
+```
+
+Two rules follow, and both are enforced in code:
+
+- an **identical** section letter across editions does not imply
+  equivalence (2019 K is finance, 2026 K is telecommunications);
+- a **changed** section letter does not imply the activity changed —
+  where the underlying division/group/class concept is continuous, this is
+  deterministic continuity and is recorded as `derived` at **high**
+  confidence, never as a low-confidence fuzzy match.
+
+Note the consequence for reverse lookup: 2026 T has **two** structural
+sources — the former 2019 S (Other Service Activities) *and* the repair
+activity migrated out of 2019 G. `2026 T → 2019 S` alone would be wrong.
 
 ## Sources checked
 
@@ -122,6 +240,20 @@ the cost of it firing less often than a naive code-lookup would.
 | `official` | Never, in this build. Reserved for a future PSA-published mapping named explicitly in an official document (see "Reconciling a future official PSA crosswalk"). |
 | `derived` | Exact code continuity; class-prefix continuity (a 2019 sub-class code no longer exists but one or more 2026 sub-classes share its 4-digit class family); the "discontinued"/"new" absence findings after exhaustive deterministic search; and any of the above further corroborated by the UN ISIC bridge under its conformance gate. |
 | `suggested` | Pure/mostly label-token-similarity matches found outside any shared code family (restricted to the same group, then the same division, if the group yields nothing). |
+
+**Derived evidence is not official PSA correspondence.** This distinction
+is the whole point of the three-value vocabulary and is worth stating
+plainly, because `derived` mappings in this application are strong: they
+rest on PSA's own published Revision 5 structure, PSA's own Section T
+material, the official UN ISIC Rev.4↔Rev.5 correspondence table, and
+deterministic code/hierarchy continuity. Strong is still not the same as
+published. A `derived` edge is this application's reasoned conclusion from
+authoritative structural inputs; an `official` edge would be PSA stating
+the mapping itself. Only the latter may ever carry `official`, and none
+does today.
+
+Suggested mappings never override derived ones, and neither may be
+presented to a user as an official PSA equivalence.
 
 ## Scoring thresholds (spec section 17)
 

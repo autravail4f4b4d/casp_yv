@@ -4,7 +4,19 @@ test_that("get_classification loads every registered system/version without erro
     system <- reg$id[[i]]
     for (version in reg$available_versions[[i]]) {
       d <- get_classification(system, version)
-      expect_equal(names(d), CLASSIFICATION_SCHEMA_COLUMNS, info = paste(system, version))
+      # The canonical contract is that the first 10 columns are exactly
+      # CLASSIFICATION_SCHEMA_COLUMNS, in order. Composite/thematic systems
+      # (PTSCS, PSCrCS) legitimately append provenance columns after them --
+      # component, major_category, source_system/version/code -- because
+      # they mint no codes of their own and the underlying classification
+      # is part of the record's meaning. Canonical consumers index by name
+      # and ignore extras, so this is an extension, not a relaxation: the
+      # 10 canonical columns must still all be present, in order, first.
+      expect_equal(
+        names(d)[seq_along(CLASSIFICATION_SCHEMA_COLUMNS)],
+        CLASSIFICATION_SCHEMA_COLUMNS,
+        info = paste(system, version)
+      )
       expect_true(nrow(d) > 0, info = paste(system, version))
       expect_true(is.character(d$code), info = paste(system, version))
     }

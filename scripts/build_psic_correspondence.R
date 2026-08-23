@@ -73,10 +73,18 @@ suppressPackageStartupMessages({
 })
 
 source("R/schema.R")
-source("R/adapters/adapter_phscs.R")
+# structural_graph.R resolves section<->division membership through the
+# ordinary repository contract rather than re-reading artifacts itself, so
+# the service layer and every adapter it dispatches to must be present.
+# UI files are deliberately excluded -- this is a headless build step.
+for (.f in sort(list.files("R", pattern = "[.]R$", recursive = TRUE, full.names = TRUE))) {
+  if (!grepl("^R/ui/", .f)) source(.f)
+}
 source("R/correspondence/schema.R")
 source("R/correspondence/scoring.R")
 source("R/correspondence/isic_bridge.R")
+source("R/correspondence/structural_graph.R")
+source("R/correspondence/precedence.R")
 
 OUT_DATA_PATH <- "data/psic_2019_to_2026_correspondence.rds"
 OUT_META_PATH <- "data/psic_2019_to_2026_correspondence_metadata.rds"
@@ -178,9 +186,113 @@ make_row <- function(source_row, target_row, relation_type, provenance,
   )
 }
 
-rows <- vector("list", nrow(sub19))
+# ---------------------------------------------------------------------------
+# 3a. Structural precedence resolution (pre-staging repair)
+#
+# The original loop below matched purely on exact code -> 4-digit class
+# prefix -> 3/2-digit prefix + label similarity. That has no model of PSA's
+# section restructuring, and it failed hardest exactly where the
+# restructuring is biggest: 2019 division 45 (motor-vehicle and motorcycle
+# TRADE *and* REPAIR) has no counterpart division in Revision 5 at all --
+# trade moved into 46-47 and repair into division 95 / group 953 under the
+# new section T. With no shared prefix anywhere, all 16 of those 2019
+# sub-classes fell through every branch and were written out as
+# "discontinued" with a NULL target. Measured on the pre-repair artifact:
+# 16/16 division-45 rows had target_code = NA.
+#
+# resolve_correspondence_candidates() (R/correspondence/precedence.R)
+# applies the spec's evidence precedence -- structural relationship, then
+# ISIC bridge, then containment/code continuity, then label similarity,
+# then suggested fallback -- using the deterministic section graph in
+# R/correspondence/structural_graph.R. It is a pure function; every
+# structural fact reaches it through `hooks` and every ISIC fact through
+# the two arguments precomputed here.
+structural_hooks <- correspondence_structural_hooks()
+
+# 2026 section letter per candidate, computed once rather than per source.
+sub26$section <- vapply(
+  sub26$code,
+  function(cd) correspondence_code_section(cd, "2026", hooks = structural_hooks),
+  character(1)
+)
+
+resolved_rows <- vector("list", nrow(sub19))
 
 for (i in seq_len(nrow(sub19))) {
+  s <- sub19[i, ]
+  src_class <- substr(s$code, 1, 4)
+
+  cands <- resolve_correspondence_candidates(
+    source_row  = s,
+    targets     = sub26,
+    from_version = "2019",
+    to_version   = "2026",
+    hooks        = structural_hooks,
+    isic_class_targets = if (is.null(bridge)) character(0) else
+      isic_bridge_class_targets(bridge, src_class),
+    isic_supported = function(sc, tc) isTRUE(isic_supported_for(sc, tc)),
+    max_candidates = 5L
+  )
+
+  if (nrow(cands) == 0L) {
+    resolved_rows[[i]] <- make_row(
+      source_row = s, target_row = NULL,
+      relation_type = "discontinued", provenance = "derived",
+      confidence = "moderate", confidence_score = NA_real_,
+      method = "no_match_exhaustive_search",
+      evidence = sprintf(
+        paste(
+          "No 2026 sub-class was defensible for '%s' under any evidence tier:",
+          "no structural target, no ISIC bridge target, no shared code family,",
+          "and no label above the similarity floor (%.2f) within its group or division."
+        ),
+        s$code, CORRESPONDENCE_SIMILARITY_THRESHOLDS$candidate_minimum
+      ),
+      bucket = "none", singleton = NA
+    )
+    next
+  }
+
+  is_singleton <- nrow(cands) == 1L
+  built <- vector("list", nrow(cands))
+  for (j in seq_len(nrow(cands))) {
+    cd <- cands[j, ]
+    t <- sub26[match(cd$target_code, sub26$code), ]
+
+    # A multi-candidate result is a genuine split; a single candidate keeps
+    # the resolver's own hint (unchanged / renamed / reclassified /
+    # possible). "merged" is decided globally in stage 4 and may override.
+    relation <- if (is_singleton) cd$relation_hint else "split"
+
+    # Merge detection (stage 4) must only ever consider DETERMINISTIC
+    # singletons. Tiers 2-5 are structural / ISIC / containment / code
+    # continuity; tiers 6-7 are label similarity and suggested fallback.
+    bucket <- if (cd$evidence_tier <= 5L) "exact_or_prefix" else "fallback"
+
+    built[[j]] <- make_row(
+      source_row = s, target_row = t,
+      relation_type = relation,
+      provenance = cd$provenance,
+      confidence = cd$confidence,
+      confidence_score = cd$confidence_score,
+      method = cd$method,
+      evidence = cd$relation_evidence,
+      bucket = bucket, singleton = is_singleton
+    )
+  }
+  resolved_rows[[i]] <- dplyr::bind_rows(built)
+}
+
+# ---------------------------------------------------------------------------
+# 3b. Legacy matching loop -- retained but no longer executed.
+#
+# Kept immediately below purely so the two strategies can be diffed if a
+# regression is ever suspected; `if (FALSE)` guards it. Delete once the
+# repaired build has been through a staging cycle.
+# ---------------------------------------------------------------------------
+rows <- vector("list", nrow(sub19))
+
+if (FALSE) for (i in seq_len(nrow(sub19))) {
   s <- sub19[i, ]
   exact_idx <- if (s$code %in% names(idx_by_code)) unname(idx_by_code[[s$code]]) else NULL
 
@@ -298,7 +410,7 @@ for (i in seq_len(nrow(sub19))) {
   rows[[i]] <- dplyr::bind_rows(cand_rows)
 }
 
-sub_rows <- dplyr::bind_rows(rows)
+sub_rows <- dplyr::bind_rows(resolved_rows)
 
 # ---------------------------------------------------------------------------
 # 4. Merge detection: relabel "exact_or_prefix" singleton rows whose target
@@ -399,7 +511,70 @@ if (!is.null(higher_rows_df)) {
 # 7. Assemble, validate, save
 # ---------------------------------------------------------------------------
 
-correspondence <- dplyr::bind_rows(sub_rows, new_rows, higher_rows_df)
+# ---------------------------------------------------------------------------
+# 6b. Section-level edges (pre-staging repair).
+#
+# The pre-repair artifact contained ZERO section-level rows -- measured on
+# the shipped file. Section is the level at which PSA's restructuring is
+# actually expressed (G splitting into G+T, J into J+K, everything from the
+# old K shifting one letter), so a correspondence engine with no section
+# layer could not represent the revision at all, and "Compare Editions"
+# had nothing to show for a section query.
+#
+# These edges come straight from the deterministic section graph, which was
+# itself validated against both editions' real structures. Every one is
+# `derived`: they follow from PSA's published Revision 5 structure and
+# Section T material, but PSA has published no code-level table confirming
+# them, so none may be `official`.
+section19 <- psic19[psic19$level == "section", , drop = FALSE]
+section26 <- psic26[psic26$level == "section", , drop = FALSE]
+sec26_label <- stats::setNames(section26$label, section26$code)
+
+section_rows <- vector("list", 0)
+for (i in seq_len(nrow(section19))) {
+  s <- section19[i, ]
+  targets <- tryCatch(psic_section_targets(s$code, "2019", "2026"), error = function(e) character(0))
+  targets <- targets[!is.na(targets) & targets %in% section26$code]
+  if (length(targets) == 0L) next
+
+  edges <- PSIC_SECTION_GRAPH[
+    PSIC_SECTION_GRAPH$from_version == "2019" & PSIC_SECTION_GRAPH$from_section == s$code, ,
+    drop = FALSE
+  ]
+
+  for (tcode in targets) {
+    edge <- edges[edges$to_section == tcode, , drop = FALSE]
+    rel <- if (nrow(edge) > 0) edge$relation_type[[1]] else "renamed"
+    rationale <- if (nrow(edge) > 0) edge$rationale[[1]] else NA_character_
+
+    section_rows[[length(section_rows) + 1L]] <- make_row(
+      source_row = s,
+      target_row = tibble::tibble(
+        code = tcode, label = unname(sec26_label[[tcode]]), level = "section"
+      ),
+      relation_type = rel,
+      provenance = "derived",
+      # Deterministic structural movement documented by PSA's own Revision 5
+      # structure -- not a fuzzy guess, and must not be presented as one.
+      confidence = "high",
+      confidence_score = NA_real_,
+      method = "psa_structural_section_graph",
+      evidence = rationale %||% sprintf(
+        "PSA Revision 5 broad structure places 2019 section '%s' at 2026 section '%s'.",
+        s$code, tcode
+      ),
+      bucket = "section", singleton = length(targets) == 1L
+    )
+  }
+}
+
+section_rows_df <- if (length(section_rows) > 0) dplyr::bind_rows(section_rows) else NULL
+if (!is.null(section_rows_df)) {
+  section_rows_df$.bucket <- NULL
+  section_rows_df$.singleton <- NULL
+}
+
+correspondence <- dplyr::bind_rows(sub_rows, new_rows, higher_rows_df, section_rows_df)
 correspondence <- correspondence[, CORRESPONDENCE_SCHEMA_COLUMNS]
 for (col in setdiff(CORRESPONDENCE_SCHEMA_COLUMNS, "confidence_score")) {
   correspondence[[col]] <- as.character(correspondence[[col]])

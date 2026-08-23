@@ -13,7 +13,18 @@ invisible(lapply(sort(r_files), source))
 library(shiny)
 library(bslib)
 
-ALL_LEVELS_VALUE <- ""  # sentinel for the "All levels" select choice
+# Sentinel for the "All levels" / "All components" choices (UI-04).
+#
+# Deliberately a non-empty string. An empty-string value makes selectize
+# render the entry as greyed PLACEHOLDER text rather than a chosen option,
+# so "All levels" looked like an empty control the user had failed to fill
+# in -- which is what human UAT reported. A real token renders as a real
+# selected option while still meaning "no level restriction": it is
+# translated back to NULL before it ever reaches a service, so the
+# repository never sees a literal "All levels" where it expects a
+# classification level.
+ALL_LEVELS_VALUE <- "__all_levels__"
+ALL_COMPONENTS_VALUE <- "__all_components__"
 
 #' Tab label: Phosphor glyph + visible text.
 #'
@@ -25,6 +36,19 @@ nav_label <- function(icon, text) {
     shiny::tags$i(class = paste("ph", icon), `aria-hidden` = "true"),
     text
   )
+}
+
+#' Human-readable label for a composite system's component id.
+#'
+#' Component ids are machine tokens from the adapters
+#' (`tourism_industry`, `creative_good_service`, ...). Title-casing the
+#' words is a presentation concern only -- the id itself is what travels to
+#' the repository, so nothing here can change which records are selected.
+.component_display_name <- function(ids) {
+  vapply(ids, function(id) {
+    words <- strsplit(gsub("_", " ", id), " ", fixed = TRUE)[[1]]
+    paste(toupper(substring(words, 1, 1)), substring(words, 2), sep = "", collapse = " ")
+  }, character(1), USE.NAMES = FALSE)
 }
 
 ui <- bslib::page_navbar(
@@ -158,13 +182,73 @@ server <- function(input, output, session) {
     levels <- classification_levels(input$classification_system, input$classification_version)
     level_choices <- c("All levels" = ALL_LEVELS_VALUE, stats::setNames(levels, levels))
     updateSelectInput(session, "classification_level", choices = level_choices, selected = ALL_LEVELS_VALUE)
+
+    # --- Component control for composite systems (UI-05) -----------------
+    #
+    # PTSCS and PSCrCS are thematic: they mint no codes of their own, they
+    # select codes out of PSIC / CPC / PSOC and group them by component.
+    # Forcing those components into the Level control would present them as
+    # a code hierarchy, which they are not. So the Component select is a
+    # SEPARATE control, shown only for systems the registry marks composite
+    # -- the ordinary Level control is never renamed globally.
+    components <- classification_components(input$classification_system)
+    if (length(components) > 0L) {
+      component_choices <- c(
+        "All components" = ALL_COMPONENTS_VALUE,
+        stats::setNames(components, .component_display_name(components))
+      )
+      updateSelectInput(
+        session, "classification_component",
+        choices = component_choices, selected = ALL_COMPONENTS_VALUE
+      )
+    }
   }, ignoreNULL = TRUE)
+
+  # Drives the conditionalPanel wrapping the Component control: TRUE only
+  # for systems the registry itself reports as composite, so a system whose
+  # ingestion failed (and so never reached the registry) can never surface
+  # a component control.
+  output$classification_is_composite <- reactive({
+    req(input$classification_system)
+    length(classification_components(input$classification_system)) > 0L
+  })
+  outputOptions(output, "classification_is_composite", suspendWhenHidden = FALSE)
 
   query_debounced <- reactive(input$classification_query) |> debounce(250)
 
+  # Sentinel -> NULL, and anything that is not a genuine level for the
+  # CURRENT system+version -> NULL as well. Two states need that second
+  # guard: the input's initial "" before the first updateSelectInput()
+  # round-trip lands, and a stale level left over for one round-trip after
+  # the user switches system (psgc's "Bgy" while psic is already selected).
+  # Both must read as "no restriction" rather than reaching the repository,
+  # which correctly rejects an unknown level.
   current_level <- reactive({
     lvl <- input$classification_level
-    if (is.null(lvl) || identical(lvl, ALL_LEVELS_VALUE)) NULL else lvl
+    if (is.null(lvl) || !nzchar(lvl) || identical(lvl, ALL_LEVELS_VALUE)) {
+      return(NULL)
+    }
+    req(input$classification_system, input$classification_version)
+    if (!input$classification_version %in% classification_versions(input$classification_system)) {
+      return(NULL)
+    }
+    if (!lvl %in% classification_levels(input$classification_system, input$classification_version)) {
+      return(NULL)
+    }
+    lvl
+  })
+
+  # Sentinel -> NULL, and never send a component to a system that has none
+  # (a stale value can linger for one round-trip after switching systems).
+  current_component <- reactive({
+    cmp <- input$classification_component
+    if (is.null(cmp) || identical(cmp, ALL_COMPONENTS_VALUE)) {
+      return(NULL)
+    }
+    if (!cmp %in% classification_components(input$classification_system)) {
+      return(NULL)
+    }
+    cmp
   })
 
   results <- reactive({
@@ -178,7 +262,8 @@ server <- function(input, output, session) {
       version = input$classification_version,
       query = query_debounced(),
       level = current_level(),
-      limit = 200
+      limit = 200,
+      component = current_component()
     )
   })
 
@@ -202,7 +287,13 @@ server <- function(input, output, session) {
       display,
       selection = "single",
       rownames = FALSE,
-      options = list(pageLength = 15, dom = "ftip"),
+      # dom = "tip", NOT "ftip" (UI-03). The "f" is DataTables' own search
+      # box, which sat directly under the 56px hero search and filtered only
+      # the rows already returned -- a different mental model from the hero
+      # field, which queries the whole classification repository. Human UAT
+      # found the pair confusing. Sorting ("t" table), pagination ("p") and
+      # the result-count info line ("i") are all retained.
+      options = list(pageLength = 15, dom = "tip"),
       class = "stripe hover"
     )
   })
@@ -317,7 +408,7 @@ server <- function(input, output, session) {
       names(display) <- c("Code", "Label", "Level", "Status")
       DT::datatable(
         display, selection = "none", rownames = FALSE,
-        options = list(pageLength = 10, dom = "ftip"), class = "stripe hover"
+        options = list(pageLength = 10, dom = "tip"), class = "stripe hover"
       )
     })
     outputOptions(output, state_output_id, suspendWhenHidden = FALSE)
@@ -347,7 +438,7 @@ server <- function(input, output, session) {
     names(display) <- c("From code", "From label", "To code", "To label", "Relationship", "Provenance", "Confidence")
     DT::datatable(
       display, selection = "single", rownames = FALSE,
-      options = list(pageLength = 10, dom = "ftip"), class = "stripe hover"
+      options = list(pageLength = 10, dom = "tip"), class = "stripe hover"
     )
   })
   outputOptions(output, "correspondence_results", suspendWhenHidden = FALSE)

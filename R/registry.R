@@ -136,6 +136,53 @@
   phscs_levels("psoc", "2012")
 }
 
+# --- Guards for the supplemental adapters ---------------------------------
+#
+# Same defensive contract as .psic_versions()/.psic_current_version() above,
+# generalised. Each supplemental adapter reads its runtime artifact lazily
+# from disk, so any of these calls can throw if an artifact is missing or
+# corrupt. A failure must remove only that system from the registry, never
+# break the registry (and therefore the whole app) for every other system.
+# `character(0)` from versions_fn is how a system drops out.
+.supplemental_versions <- function(fn_name) {
+  tryCatch(
+    if (exists(fn_name, mode = "function")) as.character(get(fn_name, mode = "function")()) else character(0),
+    error = function(e) character(0)
+  )
+}
+
+.supplemental_levels <- function(fn_name) {
+  tryCatch(
+    if (exists(fn_name, mode = "function")) as.character(get(fn_name, mode = "function")()) else character(0),
+    error = function(e) character(0)
+  )
+}
+
+.supplemental_components <- function(fn_name) {
+  tryCatch(
+    if (exists(fn_name, mode = "function")) as.character(get(fn_name, mode = "function")()) else character(0),
+    error = function(e) character(0)
+  )
+}
+
+# The adapter's own metadata is authoritative for which edition is current.
+.supplemental_current <- function(meta_fn_name, versions) {
+  current <- tryCatch(
+    {
+      if (exists(meta_fn_name, mode = "function")) {
+        meta <- get(meta_fn_name, mode = "function")()
+        if (identical(meta$status, "current")) meta$version else NULL
+      } else {
+        NULL
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(current) && current %in% versions) current
+  else if (length(versions) > 0L) versions[[1]]
+  else NA_character_
+}
+
 .registry_systems_spec <- function() {
   list(
     list(
@@ -221,7 +268,15 @@
     ),
     list(
       id = "psccs",
-      display_name = "Philippine Standard Commodity Classification System",
+      # CANONICAL NAME CORRECTION (META-01). This previously read
+      # "Philippine Standard Commodity Classification System", which is the
+      # name of a *different* PSA classification. PSCCS is the crime
+      # classification; PSCC (registered separately below) is the commodity
+      # one. Fixed here in the single authoritative metadata source rather
+      # than aliased in the UI, so every consumer -- Search selector,
+      # Sources cards, detail panes and the RM registry tool -- corrects at
+      # once.
+      display_name = "Philippine Standard Classification of Crime for Statistical Purposes",
       short_name = "PSCCS",
       category = "economic",
       adapter = "adapter_phscs",
@@ -231,6 +286,60 @@
       versions_fn = function() phscs_versions("psccs"),
       current_fn = function(versions) .phscs_current_version("psccs", versions),
       levels_fn = function(version) phscs_levels("psccs", version)
+    ),
+
+    # --- Systems added in the pre-staging ingestion milestone -------------
+    #
+    # Each is served by its own supplemental adapter over a locally built,
+    # offline runtime artifact -- the same pattern as PSIC Revision 5 and
+    # PSOC 2022, and for the same reason: no PSA network dependency at
+    # request time. Every call into an adapter is wrapped in the same
+    # tryCatch/exists() guard used for psic/psoc above, so a missing or
+    # corrupt artifact degrades that ONE system out of the registry rather
+    # than erroring the whole application. A system whose ingestion failed
+    # therefore simply does not appear -- which is exactly what the Sources
+    # deck and the Search selector need, since both are registry-driven.
+    list(
+      id = "pscc",
+      # DISTINCT from PSCCS above. PSCC = commodities; PSCCS = crime.
+      display_name = "Philippine Standard Commodity Classification",
+      short_name = "PSCC",
+      category = "economic",
+      adapter = "adapter_pscc_2022",
+      supports_history = FALSE,
+      source = "Philippine Statistics Authority",
+      source_url = "https://psa.gov.ph/classification/pscc",
+      versions_fn = function() .supplemental_versions("pscc2022_versions"),
+      current_fn = function(versions) .supplemental_current("pscc2022_metadata", versions),
+      levels_fn = function(version) .supplemental_levels("pscc2022_levels")
+    ),
+    list(
+      id = "ptscs",
+      display_name = "Philippine Tourism Statistical Classification System",
+      short_name = "PTSCS",
+      category = "thematic",
+      adapter = "adapter_ptscs_2025",
+      supports_history = FALSE,
+      source = "Philippine Statistics Authority",
+      source_url = "https://psa.gov.ph/classification/ptscs",
+      versions_fn = function() .supplemental_versions("ptscs2025_versions"),
+      current_fn = function(versions) .supplemental_current("ptscs2025_metadata", versions),
+      levels_fn = function(version) .supplemental_levels("ptscs2025_levels"),
+      components_fn = function() .supplemental_components("ptscs2025_components")
+    ),
+    list(
+      id = "pscrcs",
+      display_name = "Philippine Standard Creative Classification System",
+      short_name = "PSCrCS",
+      category = "thematic",
+      adapter = "adapter_pscrcs_2025",
+      supports_history = FALSE,
+      source = "Philippine Statistics Authority",
+      source_url = "https://psa.gov.ph/classification/pscrcs",
+      versions_fn = function() .supplemental_versions("pscrcs2025_versions"),
+      current_fn = function(versions) .supplemental_current("pscrcs2025_metadata", versions),
+      levels_fn = function(version) .supplemental_levels("pscrcs2025_levels"),
+      components_fn = function() .supplemental_components("pscrcs2025_components")
     )
   )
 }
@@ -251,9 +360,25 @@ classification_registry <- function() {
 
   rows <- lapply(specs, function(s) {
     versions <- s$versions_fn()
+
+    # A supplemental system whose artifact is missing or unreadable yields
+    # no versions. Drop it rather than emitting a half-populated row: the
+    # Search selector and the Sources deck both iterate this table, and a
+    # system with no editions is not usable by either.
+    if (length(versions) == 0L) {
+      return(NULL)
+    }
+
     current_version <- s$current_fn(versions)
     levels_by_version <- lapply(versions, s$levels_fn)
     available_levels <- unique(unlist(levels_by_version, use.names = FALSE))
+
+    # Optional. Composite/thematic systems (PTSCS, PSCrCS) partition their
+    # records by `component` rather than by a code hierarchy; ordinary
+    # hierarchical systems get character(0) and are unaffected. This is the
+    # smallest extension that lets the UI decide between a Level control
+    # and a Component control without hardcoding which systems are which.
+    components <- if (is.function(s$components_fn)) s$components_fn() else character(0)
 
     tibble::tibble(
       id = s$id,
@@ -264,6 +389,8 @@ classification_registry <- function() {
       available_versions = list(versions),
       current_version = current_version,
       available_levels = list(available_levels),
+      available_components = list(components),
+      is_composite = length(components) > 0L,
       supports_history = s$supports_history,
       source = s$source,
       source_url = s$source_url

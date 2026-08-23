@@ -62,6 +62,25 @@
 # label-similarity guess with no hierarchy support lands at "low" unless the
 # title match is very strong.
 
+# STRUCTURAL EVIDENCE (added by the 2019<->2026 structural correspondence
+# repair -- see R/correspondence/precedence.R)
+# --------------------------------------------------------------------------
+# The signals above are all *positional* (same code, same code family) or
+# *textual* (same words). None of them knows anything about how PSA actually
+# restructured the section layer between PSIC 2019 and Revision 5. That gap
+# is what produced the defect this repair fixes: 2019 Division 45 (trade AND
+# repair of motor vehicles/motorcycles) has no numeric counterpart at all in
+# Revision 5 -- trade moved into Divisions 46/47 (Section G) and repair moved
+# into Division 95 / Group 953 (Section T) -- so every positional signal
+# returns nothing and the pipeline fell through to "discontinued" or to a raw
+# label guess that could land a *repair* activity in *manufacturing*.
+#
+# `structural_relationship` is therefore weighted ABOVE `exact_code`: a known,
+# documented movement of an activity between editions is stronger evidence
+# about where that activity went than the fact that some unrelated concept
+# happens to reuse the same digits. Precedence (not just weight) is enforced
+# separately by the evidence-tier model in R/correspondence/precedence.R;
+# this weight only keeps `confidence_score` ordinally consistent with it.
 CORRESPONDENCE_SCORE_WEIGHTS <- list(
   exact_code = 40,
   hierarchy_same_class = 30,
@@ -70,7 +89,8 @@ CORRESPONDENCE_SCORE_WEIGHTS <- list(
   hierarchy_none = 0,
   isic_bridge_supported = 30,
   near_identical_title = 15,
-  description_similarity = 5
+  description_similarity = 5,
+  structural_relationship = 45
 )
 
 CORRESPONDENCE_CONFIDENCE_THRESHOLDS <- list(high = 50, moderate = 25)
@@ -81,7 +101,23 @@ CORRESPONDENCE_SIMILARITY_THRESHOLDS <- list(
   near_identical_title = 0.90,   # jaccard >= this counts as "near-identical"
   description_similarity = 0.60, # jaccard >= this counts as "similar" description
   candidate_minimum = 0.34,      # jaccard >= this is even considered a fallback candidate
-  isic_conformance = 0.50        # jaccard >= this means a PSIC label "follows" its ISIC title
+  isic_conformance = 0.50,       # jaccard >= this means a PSIC label "follows" its ISIC title
+  # Lower floor used ONLY inside a target space that deterministic structural
+  # evidence has already narrowed (e.g. "this 2019 Section G code is a repair
+  # activity, so its target must be a 2026 Group 953 descendant"). Once the
+  # destination is structurally settled, label similarity is no longer being
+  # asked "is this the right neighbourhood?" -- only "which member of this
+  # already-correct neighbourhood?" -- so the bar for keeping a member as a
+  # candidate is deliberately lower than the unrestricted `candidate_minimum`.
+  # Without this, real 1->N redistributions get flattened: e.g. 2019 "45101
+  # Sale of passenger motor vehicles" scores 0.42 against the 2026 retail
+  # target but only 0.33 against the equally correct wholesale target, and the
+  # unrestricted floor would silently drop the wholesale half of the split.
+  structural_candidate_minimum = 0.20,
+  # Width of the "keep the near-ties too" window below the best-scoring
+  # candidate, so genuine N-way redistributions survive instead of being
+  # flattened to a single "best" target.
+  candidate_window = 0.15
 )
 
 #' Normalize a label for comparison: lowercase, strip punctuation, collapse
@@ -173,6 +209,12 @@ bucket_confidence <- function(score) {
 #'   possibly NA. Used for the description-similarity signal.
 #' @param isic_bridge_supported logical(1). Precomputed by the caller via
 #'   `isic_bridge_supported()` in isic_bridge.R.
+#' @param structural_supported logical(1). TRUE when a deterministic
+#'   between-edition structural relationship (section-letter shift, the
+#'   Section G trade/repair redistribution, or the 2019 J -> 2026 J/K split)
+#'   places this target in the correct destination. Defaults to FALSE so every
+#'   pre-existing caller keeps byte-identical behaviour. Computed by
+#'   `resolve_correspondence_candidates()` in R/correspondence/precedence.R.
 #'
 #' @return a list(score = double, confidence = character, hierarchy = character)
 score_correspondence <- function(exact_code,
@@ -180,13 +222,15 @@ score_correspondence <- function(exact_code,
                                   source_label, target_label,
                                   source_description = NA_character_,
                                   target_description = NA_character_,
-                                  isic_bridge_supported = FALSE) {
+                                  isic_bridge_supported = FALSE,
+                                  structural_supported = FALSE) {
   score <- 0
   hierarchy <- if (isTRUE(exact_code)) "same_class" else hierarchy_relation(source_code, target_code)
 
   if (isTRUE(exact_code)) score <- score + CORRESPONDENCE_SCORE_WEIGHTS$exact_code
   score <- score + .hierarchy_weight(hierarchy)
   if (isTRUE(isic_bridge_supported)) score <- score + CORRESPONDENCE_SCORE_WEIGHTS$isic_bridge_supported
+  if (isTRUE(structural_supported)) score <- score + CORRESPONDENCE_SCORE_WEIGHTS$structural_relationship
 
   near_identical <- is_near_identical_title(source_label, target_label)
   if (near_identical) score <- score + CORRESPONDENCE_SCORE_WEIGHTS$near_identical_title

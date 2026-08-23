@@ -91,6 +91,53 @@ body {
   font-family: var(--font-body);
 }
 
+/* ---- Page flow: the global footer must never be overlaid (UI-01) --------
+   ROOT CAUSE of the reported overlap: the footer is NOT fixed or sticky --
+   it is a plain static element, last child of page_navbar()'s
+   .container-fluid. The overlap came from bslib's *fill* page mode.
+   page_navbar() emits body.bslib-page-fill, which pins the body to exactly
+   100vh and lays its children out as a column flexbox. .tab-content then
+   received a fixed 1fr slice of that viewport (measured 808px at 900px
+   viewport) while the active .tab-pane's real content measured 1185px.
+   Because .tab-pane keeps `overflow: visible`, the surplus 377px was
+   PAINTED OUTSIDE its own box, straight over the footer -- which had
+   already been laid out at the bottom of the 100vh body. The document did
+   scroll, so the content was reachable, but rows, the DT info line and the
+   (focusable) pagination controls physically sat below/behind the footer
+   band. Measured before the fix at 1440x900 on Search: footer 862-900px,
+   last table row 1070-1120px, pagination 1175-1229px.
+
+   Fix: opt the PAGE-LEVEL chain out of viewport-height filling so the app
+   is an ordinary flowing document -- content, then the provenance note,
+   then end of scroll. No position: fixed/sticky is introduced anywhere;
+   nothing needs a reserved height because nothing is taken out of flow.
+   min-height keeps the footer at the bottom of short pages.
+
+   Scoped deliberately to `body.bslib-page-fill > .container-fluid > ...`:
+   the html-fill-item/html-fill-container machinery INSIDE panels (bslib
+   cards, notably the RM assistant card and its chat container) is
+   untouched and still fills normally. */
+html {
+  height: auto;
+}
+
+body.bslib-page-fill {
+  height: auto;
+  min-height: 100vh;
+}
+
+body.bslib-page-fill > .container-fluid.html-fill-container,
+body.bslib-page-fill > .container-fluid > .tab-content.html-fill-item {
+  flex: 1 0 auto;
+  height: auto;
+  min-height: 0;
+}
+
+body.bslib-page-fill > .container-fluid > .tab-content > .tab-pane.html-fill-item {
+  height: auto;
+  min-height: 0;
+}
+
 .mono,
 .psa-code {
   font-family: var(--font-mono);
@@ -113,6 +160,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
+summary:focus-visible,
 [tabindex]:focus-visible,
 .nav-link:focus-visible,
 .form-control:focus-visible,
@@ -672,21 +720,231 @@ table.dataTable tbody tr.selected td {
   color: color-mix(in srgb, var(--color-text) 62%, transparent);
 }
 
-/* Long provenance prose renders inside a scrollable region so the tab does
-   not become an endless page. */
+/* Long provenance prose. The former `max-height: 620px; overflow-y: auto`
+   is deliberately GONE (UI-02): it produced a nested vertical scrollbar
+   inside an already-scrolling page, which is a scroll trap on touch and
+   with a keyboard. The prose now lives inside a collapsed <details>, so
+   the page stays short by default and expands into normal page flow.
+
+   Only the *horizontal* overflow risk is handled here, and by wrapping
+   rather than by scrolling: the audit tables carry long unbroken URLs in
+   <code> spans that would otherwise push the whole document wider than a
+   320px viewport. table-layout: fixed keeps the <table> semantics intact
+   for assistive tech (unlike the common display: block hack). */
 .psa-sources-prose {
-  max-height: 620px;
-  overflow-y: auto;
   font-size: 14px;
   line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 
-.psa-sources-prose table { font-size: 13px; }
+.psa-sources-prose table {
+  font-size: 13px;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.psa-sources-prose th,
+.psa-sources-prose td { overflow-wrap: anywhere; }
+
+.psa-sources-prose pre { overflow-x: auto; }
+
+.psa-sources-prose > :first-child { margin-top: 0; }
+
+/* ---- Sources: responsive card deck (UI-02) ------------------------------
+   3 columns on wide desktop, 2 on tablet/small desktop, 1 on mobile.
+   minmax(0, 1fr) rather than 1fr so a long unbroken string in one card can
+   never force the whole grid (and therefore the document) wider than the
+   viewport. Cards size to their own content -- no fixed heights and no
+   internal scrollbars anywhere in this deck. */
+.psa-sources-section {
+  margin-top: 34px;
+}
+
+.psa-sources-section > h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--color-text);
+}
+
+.psa-sources-section > .psa-section-note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+  max-width: 720px;
+  margin: 0 0 14px;
+}
+
+.psa-card-deck {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.psa-card-deck-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.psa-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.psa-source-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.psa-source-card h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.psa-source-card-name {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+}
+
+/* Label/value pairs. A real <dl>, so the relationship survives in the
+   accessibility tree instead of being conveyed by layout alone. */
+.psa-card-dl {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 5px 12px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.psa-card-dl dt {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+
+.psa-card-dl dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.psa-card-link {
+  font-size: 13px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* ---- Semantic disclosure (<details>/<summary>) --------------------------
+   Native element on purpose: keyboard-operable (Enter/Space), correct
+   expanded/collapsed state in the accessibility tree, and it needs no
+   JavaScript at all. The default triangle marker is replaced by a caret so
+   the affordance matches the rest of the UI; the summary keeps a ≥44px tap
+   target and the app-wide :focus-visible ring (see the focus block above,
+   which lists `summary`). */
+.psa-disclosure {
+  border-top: 1px solid var(--color-divider);
+  margin-top: 2px;
+}
+
+.psa-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 2px;
+  font-size: 13px;
+  color: var(--color-accent-300);
+  cursor: pointer;
+  list-style: none;
+}
+
+.psa-disclosure > summary::-webkit-details-marker { display: none; }
+
+.psa-disclosure > summary::after {
+  content: "\25be";
+  font-size: 14px;
+  line-height: 1;
+}
+
+.psa-disclosure[open] > summary::after { content: "\25b4"; }
+
+.psa-disclosure > summary:hover { color: var(--color-accent); }
+
+.psa-disclosure-body {
+  padding: 2px 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Archived editions: a plain wrapped list of outlined tags, revealed only
+   after the reader asks for it (PSGC alone has 12 archived releases, which
+   as always-visible badges dominated the card). */
+.psa-edition-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Provenance vocabulary definitions on the correspondence card. */
+.psa-provenance-dl {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.psa-provenance-dl dt {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.psa-provenance-dl dd {
+  margin: 0;
+  min-width: 0;
+  color: color-mix(in srgb, var(--color-text) 72%, transparent);
+}
 
 /* =========================================================================
    Responsive — HANDOFF §3. bslib/Bootstrap 5 defaults, plus a 375px floor.
    No breakpoints beyond these were invented.
    ========================================================================= */
+
+/* Sources deck: 3 columns only where there is genuinely room for them.
+   Below 1200px (small desktop / tablet landscape) drop to 2, below 768px
+   to a single column. Matches the 3/2/1 target in the UI repair spec. */
+@media (max-width: 1199.98px) {
+  .psa-card-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767.98px) {
+  .psa-card-deck,
+  .psa-card-deck-2 { grid-template-columns: minmax(0, 1fr); }
+
+  /* Label/value pairs stack rather than squeezing the value column to a
+     few characters at phone width. */
+  .psa-card-dl,
+  .psa-provenance-dl { grid-template-columns: minmax(0, 1fr); }
+
+  .psa-card-dl dt,
+  .psa-provenance-dl dt { margin-top: 4px; }
+}
 
 /* Tablet: 576–991px — single-column Search body, panels stack. */
 @media (max-width: 991.98px) {

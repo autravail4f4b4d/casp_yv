@@ -75,9 +75,11 @@ server logic in the same change.
 
 | ID | Type | Meaning |
 |---|---|---|
-| `classification_system` | input (select) | Selected system id (`psgc`, `psic`, `psoc`, `psced`, `pcoicop`, `pcpc`, `psccs`) |
+| `classification_system` | input (select) | Selected system id. Ten registered: `psgc`, `psic`, `psoc`, `psced`, `pcoicop`, `pcpc`, `psccs`, `pscc`, `ptscs`, `pscrcs`. Choices are built from `classification_registry()`, never hard-coded |
 | `classification_version` | input (**radioButtons**) | Selected edition/release id for the current system. Rendered as a radio group so every edition and its Current/Archived status is visible at once — this is where Browse/Archive lives, so archived editions must not be hidden inside a closed dropdown. The ID and the value it yields are unchanged; only the widget type differs, so `app.R` updates it with `updateRadioButtons()` (rich `choiceNames` carrying the status badge, plain `choiceValues`) rather than `updateSelectInput()` |
-| `classification_level` | input (select) | Selected hierarchy level id, or `""` (the "All levels" sentinel, `ALL_LEVELS_VALUE` in `app.R`) |
+| `classification_level` | input (select) | Selected hierarchy level id, or `ALL_LEVELS_VALUE` (`"__all_levels__"`) meaning no level restriction. **The sentinel is deliberately non-empty**: an empty-string value makes selectize render the entry as greyed placeholder text rather than a chosen option, which human UAT read as an unfilled control. `app.R` translates it (and any level not valid for the current system+version) back to `NULL` before it reaches a service, so the repository never receives a literal `"All levels"` |
+| `classification_component` | input (select) | Component id for composite systems, or `ALL_COMPONENTS_VALUE` (`"__all_components__"`). Wrapped in a `conditionalPanel` on `output.classification_is_composite`, so it appears only for systems the registry marks composite |
+| `classification_is_composite` | output (reactive flag) | Drives the Component control's visibility. Derived from `classification_components()`, so a system whose ingestion failed and never registered can never surface the control |
 | `classification_query` | input (text) | Free-text search query; blank = browse |
 | `classification_results` | output (DT table) | Results table; row selection drives the detail card |
 | `selected_entry` | output (uiOutput) | The "Selected entry" detail card body |
@@ -499,3 +501,114 @@ normal-size text (13px is not "large"). It was raised to 55% wherever it
 carries content — an intentional, documented divergence from the handoff's
 exact opacity value, taken because the handoff also requires WCAG-conscious
 states and accessibility wins the tie.
+
+## 18. Pre-staging UI repairs (UI-01 … UI-05, META-01)
+
+### UI-01 — global footer no longer overlays content
+
+The footer was never `position: fixed` or `sticky`. The overlap came from
+bslib's **fill page mode**: `page_navbar()` emits `body.bslib-page-fill`,
+which pins the body to exactly `100vh` and lays its children out as a
+column flexbox. `.tab-content` then received a fixed viewport-sized slice
+while the active `.tab-pane`'s real content was taller, and because
+`.tab-pane` keeps `overflow: visible` the surplus was painted outside its
+own box — straight over the footer. The document did scroll, so content was
+reachable, but rows, the DT info line and the focusable pagination controls
+physically sat behind the footer band. Measured before the fix at 1440×900
+on Search: footer 862–900px, last table row 1070–1120px, pagination
+1175–1229px.
+
+The fix opts the **page-level chain only** out of viewport-height filling,
+so the app is an ordinary flowing document. Nothing is taken out of flow,
+so nothing needs a reserved height; `min-height: 100vh` keeps the footer at
+the bottom of short pages. The `html-fill-item` / `html-fill-container`
+machinery *inside* panels — notably the RM assistant card and its chat
+container — is deliberately untouched and still fills normally.
+
+Verified `position: static`, zero overlap and zero horizontal overflow at
+1440, 1366, 768, 375 and 320px.
+
+### UI-02 — Sources is a card deck, not a scroll trap
+
+Sources previously used fixed-height (`max-height: 620px; overflow-y:
+auto`) prose panels — nested scrollbars inside an already-scrolling page —
+with implementation paths dominating a public page. It is now one normal
+page scroll: a registry-driven card deck, then supplemental edition
+provenance cards, then a correspondence methodology card, then technical
+implementation details.
+
+**The deck is registry-driven and must stay that way.** It iterates
+`classification_registry()`; there is no hard-coded list of systems. A
+system that registers gets a card automatically, and a system whose
+ingestion or validation failed never reaches the registry and so silently
+gets no card. Long audit and technical material sits behind native
+`<details>`/`<summary>` disclosures: keyboard-operable, correctly
+represented in the accessibility tree, no JavaScript.
+
+Verified: 13 cards (10 registered systems + PSIC Rev 5 + PSOC 2022 +
+correspondence methodology), 8 disclosures all collapsed by default,
+**zero nested scroll regions**, no horizontal overflow.
+
+Nothing on this page overrides a registry value. `display_name` renders
+verbatim — a UI-only alias papering over a wrong canonical value would hide
+a defect rather than fix it.
+
+### UI-03 — redundant results-table search removed
+
+Every results grid now uses `dom = "tip"` rather than `"ftip"`. The `"f"`
+is DataTables' own search box, which sat directly beneath the hero search
+and filtered only already-returned rows — a different mental model from the
+hero field, which queries the whole classification repository. Human UAT
+found the pair confusing. Sorting, pagination and the info line are all
+retained.
+
+Applied to all three grids (Search, both PSOC + PSIC panels, Compare
+Editions) because each sits under its own canonical app-level query field
+and therefore duplicates it.
+
+### UI-04 — "All levels" is a real default
+
+See the `classification_level` row in §4. The sentinel is non-empty so the
+option renders as genuinely selected, and it is translated to `NULL` before
+reaching a service. Switching system or edition resets Level to All levels.
+
+Verified UAT fixture: PSGC + `negros` + All levels returns matches at
+**Reg, Prov and Bgy simultaneously** (4 results across three levels).
+
+### UI-05 — Component control for composite systems
+
+PTSCS and PSCrCS mint no codes of their own: they select codes out of
+PSIC / CPC / PSOC and group them by component. Presenting those components
+as hierarchy levels would misrepresent them, so they get a **separate
+Component control**, shown only for systems the registry marks composite.
+The ordinary Level control is never globally renamed.
+
+The underlying source classification stays visible in results:
+`search_classification_data()` now preserves adapter-supplied extra columns
+(`component`, `major_category`, `source_system`, `source_version`,
+`source_code`) after the canonical 10, instead of dropping them. Ordinary
+systems have no extras and are unaffected.
+
+### META-01 — PSCCS naming corrected canonically
+
+`R/registry.R` now carries:
+
+```
+PSCC   Philippine Standard Commodity Classification                      (2022)
+PSCCS  Philippine Standard Classification of Crime for Statistical Purposes (2018)
+```
+
+Fixed in the single authoritative metadata source, not aliased in the UI,
+so the Search selector, Sources cards, detail panes and the RM registry
+tool all correct at once. A regression test asserts both names
+independently and asserts neither carries the other's wording.
+
+## 19. Canonical schema: extra columns are permitted after the first ten
+
+The contract is that the **first ten columns are exactly
+`CLASSIFICATION_SCHEMA_COLUMNS`, in order**. Composite/thematic systems
+legitimately append provenance columns after them, because for those
+systems the underlying classification is part of the record's meaning.
+Canonical consumers index by name and ignore extras, so this is an
+extension rather than a relaxation — the ten canonical columns must still
+all be present, in order, first.

@@ -96,6 +96,15 @@ search_classification_data <- function(data, query, level = NULL, limit = 100) {
   matched <- matched[!is.na(matched$.rank_tier), , drop = FALSE]
   matched <- dplyr::arrange(matched, .data$.rank_tier, .data$.orig_order)
 
-  result <- matched[, CLASSIFICATION_SCHEMA_COLUMNS, drop = FALSE]
+  # Canonical columns first, then any extra columns the adapter supplied,
+  # then drop the scratch ranking columns. Composite/thematic systems
+  # (PTSCS, PSCrCS) append provenance columns -- component, major_category,
+  # source_system/version/code -- after the canonical 10, and those must
+  # survive a search: the underlying source classification is part of the
+  # statistical meaning of the record and has to remain visible in result
+  # details, not just in an unsearched browse. Ordinary systems have no
+  # extras and are completely unaffected.
+  extras <- setdiff(names(matched), c(CLASSIFICATION_SCHEMA_COLUMNS, ".rank_tier", ".orig_order"))
+  result <- matched[, c(CLASSIFICATION_SCHEMA_COLUMNS, extras), drop = FALSE]
   head(result, limit)
 }

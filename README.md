@@ -3,7 +3,8 @@
 A read-only R Shiny app for searching and browsing Philippine Statistics
 Authority (PSA) statistical classifications: PSGC, PSIC (including PSIC
 Revision 5 / the "2026 PSIC"), PSOC (including the "2022 Updates to the
-2012 PSOC"), PSCED, PCOICOP, PCPC, and PSCCS. It also provides a parallel
+2012 PSOC"), PSCED, PCOICOP, PCPC, PSCCS (crime), PSCC (commodities),
+PTSCS (tourism) and PSCrCS (creative). It also provides a parallel
 PSOC + PSIC occupation/industry search, a bidirectional PSIC 2019 ↔
 Revision 5 (2026) correspondence explorer, and **RM**, an optional grounded
 conversational assistant that can only ever quote codes retrieved from this
@@ -55,6 +56,9 @@ Rscript scripts/build_psic_2026.R              # PSIC Revision 5 (2026)
 Rscript scripts/build_psoc_2022.R              # 2022 Updates to the 2012 PSOC
 Rscript scripts/build_psic_correspondence.R    # PSIC 2019 <-> 2026 correspondence
 Rscript scripts/build_assistant_assets.R       # RM pairings + compact PSIC rules
+Rscript scripts/build_pscc_2022.R              # PSCC 2022 (commodities)
+Rscript scripts/build_ptscs_2025.R             # PTSCS 2025 v2.1 (tourism)
+Rscript scripts/build_pscrcs_2025.R            # PSCrCS 2025 (creative)
 ```
 
 `build_psoc_2022.R` requires `data-raw/2022-Updates-to-the-2012-PSOC.xlsx`

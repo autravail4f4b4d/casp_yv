@@ -1,11 +1,13 @@
 # Implementation Status — PSA Statistical Classifications Search
 
-> **Latest milestone: Unified visual redesign** — see
-> [Unified UI milestone](#unified-ui-milestone) at the end of this document.
-> Regression: **1103 / 1103 passing**, unchanged from the pre-redesign
-> baseline (presentation-only milestone; no functional tests added).
+> **Latest milestone: Pre-staging hardening** — see
+> [Pre-staging hardening milestone](#pre-staging-hardening-milestone) at the
+> end of this document. Regression: **1904 / 1904 passing** (from a verified
+> 1103 baseline). PSIC structural correspondence repaired, three new
+> classification systems ingested, PSCCS name corrected, UI/UAT defects
+> fixed.
 
-This document covers **four milestones**:
+This document covers **five milestones**:
 
 1. The original functionality-first MVP (`PSA_CLASSIFICATIONS_4_HOUR_CLAUDE_CODE_BUILD.md`)
    — complete, preserved as the known-good baseline. See git commit
@@ -18,7 +20,9 @@ This document covers **four milestones**:
    (`PSA_CLASSIFICATIONS_RM_ASSISTANT_INTEGRATION.md`). Complete;
    committed as `c9dfbb5`.
 4. The unified visual redesign (`HANDOFF-CLAUDE-CODE.md` /
-   `unified-app-primary.dc.html`) — the subject of this update.
+   `unified-app-primary.dc.html`). Complete; committed as `31cb046`.
+5. Pre-staging hardening (`PRE_STAGING_PARALLEL_EXECUTION_MASTER.md` and
+   its three underlying specifications) — the subject of this update.
 
 ## Recovery from interrupted session
 
@@ -785,3 +789,265 @@ host (see `docs/DEPLOYMENT.md`). Two things should happen before a *public*
 launch rather than a staging one: a human visual review, and — if RM is to
 be enabled — a real provider key plus the live multilingual/grounding
 evaluation that has never been run.
+
+---
+
+# Pre-staging hardening milestone
+
+Executed per `PRE_STAGING_PARALLEL_EXECUTION_MASTER.md` and its three
+underlying specifications: PSIC structural correspondence repair,
+additional-classification ingestion, and pre-staging UI/UAT repair.
+
+## Starting gate
+
+| | |
+|---|---|
+| Branch | `feature/pre-staging-hardening` |
+| Starting commit | `bc2a1fb` |
+| Working tree | clean (no uncommitted work to preserve) |
+| Starting test count | **1103 / 1103**, verified by execution, not assumed |
+
+## Workstream graph as executed
+
+Six Wave-1 workstreams ran in parallel with disjoint file ownership
+(PSCC / PTSCS / PSCrCS ingestion; correspondence structural graph;
+correspondence detailed mapping; UI footer + Sources deck). A session
+usage limit terminated four of them mid-flight; each had written
+substantially more to disk than its final message implied, so the recovery
+was an audit-and-finish rather than a restart. Remnants completed by the
+orchestrator: `docs/CORRESPONDENCE_SOURCES.md` structural-evidence sections
+(9 failing provenance assertions), and
+`tests/testthat/test-correspondence-detailed.R` (never written).
+
+Convergence waves, all single-owner, in order: registry/metadata →
+correspondence artifact rebuild → shared UI → RM integration check →
+targeted tests → full regression → browser UAT → documentation.
+
+## Files changed by workstream
+
+**New classification sources**
+```
+scripts/build_pscc_2022.R          R/adapters/adapter_pscc_2022.R
+scripts/build_ptscs_2025.R         R/adapters/adapter_ptscs_2025.R
+scripts/build_pscrcs_2025.R        R/adapters/adapter_pscrcs_2025.R
+data/pscc_2022{,_metadata}.rds
+data/ptscs_2025_v2_1{,_metadata}.rds
+data/pscrcs_2025{,_metadata}.rds
+tests/testthat/test-{pscc-2022,ptscs-2025,pscrcs-2025}.R
+```
+
+**Correspondence repair**
+```
+R/correspondence/structural_graph.R   (new)
+R/correspondence/precedence.R         (new)
+R/correspondence/scoring.R            (extended)
+R/correspondence/isic_bridge.R        (extended)
+scripts/build_psic_correspondence.R   (structural integration + section edges)
+data/psic_2019_to_2026_correspondence{,_metadata}.rds  (rebuilt)
+tests/testthat/test-correspondence-{structural,provenance,detailed}.R
+docs/CORRESPONDENCE_SOURCES.md
+```
+
+**Shared convergence (orchestrator-owned)**
+```
+R/registry.R      3 systems registered, PSCCS name corrected, components column
+R/repository.R    dispatch for 3 systems, component filter + validation
+R/search.R        preserve adapter extra columns through ranking
+app.R             DT search removed, All-levels sentinel, Component control
+R/ui/ui_search.R  Component control
+R/ui/ui_sources.R registry-driven card deck (agent)
+www/app.css       page-flow fix + Sources deck styles (agent)
+tests/testthat/test-{registry,repository,assistant-tools,assistant-integration}.R
+docs/{DATA_SOURCES,UI_CONTRACT,CORRESPONDENCE_SOURCES}.md
+```
+
+## New classification validation counts
+
+| System | Version | Official target | Parsed | Result |
+|---|---|---|---|---|
+| PSCC | 2022 | (none published) | 21,547 records | built |
+| PTSCS | 2025 v2.1 | 176 industries / 214 products | **176 / 214** | exact |
+| PSCrCS | 2025 | 317 / 409 / 114 | **317 / 409 / 114** | exact |
+
+PTSCS's sheets hold 196/236 physical rows; the differences were fully
+accounted for (16/18 category headings + column header + 2 blank spacers +
+sheet title = exactly 19/21) before any parsing decision. Category headings
+are preserved as `major_category` metadata, not emitted as records — they
+carry only a presentational ordinal, no official code.
+
+Both composite workbooks' own Metadata sheets independently state their
+counts and underlying classifications, so the targets were confirmed from
+source rather than taken on faith.
+
+## PSCCS correction
+
+`R/registry.R` previously carried `display_name = "Philippine Standard
+Commodity Classification System"` on `psccs` — the name of a different
+classification. Corrected in the single authoritative metadata source (not
+aliased in the UI) to **Philippine Standard Classification of Crime for
+Statistical Purposes**, edition 2018. PSCC is separately registered as
+**Philippine Standard Commodity Classification**, 2022. A regression test
+asserts both independently and asserts neither carries the other's wording.
+Verified in the running app: Search selector, Sources cards and the RM
+registry tool all report the corrected names.
+
+## Correspondence root cause and fix
+
+**Root cause.** The builder matched exact code → 4-digit class prefix →
+3/2-digit prefix + label similarity. It had no model of PSA's section
+restructuring, so wherever a whole division was dissolved it produced
+nothing at all. Measured on the pre-repair artifact: **all 16 of 2019
+division 45's sub-classes (motor-vehicle and motorcycle trade *and* repair)
+were `discontinued` with `target_code = NA`**, because Revision 5 contains
+zero `45*` codes — trade moved to divisions 46–47 and repair to division 95
+/ group 953. The artifact also contained **zero section-level rows**, so the
+level at which the restructuring is actually expressed was absent entirely.
+
+**Fix.** A deterministic section graph (`structural_graph.R`) validated
+against both editions' real structures, plus a precedence resolver
+(`precedence.R`) implementing the spec's evidence order — structural
+relationship → ISIC bridge → containment/code continuity → label
+similarity → suggested fallback — so structural movement can no longer be
+overridden by fuzzy similarity. Section-level edges are emitted from the
+graph. Reverse lookup is derived from the same artifact, never separately
+authored.
+
+Verified structural rules:
+
+```
+2019 G -> 2026 G + T      trade stays in 46-47, repair migrates to 95/953
+2019 J -> 2026 J + K      58-60 -> J, 61-63 -> K
+2019 K -> 2026 L, L -> M, M -> N, N -> O, O -> P, P -> Q,
+         Q -> R, R -> S, S -> T, T -> U, U -> V
+reverse: 2026 T -> BOTH 2019 S and 2019 G (multi-source, as required)
+```
+
+Verified detailed examples from real records:
+
+| 2019 | Label | 2026 target(s) |
+|---|---|---|
+| 45101 | Sale of passenger motor vehicles | 46611/46619/47811/47812/47819 (trade only) |
+| 45201 | Repair of motor vehicles, incl. overhauling | 95311/95314/95315/95319 (repair only) |
+| 45202 | Repair of batteries for motor vehicles | includes 95314 battery repair |
+| 45203 | Vulcanizing/preparing of tires | 95311/95319 |
+| 95311 | (reverse) | 45201, 45202, 45203, 45209 |
+
+Trade and repair are cleanly separated: every division-45 source lands
+wholly in 46/47 **or** wholly in 95, never straddling both. Divisions
+58–63 map on a clean diagonal with no cross-contamination.
+
+## Artifact statistics, before → after
+
+| | Before | After |
+|---|---|---|
+| Total edges | 2,699 | **3,285** |
+| Section-level rows | **0** | **23** |
+| discontinued (unmapped 2019) | 143 | **6** |
+| new (unmatched 2026) | 251 | 172 |
+| derived | 2,510 | 3,247 |
+| suggested | 189 | **38** |
+| official | 0 | **0** (unchanged, enforced by test) |
+| high confidence | 1,985 | 2,147 |
+
+The large fall in `suggested` and in `discontinued` is the point: structural
+evidence replaced fuzzy guesses, and whole dissolved divisions now resolve.
+
+## UI fixes
+
+- **UI-01** footer overlay — root cause was bslib fill-page mode, not a
+  fixed/sticky footer; page-level chain opted out of viewport filling.
+- **UI-02** Sources rebuilt as a registry-driven card deck with native
+  `<details>` disclosures; zero nested scroll regions.
+- **UI-03** redundant DataTables search removed from all three grids
+  (`dom = "tip"`); sorting, pagination and info line retained.
+- **UI-04** `All levels` is a real selected option via a non-empty sentinel,
+  translated to `NULL` before reaching any service.
+- **UI-05** conditional Component control for composite systems; adapter
+  extra columns now survive search so source provenance stays visible.
+- **META-01** verified in Search selector, Sources cards and RM registry.
+
+## Tests
+
+| Gate | Result |
+|---|---|
+| Starting baseline | 1103 / 1103 |
+| After registry convergence | 1835 / 1835 |
+| After correspondence rebuild | 1835 / 1835 |
+| **Final full regression** | **1904 / 1904** |
+
+`0 failures, 0 warnings, 0 skips.` +801 tests, no regressions. Every
+previously passing test still passes; four assertions were legitimately
+updated (three "7 registered systems" counts, and the canonical-columns
+check relaxed to "first ten, in order" to accommodate composite extras).
+
+## Browser UAT
+
+Verified against a live app. Screenshots are unavailable in this
+environment (the browser pane does not composite), so verification was by
+DOM geometry, computed styles and the accessibility tree.
+
+| Check | Result |
+|---|---|
+| Five destinations render | pass |
+| PSGC `negros` + All levels | pass — 4 results across **Reg, Prov and Bgy** |
+| Blank-query browse | pass |
+| Archived edition selection | pass |
+| PSCC punctuated codes | pass — `0301.99.49-001`, `10.06` verbatim |
+| PTSCS component switching | pass — product filter isolates products |
+| PSCrCS component switching | pass — 114 occupations exactly |
+| Correct PSCCS label | pass |
+| No native DT search field | pass — 0 present |
+| Compare Editions G repair | pass — 45201 → 95311/95314/95315/95319, split, warning shown |
+| Compare Editions reverse | pass — 2026 T → 2019 S **and** G |
+| Sources deck | pass — 13 cards, 8 collapsed disclosures, 0 scroll traps |
+| Footer overlap | pass — static, no overlap at any viewport |
+| RM disabled state | pass — calm unavailable panel, other tabs unaffected |
+| RM composer 375 / 320 px | pass — Send 44×44, in viewport, in a11y tree |
+| Viewports 1440 / 1366 / 768 / 375 / 320 | pass — no horizontal overflow |
+
+**No live LLM provider evaluation was performed** — no credentials are
+available. RM was exercised with a fake key, which verifies UI states and
+the deterministic tool layer only. No multilingual or grounding-behaviour
+claims are made from a live model.
+
+## Known limitations
+
+- **No live RM provider evaluation** (no credentials). Unchanged from the
+  RM milestone; all 12 evaluation cases remain pending a real key.
+- **No official PSA 2019↔Revision 5 crosswalk is incorporated.** Every
+  correspondence edge is `derived` or `suggested`; none is `official`,
+  enforced by test. If PSA publishes one, only rows it explicitly names may
+  be relabelled.
+- **Some repair mappings are moderate-confidence multi-target splits.**
+  45202 (battery repair) returns four ranked candidates including the exact
+  95314 counterpart rather than that one alone. This is deliberate —
+  multiplicity must not be flattened — but precision could improve with a
+  published crosswalk.
+- **6 of 1,360 2019 sub-classes remain unmapped** (down from 143) and 172
+  Revision 5 sub-classes are genuinely new. Both are honest findings after
+  exhaustive deterministic search, not gaps in coverage.
+- **PSIC Revision 5 groups: 261 parsed vs 260 stated by PSA** — pre-existing
+  documented discrepancy, unchanged.
+- **PSOC 2022 unit groups: 466 parsed vs 456 stated** — likewise
+  pre-existing and documented.
+- **Composite systems' codes are not globally unique** within a system;
+  uniqueness is per `(component, code)`. Three PSCrCS collisions exist
+  today. `get_classification_entry()` surfaces multi-row matches rather
+  than hiding them.
+- **Mid-stream RM provider-failure surfacing remains unwired** — upstream
+  shinychat gap, documented in `docs/ASSISTANT_CONTRACT.md` §12.
+- **No human has visually reviewed the rendered UI.** Verification was
+  structural (DOM/a11y/computed style), not visual.
+- **`renv.lock` is out of sync** — reported by `renv::status()` during test
+  runs. No new R packages were added by this milestone; a snapshot should be
+  taken before deployment.
+
+## Staging readiness
+
+All Definition-of-Done items in the master plan are satisfied: repaired
+structural correspondence with forward/reverse symmetry and honest
+provenance; PSCC / PTSCS / PSCrCS ingested and validated; PSCCS corrected;
+All-levels default, redundant search removed, component controls, Sources
+cards, no footer overlap, no mobile regressions; targeted and full
+regression suites passing; all five destinations and both mobile floors
+verified.

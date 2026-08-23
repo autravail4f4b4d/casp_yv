@@ -82,7 +82,50 @@ classification_levels <- function(system, version) {
   if (identical(system, "psgc")) {
     return(psgc_levels(version))
   }
+  if (identical(system, "pscc")) {
+    return(pscc2022_levels())
+  }
+  if (identical(system, "ptscs")) {
+    return(ptscs2025_levels())
+  }
+  if (identical(system, "pscrcs")) {
+    return(pscrcs2025_levels())
+  }
   phscs_levels(system, version)
+}
+
+.validate_component <- function(system, component) {
+  if (is.null(component)) {
+    return(invisible(TRUE))
+  }
+  components <- classification_components(system)
+  if (length(components) == 0L) {
+    stop(sprintf(
+      "System '%s' has no components — it is an ordinary hierarchical classification, so filter it by level instead.",
+      system
+    ), call. = FALSE)
+  }
+  if (!component %in% components) {
+    stop(sprintf(
+      "Unsupported component '%s' for system '%s'. Available components: %s",
+      component, system, paste(components, collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Component ids for a composite/thematic system.
+#'
+#' PTSCS and PSCrCS partition their records by `component` (tourism
+#' industry vs. product; creative industry vs. good/service vs.
+#' occupation) rather than by a code hierarchy -- they mint no codes of
+#' their own, they select codes out of PSIC/CPC/PSOC and group them
+#' thematically. An ordinary hierarchical system returns `character(0)`,
+#' which is how a caller tells the two kinds apart without hardcoding a
+#' list of system ids.
+classification_components <- function(system) {
+  reg <- .registry_row_for(system)
+  reg$available_components[[1]]
 }
 
 .validate_level <- function(system, version, level) {
@@ -111,9 +154,10 @@ classification_levels <- function(system, version) {
 #'   returns every level.
 #'
 #' @return A tibble with exactly `CLASSIFICATION_SCHEMA_COLUMNS`.
-get_classification <- function(system, version, level = NULL) {
+get_classification <- function(system, version, level = NULL, component = NULL) {
   .validate_version(system, version)
   .validate_level(system, version, level)
+  .validate_component(system, component)
 
   if (identical(system, "psgc")) {
     return(psgc_get(version, level = level))
@@ -123,6 +167,15 @@ get_classification <- function(system, version, level = NULL) {
   }
   if (identical(system, "psoc") && identical(version, "2022")) {
     return(psoc2022_get(level = level))
+  }
+  if (identical(system, "pscc")) {
+    return(pscc2022_get(level = level))
+  }
+  if (identical(system, "ptscs")) {
+    return(ptscs2025_get(level = level, component = component))
+  }
+  if (identical(system, "pscrcs")) {
+    return(pscrcs2025_get(level = level, component = component))
   }
   phscs_get(system, version, level = level)
 }
@@ -140,11 +193,17 @@ get_classification <- function(system, version, level = NULL) {
 #'
 #' @return A tibble with exactly `CLASSIFICATION_SCHEMA_COLUMNS`, at most
 #'   `limit` rows. Never errors on a no-match query; never returns NULL.
-search_classification <- function(system, version, query, level = NULL, limit = 100) {
+search_classification <- function(system, version, query, level = NULL,
+                                   limit = 100, component = NULL) {
   .validate_version(system, version)
   .validate_level(system, version, level)
+  .validate_component(system, component)
 
-  data <- get_classification(system, version, level = NULL)
+  # `component` narrows the pool BEFORE ranking, exactly as `level` does --
+  # it is a filter on which records are eligible, not a change to how they
+  # are ranked. The single deterministic ranking engine in R/search.R is
+  # reused unchanged; no second ranking path exists for composite systems.
+  data <- get_classification(system, version, level = NULL, component = component)
   search_classification_data(data, query, level = level, limit = limit)
 }
 
@@ -183,6 +242,15 @@ classification_metadata <- function(system, version) {
   }
   if (identical(system, "psoc") && identical(version, "2022")) {
     return(psoc2022_metadata())
+  }
+  if (identical(system, "pscc")) {
+    return(pscc2022_metadata())
+  }
+  if (identical(system, "ptscs")) {
+    return(ptscs2025_metadata())
+  }
+  if (identical(system, "pscrcs")) {
+    return(pscrcs2025_metadata())
   }
   phscs_metadata(system, version)
 }

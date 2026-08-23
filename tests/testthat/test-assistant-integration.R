@@ -36,7 +36,7 @@ test_that("every deterministic classification service still works with the assis
 
     # The full pre-existing service contract, exercised with RM off.
     reg <- classification_registry()
-    expect_equal(nrow(reg), 7)
+    expect_equal(nrow(reg), 10)
 
     expect_equal(classification_versions("psoc"), reg$available_versions[reg$id == "psoc"][[1]])
 

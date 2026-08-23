@@ -71,6 +71,26 @@ search_ui <- function() {
             selected = character(0)
           )
         ),
+        # Component control for composite/thematic systems (UI-05).
+        #
+        # Shown ONLY when the registry reports the selected system as
+        # composite -- PTSCS and PSCrCS today. Those systems group records
+        # by component (tourism industry vs. product; creative industry vs.
+        # good/service vs. occupation) rather than by a code hierarchy, so
+        # they get their own control instead of having their components
+        # misrepresented as hierarchy levels. The ordinary Level control is
+        # never globally renamed.
+        #
+        # The condition reads a server-side flag derived from the registry,
+        # so a system whose ingestion failed and never registered can never
+        # surface this control.
+        shiny::conditionalPanel(
+          condition = "output.classification_is_composite",
+          shiny::selectInput(
+            "classification_component", "Component",
+            choices = NULL, width = "100%"
+          )
+        ),
         shiny::selectInput(
           "classification_level", "Level",
           choices = NULL, width = "100%"
