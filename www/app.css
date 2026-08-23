@@ -5,3 +5,51 @@
 dl.row dt {
   font-weight: 600;
 }
+
+/* --- RM Assistant -------------------------------------------------------
+   Minimal layout-only rules for the chat panel. shinychat already ships its
+   own component styling (bubbles, input, cancel control); these rules only
+   make the chat fill its card and keep the input anchored while the message
+   list scrolls, including on narrow viewports. All selectors are prefixed
+   .rm-assistant- so nothing here can collide with existing app styles or
+   with shinychat's internals. */
+
+.rm-assistant-card {
+  /* Let the card participate in bslib's fill layout without a fixed height. */
+  overflow: hidden;
+}
+
+.rm-assistant-card shiny-chat-container {
+  /* Fill the card body; the message list scrolls, the input stays put. */
+  height: 100%;
+  max-height: 100%;
+}
+
+.rm-assistant-disclaimer {
+  font-size: 0.8125rem;
+  opacity: 0.75;
+}
+
+/* Keep the chat grid from being widened by its own content.
+   shiny-chat-container is display:grid, and a grid item's default
+   min-width:auto lets a wide child size the column past the container. On a
+   375px viewport this produced a 579.75px column inside a 325px card: the
+   page itself did not scroll, so the overflow was silently clipped and the
+   send button ended up off-screen and absent from the accessibility tree,
+   making RM unusable on a phone. minmax(0, 1fr) lets the column shrink. */
+.rm-assistant-card shiny-chat-container {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 575.98px) {
+  /* On phones, reclaim the horizontal padding for message text and let the
+     panel use more of the viewport height. */
+  .rm-assistant-card {
+    min-height: 70vh;
+  }
+
+  .rm-assistant-header {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+}

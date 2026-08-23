@@ -32,6 +32,23 @@ ui <- bslib::page_navbar(
   bslib::nav_panel("Search", value = "search", search_ui()),
   bslib::nav_panel("Dual Search", value = "dual_search", dual_search_ui()),
   bslib::nav_panel("Compare PSIC Editions", value = "correspondence", correspondence_ui()),
+  # RM Assistant. Which panel body is built is decided ONCE at startup from
+  # the deployment's provider configuration: a deployment either has a
+  # working assistant configuration or it does not (spec 21). When it does
+  # not, the deterministic Search/Browse/Dual/Correspondence tabs are
+  # completely unaffected -- that independence is the whole point, and is
+  # asserted by tests/testthat/test-assistant-integration.R.
+  bslib::nav_panel(
+    "RM Assistant", value = "rm_assistant",
+    local({
+      st <- rm_assistant_status()
+      if (isTRUE(st$enabled) && isTRUE(st$available)) {
+        rm_assistant_ui()
+      } else {
+        rm_assistant_unavailable_ui(st$reason)
+      }
+    })
+  ),
   bslib::nav_panel("About / Data Sources", value = "about", shiny::uiOutput("sources_panel")),
   footer = shiny::tags$footer(
     class = "text-muted small p-2 border-top mt-2",
@@ -274,6 +291,57 @@ server <- function(input, output, session) {
     correspondence_detail_ui(correspondence_selected())
   })
   outputOptions(output, "correspondence_detail", suspendWhenHidden = FALSE)
+
+  # --- RM Assistant (see the SERVER CONTRACT block in R/ui/ui_assistant.R) ---
+  #
+  # PER SESSION, deliberately. An ellmer Chat is a mutable R6 object that
+  # accumulates conversation turns; hoisting this out of the server function
+  # would share one client across every public visitor and leak one user's
+  # conversation into another's (spec 10/22). Nothing here is cached at
+  # module level.
+  #
+  # create_rm_chat_client() returns NULL rather than erroring whenever the
+  # assistant is disabled or misconfigured, so the whole block is a no-op in
+  # a deployment without a provider -- the deterministic tabs above are
+  # entirely unaffected.
+  rm_client <- create_rm_chat_client(tools = rm_assistant_tools())
+
+  if (!is.null(rm_client)) {
+    # No `greeting =` argument: the static greeting is already baked into
+    # the initial HTML by rm_assistant_ui(), costing zero model tokens and
+    # zero server round-trips (spec 9). Passing it again would set it twice.
+    rm_chat <- shinychat::chat_mod_server("rm_assistant", client = rm_client)
+
+    # New chat. The module's own clear() resets BOTH the visible transcript
+    # and the ellmer client's turn history, so the model forgets the
+    # conversation too rather than silently retaining it behind a cleared UI.
+    observeEvent(input[["rm_assistant-new_chat"]], {
+      rm_chat$clear()
+    })
+
+    # KNOWN LIMITATION -- mid-stream provider failure is silent client-side.
+    #
+    # If the provider call fails *after* the assistant was successfully
+    # configured (expired or revoked key, network fault, rate limit),
+    # shinychat rolls the transcript back and restores the user's text to
+    # the input box, but shows them nothing explaining why. The failure IS
+    # logged server-side by shinychat, and no secret or stack trace reaches
+    # the browser, so this is a UX gap rather than a safety or security one.
+    # The startup-time degradation path (assistant disabled or
+    # misconfigured -> rm_assistant_unavailable_ui()) works correctly and is
+    # the case spec 21 is chiefly concerned with.
+    #
+    # A fix was attempted and deliberately reverted rather than left in
+    # place half-working. Three separate approaches were tried against
+    # shinychat 0.4.0 and none reached the DOM on the errored-stream path:
+    # the module's own `append()` helper, the top-level
+    # `shinychat::chat_append()` against the namespaced id, and
+    # `showNotification()`. Detection itself was proven to work (tracing
+    # confirmed the failed stream leaves an EMPTY assistant turn on the
+    # ellmer client, which is distinguishable from a real reply); it is
+    # only the surfacing that fails. Revisit when shinychat exposes an
+    # error hook on its chat module -- see docs/ASSISTANT_CONTRACT.md.
+  }
 }
 
 shinyApp(ui, server)

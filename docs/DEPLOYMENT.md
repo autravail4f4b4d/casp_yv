@@ -13,14 +13,54 @@ The project is an `renv` project (`renv.lock`, `.Rprofile` sourcing
 `renv/activate.R`). Every package the app or its build/test scripts use is
 pinned to the exact version installed and verified during this build (R
 4.6.1): `shiny`, `bslib`, `phscs`, `psgc`, `dplyr`, `stringr`, `tibble`,
-`purrr`, `DT`, `readxl`, `testthat`, `httr2`, `digest`. renv also recorded
-its own transitive dependencies (rlang, vctrs, htmltools, etc.).
+`purrr`, `DT`, `readxl`, `testthat`, `httr2`, `digest`, and — added for the
+RM Assistant — `ellmer` (0.4.2) and `shinychat` (0.4.0), plus their
+dependencies `S7` and `coro`. renv also recorded its own transitive
+dependencies (rlang, vctrs, htmltools, etc.).
 
 To restore this exact environment on a fresh machine/host:
 
 ```
 Rscript -e "renv::restore()"
 ```
+
+## RM Assistant — model provider configuration
+
+The RM Assistant (see `docs/ASSISTANT_CONTRACT.md`) is the only part of this
+application that talks to an external service, and it is **off by default**.
+
+| Variable | Default when unset | Meaning |
+|---|---|---|
+| `RM_ASSISTANT_ENABLED` | **disabled** | Master switch. `false`/`0`/`no`/`off`/empty also disable |
+| `RM_PROVIDER` | `openai` | `openai` or `anthropic` |
+| `RM_MODEL` | `gpt-4o-mini` | Model id |
+| `OPENAI_API_KEY` | — | Required when `RM_PROVIDER=openai` |
+| `ANTHROPIC_API_KEY` | — | Required when `RM_PROVIDER=anthropic` |
+
+Set these as **server-side environment variables on the host** (Posit
+Connect Cloud exposes an environment-variable panel per deployment). Never
+commit them: no key belongs in `app.R`, client HTML/JavaScript, a committed
+`.Renviron`, or this repository. The application only *checks whether* the
+credential variable is present; the value itself is read by `ellmer`
+directly and is never copied into application code or into any user-visible
+string.
+
+Two operational notes:
+
+- **`RM_DEFAULT_MODEL` is an OpenAI model id.** A deployment that sets
+  `RM_PROVIDER=anthropic` must also set `RM_MODEL` to a valid Anthropic
+  model, otherwise the client constructs successfully and then fails on the
+  first message rather than at startup.
+- **An invalid or expired key cannot be detected without a network call.**
+  Such a deployment reports the assistant as available and fails on the
+  first user message. See the mid-stream-failure limitation in
+  `docs/ASSISTANT_CONTRACT.md` §12.
+
+Leaving the assistant disabled is a fully supported production
+configuration: the deterministic Search, Browse/Archive, Dual Search and
+Compare PSIC Editions features are entirely unaffected, and the RM tab
+renders a calm "temporarily unavailable" panel. This is asserted by
+`tests/testthat/test-assistant-integration.R`.
 
 ## Runtime data dependencies — no PSA network calls at runtime
 

@@ -46,13 +46,21 @@ edition is PSA's current one or an archived reference.
 | Browse/Archive | Combined into the Search screen; edition selector + level selector + blank-query browse together satisfy this |
 | Dual Search | Implemented as a separate nav panel — one query, independent PSOC (occupations) + PSIC (industries) result panels |
 | Compare PSIC Editions | Implemented as a separate nav panel — bidirectional PSIC 2019 ↔ Revision 5 (2026) correspondence explorer |
+| RM Assistant | Implemented as a separate nav panel — conversational assistant (shinychat + ellmer). See `docs/ASSISTANT_CONTRACT.md` |
 | About/Data Sources | Implemented as a separate nav panel |
 
-All four nav panels live under one `bslib::page_navbar(id = "main_nav", ...)`
+All five nav panels live under one `bslib::page_navbar(id = "main_nav", ...)`
 — `input$main_nav` is a real Shiny input holding the active tab's `value`
-(`"search"` / `"dual_search"` / `"correspondence"` / `"about"`). See the
-implementation note under section 4 for why this exists and why every
-secondary-tab output is gated on it.
+(`"search"` / `"dual_search"` / `"correspondence"` / `"rm_assistant"` /
+`"about"`). See the implementation note under section 4 for why this exists
+and why every secondary-tab output is gated on it.
+
+**The RM Assistant panel is the one exception to that gating**, and
+deliberately so: it declares no Shiny outputs at all. The chat is a custom
+element driven by custom messages (delivered whether or not the tab is
+visible) and its greeting is present in the initial HTML rather than pushed
+from the server, so it needs neither the `req(input$main_nav == ...)` gate
+nor `outputOptions(suspendWhenHidden = FALSE)`.
 
 ## 4. Stable Shiny input/output IDs
 
@@ -81,6 +89,10 @@ server logic in the same change.
 | `correspondence_query` | input (text) | Code or title fragment to search within the correspondence artifact; blank = browse |
 | `correspondence_results` | output (DT table) | One row per relationship (a split/merge appears as multiple rows); row selection drives the detail panel |
 | `correspondence_detail` | output (uiOutput) | Full relationship detail: source/target entries, relation type, provenance, confidence, evidence, and the statistical-safety warning when relevant |
+| `rm_assistant` | Shiny module id | The RM Assistant module namespace (stable; specified by the assistant spec) |
+| `rm_assistant-chat` | shinychat chat element | The chat transcript + composer. Created by `shinychat::chat_mod_ui()`; driven by `shinychat::chat_mod_server()` |
+| `rm_assistant-chat_user_input` | input (textarea) | The chat composer's value, set on submit |
+| `rm_assistant-new_chat` | input (actionButton) | Clear / new chat. The server calls the module's `clear()`, which resets BOTH the transcript and the ellmer client's turn history |
 
 **Implementation note for whoever next edits `app.R` — the `input$main_nav`
 gate pattern:** every output outside the default "Search" tab (`sources_panel`,
@@ -150,6 +162,12 @@ Defined in `R/repository.R` (integration layer), `R/registry.R`, and
   logic).
 - Compare PSIC Editions screen: `search_psic_correspondence()`,
   `get_psic_correspondence()` (`R/correspondence/service.R`).
+- RM Assistant screen: `rm_assistant_status()`, `create_rm_chat_client()`
+  (`R/assistant/assistant_client.R`), `rm_assistant_tools()`
+  (`R/assistant/assistant_tools.R`), `RM_GREETING` / `RM_FOOTER_TEXT`
+  (`R/assistant/assistant_prompt.R`), and `shinychat::chat_mod_server()`.
+  The UI never constructs a chat client itself and never calls a
+  classification adapter directly.
 
 ## 7. Result object schema
 
@@ -198,6 +216,27 @@ may be `NA`.
 | official / derived / suggested | `provenance_badge()` renders green/blue/yellow respectively; see section 15 for why no row is currently `official` |
 | reverse lookup | Switching `correspondence_direction` to `"2026-2019"` re-queries the same artifact in the other direction via the same `get_psic_correspondence()`/`search_psic_correspondence()` functions |
 
+### RM Assistant states (see `docs/ASSISTANT_CONTRACT.md`)
+
+| State | How it's shown |
+|---|---|
+| Initial | Static greeting beginning exactly **"Madayaw! I am RM."**, four starter suggestion chips, empty composer. Rendered from the initial HTML — **no model call and no server round-trip** is spent on the greeting |
+| Streaming | shinychat streams the reply; the send button becomes a **"Stop generating"** cancel control (provided natively by shinychat, not hand-rolled) |
+| Cancelled | User presses "Stop generating"; the partial reply stops |
+| New chat | `rm_assistant-new_chat` clears the transcript AND the ellmer client's turn history, then the static greeting reappears — again with no model call |
+| Unavailable | `rm_assistant_unavailable_ui(reason)` replaces the whole chat: "RM Assistant is temporarily unavailable" plus "You can still search and browse all classifications using the main application", and optionally a short non-technical reason. Decided once at startup from the deployment's provider configuration. Never renders a stack trace or provider error text |
+| Provider fails mid-stream | **Known limitation** — the transcript rolls back and the user's text is restored, but no explanation is shown. Documented in `docs/ASSISTANT_CONTRACT.md` §12 |
+
+Responsive note specific to this panel: `shiny-chat-container` is a CSS
+grid, and a grid item's default `min-width: auto` lets a wide child size the
+column past its container. At 375px this produced a ~580px column inside a
+~325px card, silently clipping the send button off-screen (it disappeared
+from the accessibility tree entirely, making RM unusable on a phone). The
+fix is a single rule in `www/app.css`:
+`.rm-assistant-card shiny-chat-container { grid-template-columns: minmax(0, 1fr); }`.
+**Keep it, or re-verify mobile reachability of the send button if you change
+the chat layout.**
+
 ## 9. Responsive requirements
 
 `bslib::page_navbar` + `layout_sidebar` are responsive by default
@@ -242,9 +281,15 @@ the page body scrolling horizontally).
 
 - `R/schema.R`, `R/registry.R`, `R/repository.R`, `R/search.R`,
   `R/parallel_search.R`, `R/correspondence/*.R`, `R/adapters/*.R`,
+  `R/assistant/*.R`, `prompts/RM_SYSTEM_PROMPT.md`,
   `scripts/build_psic_2026.R`, `scripts/build_psoc_2022.R`,
-  `scripts/build_psic_correspondence.R`, anything under `data/` or
+  `scripts/build_psic_correspondence.R`,
+  `scripts/build_assistant_assets.R`, anything under `data/` or
   `data-raw/`, and every file under `tests/`.
+- The RM grounding rule and its three enforcement points (prompt, tool
+  results, tests); the registered tool list and their result field sets;
+  the fail-closed default of `RM_ASSISTANT_ENABLED`; and per-session chat
+  client construction. See `docs/ASSISTANT_CONTRACT.md` §13.
 - The ranking order in `R/search.R` (exact code → code prefix → exact
   label → label prefix → label contains → description contains) — this is
   the ONLY ranking engine; dual search reuses it verbatim, it does not

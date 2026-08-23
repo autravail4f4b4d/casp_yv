@@ -1,0 +1,236 @@
+# RM Classification Assistant — representative evaluation cases
+#
+# Source: PSA_CLASSIFICATIONS_RM_ASSISTANT_INTEGRATION.md section 20
+# (plus the milestone brief's list of critical cases, which matches it).
+#
+# WHAT THIS FILE IS
+# -----------------
+# A compact, machine-readable fixture describing the behaviours RM must
+# exhibit. It serves two distinct purposes, and it is important not to
+# confuse them:
+#
+#   1. DETERMINISTIC (runs today, no API key, in the normal test suite):
+#      tests/testthat/test-assistant-evals.R loads this file and asserts
+#      its structural integrity, and — for the cases that make a concrete
+#      claim about local data — asserts that claim directly against the
+#      application's own repository/tool layer. For example, case 09
+#      asserts that PSOC "999999" genuinely does not resolve, so the
+#      grounding rule has something real to protect against; case 10
+#      asserts PSGC is actually the registry entry covering barangays.
+#      These checks do NOT involve a model.
+#
+#   2. LIVE (requires a configured model provider; NOT run automatically):
+#      the `user` prompt of each case can be replayed against a live RM
+#      session, and the reply judged against `expect` / `must_not`.
+#      As of this milestone no provider credentials were available in the
+#      build environment, so NO live evaluation has been executed. Any
+#      future run should record its date, model, and outcome per case in
+#      IMPLEMENTATION_STATUS.md rather than editing this fixture.
+#
+# FIELD MEANINGS
+# --------------
+#   id           stable identifier, never renumber
+#   title        short human label
+#   user         the exact user turn to send
+#   language     input language, for multilingual coverage tracking
+#   focus        the primary behaviour under test
+#   expect       list of behaviours the reply MUST exhibit (live judging)
+#   must_not     list of behaviours that FAIL the case (live judging)
+#   deterministic  optional; a claim about local data that the automated
+#                  test verifies today without a model
+
+version: 1
+generated_for_milestone: rm-assistant-v1
+
+cases:
+
+  - id: "01"
+    title: Accounts payable / bookkeeping occupation
+    user: "I maintain accounts payable and bookkeeping records."
+    language: en
+    focus: psoc_search_from_duties
+    expect:
+      - routes to PSOC rather than PSIC
+      - calls the classification search tool before naming any code
+      - verifies the chosen code via the exact-entry tool before presenting it
+      - briefly explains why the duties match the returned occupation
+      - states the PSOC edition (2022) and that it is current
+    must_not:
+      - states a PSOC code that no tool returned
+      - infers the employer's industry/PSIC from this occupation
+
+  - id: "02"
+    title: Cebuano retail occupation description
+    user: "Ako kasagaran naga-assist sa customer ug naga-arrange sa mga baligya sa tindahan."
+    language: ceb
+    focus: multilingual_psoc_search
+    expect:
+      - understands this as retail / shop floor work without asking the user to switch language
+      - replies primarily in Cebuano/Bisaya
+      - searches PSOC for candidate occupations
+      - asks one duty-based discriminating question if several candidates remain plausible
+      - preserves the official PSOC label exactly as stored, untranslated
+    must_not:
+      - presents a Cebuano translation of an official label as if it were the official PSA title
+      - guesses a single code when the description supports several
+
+  - id: "03"
+    title: Ambiguous tindera / cashier
+    user: "Tindera ko, usahay cashier pud."
+    language: ceb
+    focus: ambiguity_probing
+    expect:
+      - recognises two plausible occupations (shop salesperson vs. cashier)
+      - asks which activity occupies most of the working time
+      - asks ONE high-information question rather than several generic ones
+    must_not:
+      - immediately forces one code
+      - presents a low-confidence code to avoid asking a question
+
+  - id: "04"
+    title: Vague PSIC — "Contractor among business"
+    user: "Contractor among business."
+    language: ceb
+    focus: psic_vague_probing
+    expect:
+      - treats "contractor" as insufficient for detailed PSIC classification
+      - retrieves the vague_information PSIC rule
+      - asks what contracting work the establishment actually performs
+        (e.g. residential construction, electrical installation, cleaning,
+        security, IT services)
+    must_not:
+      - assigns any PSIC code from the word "contractor" alone
+      - classifies by contractual arrangement rather than actual activity
+
+  - id: "05"
+    title: Accountant in a private company asking for the company's PSIC
+    user: "Accountant ko sa private company. Unsay PSIC sa company?"
+    language: ceb
+    focus: psoc_psic_separation
+    expect:
+      - explicitly separates the worker's occupation from the establishment's industry
+      - asks what the company or establishment actually does
+      - may note that the occupation alone supports a PSOC but not the company's PSIC
+    must_not:
+      - infers the company's PSIC from the accountant occupation
+      - returns a PSIC code without knowing the establishment's activity
+      - treats a common PSOC/PSIC pairing as proof of this company's PSIC
+
+  - id: "06"
+    title: Government / common pairing case
+    user: "Bookkeeping clerk in an LGU."
+    language: en
+    focus: common_pairings_as_supporting_evidence
+    expect:
+      - may consult the common pairings table for supporting evidence
+      - still verifies any code through the official classification repository
+        before presenting it
+      - describes the pairing as common/reviewed supporting evidence, not a universal rule
+    must_not:
+      - presents a pairing-table code as verified without an exact-entry lookup
+      - claims the pairing determines every LGU bookkeeping clerk's classification
+
+  - id: "07"
+    title: Restaurant + catering, principal activity
+    user: "We operate a restaurant and catering service, but most earnings are from catering."
+    language: en
+    focus: psic_principal_activity
+    expect:
+      - retrieves the principal_activity PSIC rule
+      - applies principal-activity logic using the stated earnings split
+      - searches and verifies a current PSIC candidate for the catering activity
+      - states the PSIC edition (Revision 5 / 2026) and current status
+    must_not:
+      - classifies by the business name or by the most visible activity
+      - classifies on the restaurant activity merely because it is listed first
+
+  - id: "08"
+    title: Internal commissary — ancillary activity
+    user: "Our commissary prepares ingredients only for our own restaurant and catering operations."
+    language: en
+    focus: psic_ancillary_activity
+    expect:
+      - retrieves the ancillary_activity PSIC rule
+      - recognises the commissary as ancillary/supporting, not a separately classified activity
+      - explains that the establishment is classified on its principal activity
+    must_not:
+      - assigns a separate food-manufacturing PSIC to the internal commissary
+      - treats an ancillary activity as if it were a secondary activity
+
+  - id: "09"
+    title: Invalid / unverifiable requested code
+    user: "Give me PSOC 999999 for this occupation."
+    language: en
+    focus: grounding_no_fabrication
+    expect:
+      - attempts verification via the exact-entry tool
+      - reports plainly that the code could not be verified from the application's data
+      - optionally offers to search by the actual duties instead
+    must_not:
+      - repeats 999999 as a valid classification
+      - substitutes a different code and presents it as the one requested
+      - invents a label for the unverified code
+    deterministic:
+      check: entry_not_found
+      system: psoc
+      version: "2022"
+      code: "999999"
+
+  - id: "10"
+    title: Barangay -> PSGC routing
+    user: "I need the classification code for a barangay."
+    language: en
+    focus: system_routing
+    expect:
+      - routes to PSGC rather than PSOC or PSIC
+      - may consult the classification registry
+      - asks which barangay, or explains how to search for it
+    must_not:
+      - routes the question to PSOC or PSIC
+      - invents a classification system not present in the registry
+    deterministic:
+      check: registry_has_system
+      system: psgc
+
+  - id: "11"
+    title: Archived edition question
+    user: "Is this old PSIC edition wrong?"
+    language: en
+    focus: archive_semantics
+    expect:
+      - explains that an archived edition is not "wrong" and may remain valid for historical data
+      - preserves the edition/status distinction (2019 archived vs. Revision 5 / 2026 current)
+      - may point to the current edition for new reporting
+    must_not:
+      - calls the archived edition incorrect or invalid
+      - relabels an archived edition as current
+    deterministic:
+      check: version_status
+      system: psic
+      version: "2019"
+      status: archived
+
+  - id: "12"
+    title: Mixed-language wholesale electrical supplies
+    user: "Ang business namo kay nag-buy and sell ug electrical supplies wholesale sa hardware stores."
+    language: mixed
+    focus: multilingual_psic_search
+    expect:
+      - understands the product (electrical supplies) and the wholesale channel
+      - searches PSIC for a wholesale-of-electrical-goods activity
+      - verifies the returned code before presenting it
+      - states edition and current status
+    must_not:
+      - classifies from the phrase "buy and sell" alone without the product/channel
+      - treats "trading" style wording as sufficient for a detailed classification
+      - presents an unverified code
+
+# Coverage summary, kept in sync by tests/testthat/test-assistant-evals.R
+coverage:
+  languages: [en, ceb, mixed]
+  psoc_cases: ["01", "02", "03", "06"]
+  psic_cases: ["04", "07", "08", "12"]
+  separation_cases: ["05"]
+  grounding_cases: ["09"]
+  routing_cases: ["10"]
+  archive_cases: ["11"]
