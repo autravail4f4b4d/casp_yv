@@ -4,21 +4,32 @@
 
 This repository is the PSA Statistical Classifications Search application.
 
-The authoritative implementation specification for the current build is:
+The original MVP implementation specification is:
 
 `PSA_CLASSIFICATIONS_4_HOUR_CLAUDE_CODE_BUILD.md`
 
-Read that file before planning or modifying the project.
+It remains the architectural and historical baseline for the project.
+
+The current implementation milestone is defined separately under **Current Functional Extension** below.
 
 ## Current Implementation Phase
 
-The current objective is the functionality-first four-hour MVP described in the implementation specification.
+The functionality-first MVP is complete and preserved as the known-good baseline.
 
-Build the functional classification application first.
+The current phase is the post-MVP functional extension defined in:
+
+`PSA_CLASSIFICATION_PSOC2022_DUAL_SEARCH_PSIC_CORRESPONDENCE.md`
+
+The current work must:
+
+- add PSOC 2022 as the current/default PSOC;
+- retain PSOC 2012 as archived;
+- implement dual PSOC + PSIC search;
+- implement PSIC 2019 ↔ 2026 correspondence;
+- preserve existing MVP behavior and tests;
+- update the UI contract for the next Claude Design pass.
 
 Do NOT perform the final visual/UI redesign during this phase.
-
-The working application will be passed to Claude Design after functionality, tests, and deployment readiness are verified.
 
 ## Engineering Method
 
@@ -79,9 +90,9 @@ The UI should depend on stable service contracts.
 
 ## PSIC Revision 5
 
-PSIC Revision 5 / 2026 PSIC must be supported in the first implementation.
+PSIC Revision 5 / 2026 PSIC is part of the verified project baseline and must remain supported.
 
-Do not assume the installed `phscs` package already contains Revision 5.
+Do not replace or bypass the existing supplemental PSIC Revision 5 ingestion merely because the installed `phscs` package changes in the future. Any migration to a package-provided Revision 5 source must preserve the existing canonical contracts, provenance, archive behavior, and tests.
 
 If it does not, use the official PSA Revision 5 workbook and the normalization pipeline specified in:
 
@@ -95,7 +106,7 @@ PSIC 2019 must remain available as an archived reference.
 
 ## Scope Restrictions
 
-For this MVP, do not introduce unless required by the implementation specification:
+For the current functional extension, do not introduce unless required by the current implementation specification:
 
 - PostgreSQL
 - SQLite
@@ -161,12 +172,45 @@ Maintain:
 
 It must accurately identify:
 
+- recovery state from any interrupted implementation;
 - completed work;
 - tests executed and results;
+- PSOC 2022 status;
+- PSOC 2012 archive status;
 - PSIC Revision 5 status;
+- dual-search status;
+- PSIC correspondence status;
 - deployment status;
 - known limitations;
 - deferred work;
 - Claude Design handoff readiness.
 
-Stop the current implementation phase once the MVP acceptance criteria in the authoritative specification are satisfied.
+Stop the current implementation phase once the acceptance criteria in:
+
+`PSA_CLASSIFICATION_PSOC2022_DUAL_SEARCH_PSIC_CORRESPONDENCE.md`
+
+are satisfied.
+
+## Current Functional Extension
+
+The authoritative specification for the current implementation milestone is:
+
+`PSA_CLASSIFICATION_PSOC2022_DUAL_SEARCH_PSIC_CORRESPONDENCE.md`
+
+Read that file before modifying the application for this milestone.
+
+This specification supersedes the earlier dual-search / PSIC-correspondence specification wherever they conflict.
+
+Current required outcomes are:
+
+1. Add PSOC 2022 as the current/default PSOC using an official PSA source and a local normalized runtime artifact.
+2. Retain PSOC 2012 as an archived reference.
+3. Implement parallel PSOC + PSIC search, defaulting to:
+   - PSOC 2022
+   - PSIC Revision 5 (2026)
+4. Implement bidirectional PSIC 2019 ↔ 2026 correspondence with explicit official / derived / suggested provenance.
+5. Preserve all valid existing MVP behavior and regression tests.
+6. Implement only minimal functional UI for these additions.
+7. Final visual design remains a separate Claude Design phase.
+
+Because a previous Claude Code session was interrupted by a usage limit, always inspect the current Git/worktree/test state before assuming which parts of this milestone are complete.
