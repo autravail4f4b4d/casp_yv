@@ -78,6 +78,64 @@
   phscs_levels("psic", "2019")
 }
 
+# PSOC follows the exact same pattern as PSIC above: phscs only contains the
+# archived 2012 edition, while PSA's current edition is the "2022 Updates to
+# the 2012 PSOC", supplied by a THIRD, sibling-owned source:
+# R/adapters/adapter_psoc_2022.R (backed by data/psoc_2022.rds), exposing
+# psoc2022_versions()/psoc2022_levels()/psoc2022_get()/psoc2022_metadata().
+# Same tryCatch + exists() degrade-gracefully guards as PSIC.
+.psoc_versions <- function() {
+  versions <- phscs_versions("psoc")
+  extra <- tryCatch(
+    {
+      if (exists("psoc2022_versions", mode = "function")) {
+        as.character(psoc2022_versions())
+      } else {
+        character(0)
+      }
+    },
+    error = function(e) character(0)
+  )
+  unique(c(versions, extra))
+}
+
+.psoc_current_version <- function(versions) {
+  current <- tryCatch(
+    {
+      if (exists("psoc2022_metadata", mode = "function")) {
+        meta <- psoc2022_metadata()
+        if (identical(meta$status, "current")) meta$version else NULL
+      } else {
+        NULL
+      }
+    },
+    error = function(e) NULL
+  )
+  if (!is.null(current) && current %in% versions) {
+    return(current)
+  }
+  # PSOC 2022 adapter unavailable, or it didn't report itself as current:
+  # degrade to the phscs-sourced version so the field is never empty (this
+  # never happens once the 2022 artifact is built and present, but keeps
+  # the registry total).
+  .phscs_current_version("psoc", versions)
+}
+
+.psoc_levels <- function(version) {
+  extra <- tryCatch(
+    {
+      if (exists("psoc2022_levels", mode = "function")) as.character(psoc2022_levels()) else character(0)
+    },
+    error = function(e) character(0)
+  )
+  if (length(extra) > 0L) {
+    return(extra)
+  }
+  # PSOC 2022 adapter unavailable: fall back to the phscs-sourced 2012
+  # level vocabulary (major/sub-major/minor/unit).
+  phscs_levels("psoc", "2012")
+}
+
 .registry_systems_spec <- function() {
   list(
     list(
@@ -114,13 +172,13 @@
       display_name = "Philippine Standard Occupational Classification",
       short_name = "PSOC",
       category = "economic",
-      adapter = "adapter_phscs",
-      supports_history = FALSE,
+      adapter = "adapter_phscs",  # + adapter_psoc_2022 (sibling); see .psoc_versions()
+      supports_history = TRUE,
       source = "Philippine Statistics Authority",
       source_url = "https://psa.gov.ph/classification/psoc",
-      versions_fn = function() phscs_versions("psoc"),
-      current_fn = function(versions) .phscs_current_version("psoc", versions),
-      levels_fn = function(version) phscs_levels("psoc", version)
+      versions_fn = .psoc_versions,
+      current_fn = .psoc_current_version,
+      levels_fn = .psoc_levels
     ),
     list(
       id = "psced",

@@ -47,22 +47,33 @@ test_that("pcoicop 2020 is current and pcoicop 2009 is archived", {
   expect_true(all(d2009$status == "archived"))
 })
 
+test_that("psoc 2012 is archived (superseded by the 2022 Updates to the 2012 PSOC)", {
+  d <- phscs_get("psoc", "2012")
+  expect_true(all(d$status == "archived"))
+})
+
 test_that("psoc parent_code is genuinely derived and independently verifiable", {
   # Verified against real phscs::get_psoc() output: unit group 1111
   # ("Legislators") belongs to minor group 111 ("Legislators and senior
   # officials"), which belongs to sub-major 11, which belongs to major 1.
+  #
+  # Level names updated to the canonical PSOC vocabulary (major_group/
+  # sub_major_group/minor_group/unit_group) as part of the PSOC 2022
+  # extension, so this edition's level ids match the 2022 edition's --
+  # this is a deliberate, spec-mandated rename (not a weakened assertion);
+  # see R/adapters/adapter_phscs.R's psoc entry for the rationale.
   d <- phscs_get("psoc", "2012")
-  unit_row <- d[d$level == "unit" & d$code == "1111", ]
+  unit_row <- d[d$level == "unit_group" & d$code == "1111", ]
   expect_equal(nrow(unit_row), 1)
   expect_equal(unit_row$parent_code, "111")
 
-  minor_row <- d[d$level == "minor" & d$code == "111", ]
+  minor_row <- d[d$level == "minor_group" & d$code == "111", ]
   expect_equal(minor_row$parent_code, "11")
 
-  submajor_row <- d[d$level == "sub-major" & d$code == "11", ]
+  submajor_row <- d[d$level == "sub_major_group" & d$code == "11", ]
   expect_equal(submajor_row$parent_code, "1")
 
-  major_row <- d[d$level == "major" & d$code == "1", ]
+  major_row <- d[d$level == "major_group" & d$code == "1", ]
   expect_true(is.na(major_row$parent_code))
 })
 
@@ -131,7 +142,9 @@ test_that("psgc_versions/psgc_levels/psgc_metadata behave as documented", {
 
 test_that("phscs_versions/phscs_levels/phscs_metadata behave as documented", {
   expect_equal(phscs_versions("psic"), "2019")
-  expect_equal(phscs_levels("psoc", "2012"), c("major", "sub-major", "minor", "unit"))
+  # Level vocabulary renamed to the canonical PSOC form as part of the
+  # PSOC 2022 extension -- see R/adapters/adapter_phscs.R's psoc entry.
+  expect_equal(phscs_levels("psoc", "2012"), c("major_group", "sub_major_group", "minor_group", "unit_group"))
 
   meta <- phscs_metadata("psic", "2019")
   expect_equal(meta$status, "archived")

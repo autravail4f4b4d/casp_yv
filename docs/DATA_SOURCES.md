@@ -1,4 +1,16 @@
-# Data Sources: PSIC Revision 5 (2026 PSIC)
+# Data Sources: PSIC Revision 5 (2026 PSIC) and PSOC 2022
+
+This document covers two supplemental data sources built on the same
+pattern: PSA's own official workbook, normalized offline into a local
+runtime artifact, with no PSA network dependency at runtime.
+
+- [PSIC Revision 5 (2026 PSIC)](#psic-revision-5-2026-psic) — below
+- [2022 Updates to the 2012 PSOC](#2022-updates-to-the-2012-psoc) — see
+  the second half of this document
+
+---
+
+## PSIC Revision 5 (2026 PSIC)
 
 ## What this is and why it exists
 
@@ -161,3 +173,148 @@ PSA website availability, and means the app behaves identically whether or
 not PSA's site, API, or workbook URL is reachable at the time someone uses
 the app. To refresh the data (e.g. if PSA republishes a corrected workbook),
 re-run the build script and re-commit the two regenerated artifact files.
+
+---
+
+## 2022 Updates to the 2012 PSOC
+
+### What this is and why it exists
+
+PSA identifies the latest Philippine Standard Occupational Classification
+edition as the **"2022 Updates to the 2012 Philippine Standard Occupational
+Classification (PSOC)"**. It captures new and emerging occupations formed
+since 2012 (new industries, technology, equipment, production patterns).
+
+At the time this app was built, the installed `phscs` R package's PSOC
+support tops out at the 2012 edition — following the same pattern already
+established for PSIC Revision 5, this app implements a **build-time
+normalization pipeline** for the 2022 update, so it can be presented as the
+current PSOC edition without depending on a future `phscs` release or a
+live PSA API call. The running Shiny app only ever reads the local runtime
+artifact (`data/psoc_2022.rds`) — it never calls out to PSA at runtime.
+
+### Source URLs
+
+- PSA classification landing page: `https://psa.gov.ph/classification/psoc`
+- PSA PSOC technical notes: `https://psa.gov.ph/classification/psoc/technical-notes`
+- Official 2022 update workbook (the file this pipeline parses):
+  `https://psa.gov.ph/sites/default/files/kmcd/files/2022-Updates-to-the-2012-PSOC.xlsx`
+
+### Retrieval record — manual download (Cloudflare-blocked automated retrieval)
+
+Unlike the PSIC Revision 5 workbook (which is served directly, no bot
+protection), `psa.gov.ph`'s file host for this particular workbook sits
+behind a Cloudflare JavaScript challenge. Automated retrieval via `curl`
+and `httr2` (with and without a browser-identifying User-Agent header)
+consistently received an HTTP 403 response with a `Cf-Mitigated: challenge`
+header — the request never reached the actual file. A real browser session
+(via this session's browser automation tooling) could load the PSA PSOC
+page and pass the challenge when *viewing* it, but the tooling available
+had no way to persist the resulting downloaded binary file to disk (it
+renders/interacts with pages; it does not capture browser-initiated file
+downloads).
+
+Given that, **the user manually downloaded the workbook from the same
+official URL above and supplied it directly** at
+`data-raw/2022-Updates-to-the-2012-PSOC.xlsx`. This is recorded honestly
+here and in `data/psoc_2022_metadata.rds$retrieval_method` — the source is
+still the official PSA URL; only the retrieval mechanism (human download
+vs. this pipeline's own HTTP client) differs from the PSIC Revision 5
+precedent. `scripts/build_psoc_2022.R` does not attempt automated download
+for this source and will fail with a clear error naming the expected local
+path if the file isn't already present.
+
+- Local snapshot: `data-raw/2022-Updates-to-the-2012-PSOC.xlsx`
+- File size: approximately 900.5 KB
+- SHA-256 (recorded automatically in `data/psoc_2022_metadata.rds$sha256`
+  every time `scripts/build_psoc_2022.R` is run): see that metadata file
+  for the exact hash of the workbook that produced the currently-committed
+  `data/psoc_2022.rds`.
+- Licensing: same as PSIC Revision 5 above — CC BY 4.0 unless otherwise
+  stated by PSA.
+
+### Workbook structure
+
+Ten sheets, one per PSOC major group: `"Group 1"` .. `"Group 9"`, `"Group
+0"` (major group 0 = Armed Forces Occupations, standard PSOC/ISCO
+convention). Each sheet has 6 columns: `SUB-MAJOR GROUP` (2-digit code),
+`MINOR GROUP` (3-digit), `UNIT GROUP` (4-digit), `OCCUPATIONAL TITLES AND
+DEFINITIONS` (the entity's title on a coded row; free-text definitions/
+task lists/example job titles on rows with no code), `1992 PSOC` and `2008
+ISCO` cross-reference codes (historical crosswalk columns, not used by this
+pipeline).
+
+The major-group level itself has no code column — its code comes from the
+sheet name, and its title is the first non-blank, non-"Major Group N."-
+marker text in the title column before the first coded row (the "Group 0"
+sheet omits that marker line entirely and states its title directly, so
+the parser does not assume the marker always exists).
+
+Exactly like the PSIC Revision 5 workbook, when a level has exactly one
+child at the level below, the row collapses multiple code columns onto one
+row sharing one title (e.g. sub-major `411` + unit `4110` on one row,
+titled "GENERAL OFFICE CLERKS"). The same forward-fill/collapse-handling
+parsing algorithm used for PSIC Revision 5 (`scripts/build_psic_2026.R`)
+is reused here (`scripts/build_psoc_2022.R`).
+
+`description` is left `NA` for PSOC 2022: the workbook's prose (multi-
+paragraph definitions, "tasks performed" lists, "examples of the
+occupations classified here" job-title lists) is extensive and interleaves
+genuine definitional text with bare example titles that are *not* further
+classification codes. Reliably separating the two without an explicit
+legend risked mislabeling text as a description; the short title alone is
+captured, and the full text remains in the source workbook.
+
+### Validated counts vs. PSA's officially stated structure
+
+PSA's technical notes state the 2022 PSOC structure contains:
+
+| Level | PSA stated | Parsed |
+|---|---|---|
+| Major groups | 10 | **10** (match) |
+| Sub-major groups | 43 | **43** (match) |
+| Minor groups | 130 | **130** (match) |
+| Unit groups | 456 | **466** (discrepancy — see below) |
+
+Total canonical records produced: 649.
+
+#### The unit groups: 466 parsed vs. 456 stated
+
+Same pattern as the PSIC Revision 5 groups discrepancy above. Per the
+implementation spec's explicit instruction, **the pipeline does not
+fabricate, merge, or drop rows to force a match to 456** —
+`scripts/build_psoc_2022.R` prints this as a `WARN (documented
+discrepancy)` during the build and does not abort.
+
+Investigation performed:
+
+- All 466 parsed unit-group codes are distinct (zero duplicates).
+- All 466 codes are well-formed 4-digit strings (zero malformed codes).
+- A referential-integrity check (part of the build script itself, hard-
+  failing the build if it doesn't hold) confirms every major/sub-major/
+  minor/unit `parent_code` resolves to a real record at the level above —
+  the parsed hierarchy is internally consistent.
+
+No internal parsing defect was found. As with PSIC's groups discrepancy,
+this is recorded as an **honest "not fully explained after investigation"**
+rather than a confirmed root cause — PSA's own technical-notes summary
+figure and the actual published workbook disagree by 10 unit groups.
+
+### Spot check: PSA's own documented change example
+
+PSA's technical notes specifically describe unit group `2121`
+("Mathematicians and Actuaries" under the 2012 PSOC) being split in the
+2022 update into `2121` ("Mathematicians") and `2123` ("Actuaries"). Both
+codes are confirmed present in the parsed data, sharing the same parent
+minor group, with the expected split titles — asserted in
+`tests/testthat/test-psoc-2022.R`.
+
+### Why runtime never re-fetches from PSA
+
+Same principle as PSIC Revision 5: `scripts/build_psoc_2022.R` is a
+build-time-only step producing `data/psoc_2022.rds` and
+`data/psoc_2022_metadata.rds`, committed as the deployed runtime
+artifacts. `R/adapters/adapter_psoc_2022.R` only ever `readRDS()`s these
+local files. To refresh the data, place an updated workbook at
+`data-raw/2022-Updates-to-the-2012-PSOC.xlsx` (manually, given the
+Cloudflare retrieval block) and re-run the build script.

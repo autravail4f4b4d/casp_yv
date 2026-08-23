@@ -64,9 +64,22 @@
       phscs::get_psoc(version = version, level = level_arg, minimal = TRUE, cols = "description")
     },
     versions = c("2012"),
-    level_order = c("major", "sub-major", "minor", "unit"),
-    level_arg = c(major = "major", `sub-major` = "sub-major", minor = "minor", unit = "unit"),
-    status = function(version) "current",
+    # Canonical level names use the vocabulary mandated for PSOC (spec:
+    # major_group/sub_major_group/minor_group/unit_group), matching the
+    # sibling adapter_psoc_2022.R so switching between the 2012 and 2022
+    # editions never leaves an incompatible level id selected. level_arg's
+    # VALUES are still phscs::get_psoc()'s own expected argument strings
+    # ("major"/"sub-major"/"minor"/"unit") -- only the canonical names
+    # (level_order, and level_arg's names) changed.
+    level_order = c("major_group", "sub_major_group", "minor_group", "unit_group"),
+    level_arg = c(
+      major_group = "major", sub_major_group = "sub-major",
+      minor_group = "minor", unit_group = "unit"
+    ),
+    # PSOC 2012 is archived: the "2022 Updates to the 2012 PSOC", supplied
+    # by the sibling adapter_psoc_2022.R, is the current edition for this
+    # system.
+    status = function(version) "archived",
     source_url = "https://psa.gov.ph/classification/psoc"
   ),
   psced = list(

@@ -44,7 +44,15 @@ edition is PSA's current one or an archived reference.
 |---|---|
 | Search | Implemented — also serves as Browse (spec section 5.2 chose to combine them into one screen) |
 | Browse/Archive | Combined into the Search screen; edition selector + level selector + blank-query browse together satisfy this |
+| Dual Search | Implemented as a separate nav panel — one query, independent PSOC (occupations) + PSIC (industries) result panels |
+| Compare PSIC Editions | Implemented as a separate nav panel — bidirectional PSIC 2019 ↔ Revision 5 (2026) correspondence explorer |
 | About/Data Sources | Implemented as a separate nav panel |
+
+All four nav panels live under one `bslib::page_navbar(id = "main_nav", ...)`
+— `input$main_nav` is a real Shiny input holding the active tab's `value`
+(`"search"` / `"dual_search"` / `"correspondence"` / `"about"`). See the
+implementation note under section 4 for why this exists and why every
+secondary-tab output is gated on it.
 
 ## 4. Stable Shiny input/output IDs
 
@@ -60,16 +68,50 @@ server logic in the same change.
 | `classification_query` | input (text) | Free-text search query; blank = browse |
 | `classification_results` | output (DT table) | Results table; row selection drives the detail card |
 | `selected_entry` | output (uiOutput) | The "Selected entry" detail card body |
-| `sources_panel` | output (uiOutput) | The About/Data Sources panel body (`suspendWhenHidden = FALSE` — see note below) |
+| `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"about"` |
+| `sources_panel` | output (uiOutput) | The About/Data Sources panel body |
+| `dual_search_query` | input (text) | Shared query searched against both PSOC and PSIC |
+| `dual_search_psoc_version` | input (select) | PSOC edition for the dual-search panel (default: current, "2022") |
+| `dual_search_psic_version` | input (select) | PSIC edition for the dual-search panel (default: current, "2026") |
+| `dual_search_psoc_results` | output (DT table) | Occupations (PSOC) result panel |
+| `dual_search_psic_results` | output (DT table) | Industries (PSIC) result panel |
+| `dual_search_psoc_state` | output (uiOutput) | Error / "No results." message for the PSOC panel, independent of the PSIC panel |
+| `dual_search_psic_state` | output (uiOutput) | Error / "No results." message for the PSIC panel, independent of the PSOC panel |
+| `correspondence_direction` | input (select) | `"2019-2026"` or `"2026-2019"` — which way the correspondence lookup runs |
+| `correspondence_query` | input (text) | Code or title fragment to search within the correspondence artifact; blank = browse |
+| `correspondence_results` | output (DT table) | One row per relationship (a split/merge appears as multiple rows); row selection drives the detail panel |
+| `correspondence_detail` | output (uiOutput) | Full relationship detail: source/target entries, relation type, provenance, confidence, evidence, and the statistical-safety warning when relevant |
 
-**Note for whoever next edits `app.R`:** `sources_panel` has no reactive
-inputs of its own, and lives in a nav panel that isn't active on load —
-Shiny suspends outputs inside inactive tabs by default and only resumes
-them on a tab-shown event with a matching reactive dependency to
-re-trigger, so without `outputOptions(output, "sources_panel",
-suspendWhenHidden = FALSE)` this panel renders once, immediately at
-session start, permanently — never leave `suspendWhenHidden` at its
-default for a static `uiOutput` inside a non-default tab.
+**Implementation note for whoever next edits `app.R` — the `input$main_nav`
+gate pattern:** every output outside the default "Search" tab (`sources_panel`,
+both dual-search result/state pairs, and both correspondence outputs) is
+built with two things together, not one or the other:
+
+1. `req(input$main_nav == "<that tab's value>")` as the **first line** of
+   the render function.
+2. `outputOptions(output, "<id>", suspendWhenHidden = FALSE)`.
+
+Do not drop either half. Relying only on Shiny's own implicit
+suspend-when-hidden/resume-on-tab-shown behavior (i.e. leaving outputs at
+their default and never touching `outputOptions`) was tested and found
+**unreliable** in this app — both a plain `renderUI` with no reactive
+inputs (it simply never got a first trigger to resume) and a `DT::renderDT`
+table (it sometimes never received the tab-shown resume signal at all,
+leaving it permanently blank) failed intermittently depending on exactly
+how the tab became visible. Conversely, forcing `suspendWhenHidden = FALSE`
+**without** the `req(input$main_nav == ...)` gate is actively harmful for
+any `DT::renderDT` output: DataTables initializes its column-width layout
+at the moment the widget is built, and if that happens while the
+container is still `display:none` (tab hidden), the widget freezes at a
+broken zero-width layout that **never recovers**, even after the tab
+becomes visible and the underlying data later changes — this was verified
+directly via server-side debug logging showing correct, non-empty data
+being computed while the client still rendered nothing. The gate-plus-
+force-active combination is what makes both halves safe: the gate stops
+the DT widget from ever being built while hidden, and forcing the output
+active means it still computes (and is ready) the instant `input$main_nav`
+switches to that tab's value, without depending on the flaky implicit
+mechanism at all.
 
 ## 5. Conceptual components
 
@@ -102,6 +144,12 @@ Defined in `R/repository.R` (integration layer), `R/registry.R`, and
   lookup; `get_classification_entry()` exists for any future deep-link/
   direct-code-lookup feature).
 - About/Data Sources screen: `classification_registry()`.
+- Dual Search screen: `classification_versions()`,
+  `search_parallel_classifications()` (`R/parallel_search.R`, which itself
+  calls `search_classification()` once per system — no separate ranking
+  logic).
+- Compare PSIC Editions screen: `search_psic_correspondence()`,
+  `get_psic_correspondence()` (`R/correspondence/service.R`).
 
 ## 7. Result object schema
 
@@ -128,6 +176,27 @@ may be `NA`.
 | Error | Unsupported system/version/level raise an R error with a message that names the available choices (see `R/repository.R`); because every input on this screen is populated *from* the registry/adapters, a user can only reach this by a race during a version/level transition, which `validate(need(...))` already covers for the version case |
 | Archived | `status_badge()` renders a grey/secondary "Archived reference" badge |
 | Current | `status_badge()` renders a green "Current" badge |
+
+### Dual Search states (per system, independently — see section 14)
+
+| State | How it's shown |
+|---|---|
+| Initial | Both panels browse their current edition (PSOC 2022 / PSIC 2026) on a blank query, exactly like the Search screen's initial state |
+| results_both | Both panels populated |
+| results_psoc_only / results_psic_only | One panel has rows, the other shows its own "No results." message (`dual_search_{psoc,psic}_state`) — the populated panel is never affected by the other's emptiness |
+| no_results | Both panels show "No results." independently |
+| error_psoc / error_psic | That panel's state output shows `"Error: <message>"` in red; the other panel renders normally from its own independent `search_classification()` call |
+
+### Correspondence states (see section 15)
+
+| State | How it's shown |
+|---|---|
+| one-to-one | One results row; detail panel shows one source + one target with relation_type "unchanged" or "renamed" |
+| split / merged / complex | Multiple results rows sharing a `from_code` (split) or `to_code` (merged); each row's detail view includes the statistical-safety warning inline |
+| no match | `to_code` is `NA` (relation_type "discontinued") or `from_code` is `NA` (relation_type "new"); detail panel shows an explicit "(no prior counterpart...)" / "(no related category...)" message, never a blank or fabricated code |
+| low confidence | `confidence_badge()` renders a red/danger "Low" badge — still shown, never hidden or filtered out by default |
+| official / derived / suggested | `provenance_badge()` renders green/blue/yellow respectively; see section 15 for why no row is currently `official` |
+| reverse lookup | Switching `correspondence_direction` to `"2026-2019"` re-queries the same artifact in the other direction via the same `get_psic_correspondence()`/`search_psic_correspondence()` functions |
 
 ## 9. Responsive requirements
 
@@ -172,10 +241,114 @@ the page body scrolling horizontally).
 ## 12. What Claude Design must not change without backend review
 
 - `R/schema.R`, `R/registry.R`, `R/repository.R`, `R/search.R`,
-  `R/adapters/*.R`, `scripts/build_psic_2026.R`, anything under `data/` or
+  `R/parallel_search.R`, `R/correspondence/*.R`, `R/adapters/*.R`,
+  `scripts/build_psic_2026.R`, `scripts/build_psoc_2022.R`,
+  `scripts/build_psic_correspondence.R`, anything under `data/` or
   `data-raw/`, and every file under `tests/`.
 - The ranking order in `R/search.R` (exact code → code prefix → exact
-  label → label prefix → label contains → description contains).
+  label → label prefix → label contains → description contains) — this is
+  the ONLY ranking engine; dual search reuses it verbatim, it does not
+  have its own.
 - The archive/current status semantics (`"current"`/`"archived"` are the
-  only two legal values; PSIC 2019 is always archived, PSIC 2026 is always
-  current, for as long as that reflects PSA's actual position).
+  only two legal values; PSIC 2019 and PSOC 2012 are always archived,
+  PSIC 2026 and PSOC 2022 are always current, for as long as that reflects
+  PSA's actual position).
+- The correspondence provenance/confidence vocabulary
+  (`official`/`derived`/`suggested`; `high`/`moderate`/`low`) and the rule
+  that this codebase's own deterministic matching logic must never label a
+  row `official` (see `docs/CORRESPONDENCE_SOURCES.md`).
+- The `CORRESPONDENCE_STATISTICAL_WARNING` text (`R/correspondence/schema.R`)
+  and the rule that it must always appear alongside any split/merged/
+  complex relationship — this is a statistical-safety requirement (spec
+  section 19), not decorative copy.
+
+## 13. PSOC version states
+
+```text
+2022 — current   ("2022 Updates to the 2012 PSOC")
+2012 — archived  (via phscs)
+```
+
+Both are fully queryable through the same `classification_versions("psoc")`
+/ `get_classification("psoc", version, ...)` contract already used for
+every other system — the Search screen requires no special-casing to
+support this; switching `classification_version` between `"2022"` and
+`"2012"` behaves exactly like switching PSIC between `"2026"` and `"2019"`.
+
+## 14. Dual-search contract
+
+- Stable IDs: see section 4 (`dual_search_query`,
+  `dual_search_psoc_version`, `dual_search_psic_version`,
+  `dual_search_psoc_results`, `dual_search_psic_results`,
+  `dual_search_psoc_state`, `dual_search_psic_state`).
+- Service function: `search_parallel_classifications(query, systems,
+  versions, levels, limit_per_system)` (`R/parallel_search.R`) — a thin
+  orchestrator that calls `search_classification()` once per system inside
+  its own `tryCatch`, so one system's failure or empty result never
+  affects the other. It adds no ranking logic of its own.
+- PSOC version selector and PSIC version selector are independent —
+  either can be switched to an archived edition without affecting the
+  other.
+- States, all independently addressable per system (see
+  `res$results[[system]]` / `res$errors[[system]]` in
+  `search_parallel_classifications()`'s return shape):
+  - **results** — a canonical result tibble, possibly zero rows (a genuine
+    no-match, not an error)
+  - **error** — that system's `search_classification()` call raised a
+    validation error (e.g. an unsupported version); the OTHER system's
+    panel is entirely unaffected and still renders normally
+- Semantic labels are mandatory, not optional styling: "Occupations —
+  PSOC" and "Industries — PSIC" (`PARALLEL_SEARCH_SYSTEM_LABELS` in
+  `R/parallel_search.R`) must always appear on their respective panels.
+  Claude Design may restyle the presentation of this distinction but must
+  never remove it or imply the two codes are interchangeable — a PSOC code
+  and a PSIC code describe different things (what a person does vs. what
+  an establishment does) and are never equivalents.
+
+## 15. Correspondence contract
+
+- Stable IDs: see section 4 (`correspondence_direction`,
+  `correspondence_query`, `correspondence_results`,
+  `correspondence_detail`).
+- Service functions (`R/correspondence/service.R`):
+  `get_psic_correspondence(code, from_version, to_version)` and
+  `search_psic_correspondence(query, from_version, to_version, limit)`,
+  reading the offline artifact `data/psic_2019_to_2026_correspondence.rds`
+  (built by `scripts/build_psic_correspondence.R`). Both directions
+  (2019→2026 and 2026→2019) are fully supported by the same functions —
+  there is no separate "reverse lookup" function.
+- Result shape (`CORRESPONDENCE_SCHEMA_COLUMNS` reshaped to caller-facing
+  `from_*`/`to_*` names by the service layer): `from_system`,
+  `from_version`, `from_code`, `from_level`, `from_label`, `to_system`,
+  `to_version`, `to_code`, `to_level`, `to_label`, `relation_type`,
+  `provenance`, `confidence`, `confidence_score`, `method`, `evidence`,
+  `review_status`, `notes`.
+- Cardinality: one row per relationship edge. A 1→N split or N→1 merge
+  appears as multiple rows sharing the same `from_code` (split) or the
+  same `to_code` (merge) — never collapsed into one row. A "new" (0→1)
+  row has `from_code = NA`; a "discontinued" (1→0) row has `to_code = NA`;
+  both are rendered with an explicit "(no prior counterpart...)" /
+  "(no related category...)" message by `correspondence_detail_ui()`
+  rather than showing a blank or a fabricated code.
+- Provenance (`official` / `derived` / `suggested`) and confidence
+  (`high` / `moderate` / `low`) are always shown together, never just one.
+  As of this build, **no row in the shipped artifact is `official`** — see
+  `docs/CORRESPONDENCE_SOURCES.md` for the source audit that determined no
+  official PSA PSIC 2019↔Revision 5 crosswalk currently exists; every row
+  is `derived` (deterministic code/hierarchy continuity, or a corroborated
+  UN ISIC Rev.4↔Rev.5 bridge) or `suggested` (label-similarity only). If a
+  future rebuild ever introduces an `official` row, it must be backed by an
+  actual cited PSA document in that same source-audit file — never
+  promoted from `suggested`/`derived` on confidence alone.
+- The statistical-safety warning
+  (`CORRESPONDENCE_STATISTICAL_WARNING`, defined once in
+  `R/correspondence/schema.R` and reused verbatim by the UI) must appear:
+  (a) always, in the footer of the Compare PSIC Editions screen, and
+  (b) inline in the relationship detail panel specifically whenever
+  `relation_type` is `split`, `merged`, or `complex` — these are exactly
+  the cardinalities where a naive reader might otherwise assume a
+  statistical value could be divided or summed across the mapped
+  categories, which this tool never does and must never appear to endorse.
+- Claude Design must not have to invent any of the above statistical or
+  provenance semantics — restyle the badges, cards, and arrows freely, but
+  the underlying facts they display come entirely from the service layer.

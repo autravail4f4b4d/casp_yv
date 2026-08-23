@@ -1,229 +1,312 @@
 # Implementation Status — PSA Statistical Classifications Search
 
-Build performed per `PSA_CLASSIFICATIONS_4_HOUR_CLAUDE_CODE_BUILD.md` and
-`CLAUDE.md` using graph/loop engineering: a foundation phase (canonical
-schema + contract discovery), three parallel background workstreams
-(adapters+registry, PSIC Revision 5 ingestion, search engine), a
-convergence/integration phase (`R/repository.R`), a minimal Shiny UI built
-and verified live in a browser, dependency pinning via `renv`, and this
-documentation pass.
+This document now covers **two milestones**:
 
-## Completed
+1. The original functionality-first MVP (`PSA_CLASSIFICATIONS_4_HOUR_CLAUDE_CODE_BUILD.md`)
+   — complete, preserved as the known-good baseline. See git commit
+   `8269eb3` ("feat: complete functional PSA classifications MVP").
+2. The current post-MVP functional extension
+   (`PSA_CLASSIFICATION_PSOC2022_DUAL_SEARCH_PSIC_CORRESPONDENCE.md`) — the
+   subject of this update: PSOC 2022, parallel PSOC/PSIC search, and PSIC
+   2019↔Revision 5 correspondence.
 
-- **Canonical schema** (`R/schema.R`): `new_classification_tibble()` /
-  `validate_classification_tibble()`, enforcing all-character columns
-  (leading zeros preserved), required non-NA fields, and
-  `status ∈ {"current","archived"}`.
-- **Registry** (`R/registry.R`): `classification_registry()` introspects
-  all 7 systems (psgc, psic, psoc, psced, pcoicop, pcpc, psccs) dynamically
-  from the adapters — no hardcoded second copy of version/level data.
-- **phscs adapter** (`R/adapters/adapter_phscs.R`): psic (2019, archived),
-  psoc (2012), psced (2017), pcoicop (2020 current / 2009 archived), pcpc
-  (2002), psccs (2018). Levels queried via each system's own documented
-  level vocabulary (never inferred from code shape). `parent_code` derived
-  by a generic, per-dataset-verified truncation search; left `NA` (never
-  fabricated) wherever a parent can't be verified against real data —
-  notably psic division→section (section codes are letters, not derivable
-  by truncation).
-- **psgc adapter** (`R/adapters/adapter_psgc.R`): all releases from
-  `psgc::list_releases()`; `parent_code` derived by a generic
-  trailing-zero-group scan validated against the real barangay→municipality
-  →province→region chain and against an NCR city with no province segment.
-- **PSIC Revision 5 ingestion** (`scripts/build_psic_2026.R` +
-  `R/adapters/adapter_psic_2026.R`): parses PSA's official detailed-
-  structure workbook (downloaded from the official URL, committed at
-  `data-raw/`), builds `data/psic_2026.rds` + `data/psic_2026_metadata.rds`
-  (source URL, retrieval date, SHA-256, validated counts). Full details in
-  `docs/DATA_SOURCES.md`.
-- **Search/ranking engine** (`R/search.R`): `search_classification_data()`
-  — deterministic 6-tier ranking (exact code → code prefix → exact label →
-  label prefix → label contains → description contains), literal (never
-  regex) matching, whitespace normalization, blank-query browse mode,
-  never errors on no-match, never coerces codes to numbers.
-- **Service integration** (`R/repository.R`): the exact public contract
-  from spec section 1.1 — `classification_versions()`,
-  `classification_levels()`, `get_classification()`,
-  `search_classification()`, `get_classification_entry()`,
-  `classification_metadata()` — dispatching to the correct adapter per
-  system/version (including the psic 2019-vs-2026 split), with clear
-  validation errors listing available systems/versions/levels.
-- **Minimal Shiny UI** (`app.R`, `R/ui/ui_search.R`, `R/ui/ui_details.R`,
-  `R/ui/ui_sources.R`, `www/app.css`): system/edition/level selectors,
-  debounced search box, results table (DT), row-click detail card with a
-  current/archived badge, and an About/Data Sources tab. Verified live in
-  a browser (see below) — one real bug found and fixed during that
-  verification (see Known Limitations).
-- **Dependency pinning**: `renv` initialized and snapshotted
-  (`renv.lock`, `.Rprofile`); verified the full test suite and a fresh
-  `Rscript` app launch both work under the renv-activated environment.
-- **Docs**: `docs/UI_CONTRACT.md`, `docs/DATA_SOURCES.md`,
-  `docs/DEPLOYMENT.md`, `README.md`, this file.
+## Recovery from interrupted session
 
-## Tests Passed
+The prior Claude Code session for this milestone was interrupted by a
+usage limit after producing only documentation: commit `2202a66` ("docs:
+define PSOC 2022 and classification extension") added the extension spec
+and updated `CLAUDE.md`, but **no implementation code, adapters, tests, or
+UI for PSOC 2022, dual search, or PSIC correspondence existed yet**.
 
-`Rscript scripts/run_tests.R` → **302 / 302 passing, 0 failed, 0 warnings,
-0 skipped**, across:
+Recovery audit performed at the start of this session:
+- `git status` — clean working tree, nothing uncommitted.
+- `git log --oneline -30` — exactly two commits (`8269eb3` MVP, `2202a66`
+  docs-only).
+- Targeted grep across the whole repository for
+  `psoc_2022|parallel_search|psic_correspondence|CORRESPONDENCE_SOURCES|adapter_psoc_2022|build_psoc_2022|build_psic_correspondence`
+  — zero hits outside the spec file itself.
+- Full MVP test suite run before any changes: **302/302 passing**,
+  confirming the baseline exactly matched the previous session's own
+  `IMPLEMENTATION_STATUS.md` claim.
 
-| File | Covers |
-|---|---|
-| `test-schema.R` | Canonical tibble construction/validation |
-| `test-registry.R` | Registry completeness and consistency |
-| `test-adapters.R` | phscs/psgc canonical output, parent_code correctness, leading-zero preservation, current/archived status |
-| `test-psic-2026.R` | PSIC 2026 artifact structure, counts, known-row spot checks, missing-artifact error |
-| `test-search.R` | Full ranking algorithm on synthetic fixtures (all 6 tiers, case/whitespace, literal-char matching, level filter, limit, blank/no-match) |
-| `test-repository.R` | End-to-end integration over **real** data for every registered system/version, plus the spec's UAT scenarios (exact/text search for PSIC/PSOC/PSGC, old-release search, level filter, literal-dot PCOICOP search, leading zeros, validation errors, edition-switch isolation) |
+Recovery matrix (final classification):
 
-### UAT scenarios (spec section 15/16) — status
-
-| # | Case | Evidence |
+| Workstream | State at recovery | Action taken |
 |---|---|---|
-| 1 | Exact PSIC Revision 5 code | `test-repository.R` (code `"01111"`) |
-| 2 | PSIC Revision 5 text search | Manual browser verification (query "software" against PSIC) + `test-search.R` tier logic |
-| 3 | PSIC 2019 archived search | `test-repository.R` + manual browser verification (all rows show `archived`) |
-| 4 | Exact PSOC code | `test-repository.R` (code `"1111"`, "Legislators") |
-| 5 | PSOC text search | `test-repository.R` (query "legislators") |
-| 6 | PSGC current release name search | `test-repository.R` (query "Bukidnon") |
-| 7 | PSGC old release search | `test-repository.R` (release `Q1_2023`, query "Ilocos Norte") |
-| 8 | Classification level filter | `test-repository.R` + `test-search.R` |
-| 9 | Blank query (browse) | `test-repository.R` + manual browser verification |
-| 10 | No result | `test-repository.R` (`"zzzzznomatch"`) |
-| 11 | Special characters | `test-repository.R` (literal `.` in a real PCOICOP code) + `test-search.R` (dots, parentheses) |
-| 12 | Leading-zero code preservation | `test-repository.R`, `test-adapters.R` |
-| 13 | Switching classification clears/updates invalid level/version state | **Manual browser verification only** (see Known Limitations) |
-| 14 | Selected result retains source/version/status | **Manual browser verification only** (detail card rendered correctly with code/label/description/system/version/level/status badge/source link) |
+| Existing MVP regression suite | COMPLETE | Re-verified, preserved |
+| PSOC 2022 source ingest | NOT STARTED | Built |
+| PSOC 2022 adapter | NOT STARTED | Built |
+| PSOC registry current version | NOT STARTED | Corrected |
+| Dual search service | NOT STARTED | Built |
+| Dual search UI hooks | NOT STARTED | Built |
+| PSIC correspondence source audit | NOT STARTED | Performed, documented |
+| Correspondence schema | NOT STARTED | Built |
+| Correspondence artifact | NOT STARTED | Built |
+| Correspondence UI hooks | NOT STARTED | Built |
+| UI contract updates | NOT STARTED | Updated |
 
-## PSIC Revision 5 Status
+No partial work was discarded — there was none to discard beyond the
+already-complete MVP baseline, which was reused as-is.
 
-**Fully implemented and current.** `data/psic_2026.rds` (2,202 rows) is
-built from PSA's official Revision 5 detailed-structure workbook, parsed
-and validated at build time, and read directly by the running app with no
-PSA network dependency. Validated structural counts: 22 sections ✓, 88
-divisions ✓, **261 groups** (PSA states 260 — documented discrepancy, see
-`docs/DATA_SOURCES.md`; no parsing defect found after investigation), 493
-classes ✓, 1,338 sub-classes ✓. PSIC 2026 is marked `current`; PSIC 2019
-(via `phscs`) remains fully queryable, marked `archived`.
+## PSOC 2022 status
 
-## Deployment Status
+**Current and default.** Source: PSA's official **"2022 Updates to the
+2012 PSOC"** workbook (`https://psa.gov.ph/classification/psoc`). PSA's
+file host for this specific workbook sits behind a Cloudflare JavaScript
+challenge that blocked automated retrieval (`curl`/`httr2` both received
+HTTP 403 with `Cf-Mitigated: challenge`); the user manually downloaded the
+same official file and supplied it at
+`data-raw/2022-Updates-to-the-2012-PSOC.xlsx`. This is recorded honestly
+in `docs/DATA_SOURCES.md` and in `data/psoc_2022_metadata.rds$retrieval_method`
+— the source is still official PSA data, only the retrieval mechanism
+differs from the PSIC Revision 5 precedent (which downloads directly).
 
-**Not deployed to a public host.** No Posit Connect Cloud (or equivalent)
-account/credentials were available in this environment. Everything short
-of the actual remote publish has been completed and verified:
+Validated structural counts (`scripts/build_psoc_2022.R`, referential
+integrity of every parent_code chain hard-enforced as a build failure
+condition):
 
-- `renv.lock` pins the full reproducible dependency set.
-- The app was launched via a fresh `Rscript` process (not a pre-warmed
-  session) under the renv-activated environment and confirmed serving the
-  UI with no startup errors, twice (once before, once after the
-  `outputOptions` fix below).
-- No PSA API token or any other credential is required anywhere.
-- See `docs/DEPLOYMENT.md` for the exact restore/run/test commands a
-  deployer needs.
+| Level | PSA stated | Parsed |
+|---|---|---|
+| Major groups | 10 | **10** ✓ |
+| Sub-major groups | 43 | **43** ✓ |
+| Minor groups | 130 | **130** ✓ |
+| Unit groups | 456 | **466** (documented discrepancy — no duplicate/malformed codes found; see `docs/DATA_SOURCES.md`) |
 
-## Known Limitations
+PSA's own documented validation fixture — Unit Group `2121` ("Mathematicians
+and Actuaries" in 2012) splitting into `2121` ("Mathematicians") and `2123`
+("Actuaries") in 2022 — is confirmed present with the correct shared parent.
 
-- **One real bug found and fixed during live-browser verification**: the
-  About/Data Sources tab's `uiOutput` has no reactive inputs, and Shiny
-  suspends outputs inside a non-active `nav_panel` by default — it never
-  rendered until the tab was clicked, and even then only through a real
-  reactive re-trigger, which this static output doesn't have. Fixed with
-  `outputOptions(output, "sources_panel", suspendWhenHidden = FALSE)` in
-  `app.R`. Re-verified working after the fix.
-- **UAT cases 13 and 14 (Shiny reactive-wiring behavior) were verified
-  manually in a live browser, not via an automated test.** A
-  `shiny::testServer()` test was considered but rejected: `testServer`
-  does not simulate the client applying `updateSelectInput()`'s pushed
-  choices back into `input$...`, so a naive test would exercise less than
-  the real client/server round-trip already verified manually (setting
-  `classification_system` via `Shiny.setInputValue` in the live app and
-  confirming version reset to the system's current edition, level reset to
-  "All levels", and the results table/detail card updating correctly).
-  This is a documented gap in automated (not functional) coverage.
-- **psic division→section `parent_code` is `NA`** for the phscs-sourced
-  2019 edition (section codes are letters, not derivable from a division's
-  numeric code without a section/division range table that wasn't
-  available/verifiable at implementation time). Never fabricated.
-- **A handful of individual rows** across pcoicop/pcpc have
-  `label`/`parent_code` filled in via a documented, honest fallback (title
-  extracted from a leading ALL-CAPS phrase in `description`, or the code
-  itself as a last resort) rather than the packaged data providing a clean
-  label directly — see the header comment in `R/adapters/adapter_phscs.R`
-  for the exact rows and rationale.
-- **`retrieved_at` in phscs/psgc metadata is `Sys.Date()`** (the date this
-  build ran), not each package's own internal data-vintage date, since
-  that isn't introspectable from the installed packages. PSIC 2026's
-  `retrieved_at` (from `scripts/build_psic_2026.R`) is the actual workbook
-  download date and is accurate.
-- **No formal WCAG audit, no fuzzy search, no cross-system simultaneous
-  search, no saved/favorite codes, no shareable deep links** — all
-  explicitly deferred per spec section 26 (see below).
+Runtime artifact: `data/psoc_2022.rds` (649 canonical rows) +
+`data/psoc_2022_metadata.rds`, read offline by
+`R/adapters/adapter_psoc_2022.R`. Missing-artifact error:
+`"PSOC 2022 runtime artifact is missing. Run scripts/build_psoc_2022.R and redeploy."`
+— never silently substitutes 2012 data while claiming to show 2022.
+
+## PSOC 2012 archive status
+
+**Retained, fully queryable, correctly marked archived.** The phscs-sourced
+2012 edition's `status` was corrected from `"current"` to `"archived"` in
+`R/adapters/adapter_phscs.R` (a deliberate, spec-mandated correction — PSA
+no longer treats 2012 as current now that the 2022 update exists). Its
+level vocabulary was also renamed from `major`/`sub-major`/`minor`/`unit`
+to the canonical `major_group`/`sub_major_group`/`minor_group`/`unit_group`
+form so switching between 2012 and 2022 in the UI never leaves a stale,
+incompatible level selected. Both changes are covered by updated/added
+tests in `tests/testthat/test-adapters.R`.
+
+## Dual search status
+
+**Complete and default-correct.** `search_parallel_classifications()`
+(`R/parallel_search.R`) defaults to PSOC 2022 + PSIC Revision 5 (2026),
+reuses `search_classification()` verbatim (no second ranking engine),
+isolates each system's search in its own `tryCatch` so a failure or
+no-match on one side never suppresses the other, and is exposed through a
+new "Dual Search" nav panel with independent PSOC ("Occupations") and PSIC
+("Industries") result panels, each with their own edition selector.
+Manually verified live (see Manual UAT below).
+
+## PSIC correspondence status
+
+**Complete.** Source audit (`docs/CORRESPONDENCE_SOURCES.md`) confirmed no
+official PSA PSIC 2019↔Revision 5 crosswalk exists yet (expected — Revision
+5 was released only 18 days before this audit). A genuine official **UN
+Statistics Division ISIC Rev.4↔Rev.5 correspondence table** was found and
+downloaded (`data-raw/ISIC4-5_Correspondence_Table.xlsx`, 603 rows) and
+used as **derived** (not official — PSIC has national adaptations UN
+evidence doesn't capture) corroborating evidence, gated behind a
+conformance check since PSIC doesn't always preserve ISIC's own code
+numbering.
+
+Built artifact `data/psic_2019_to_2026_correspondence.rds` — **2,699 rows**,
+exhaustive over all 1,360 PSIC 2019 sub-class codes:
+
+| Relation type | Count | | Provenance | Count | | Confidence | Count |
+|---|---|---|---|---|---|---|---|
+| unchanged | 741 | | derived | 2,510 | | high | 1,985 |
+| renamed | 768 | | suggested | 189 | | moderate | 605 |
+| split | 507 | | **official** | **0** | | low | 109 |
+| merged | 100 | | | | | | |
+| complex | 59 | | | | | | |
+| possible | 130 | | | | | | |
+| discontinued | 143 | | | | | | |
+| new | 251 | | | | | | |
+
+`official` provenance is enforced as a hard test guard
+(`!("official" %in% correspondence$provenance)`), not just a claim.
+Bidirectional lookup (`get_psic_correspondence()`,
+`search_psic_correspondence()`) confirmed working both directions live in
+the browser, including a real split case (`01179` → `01171`/`01172`) with
+the mandated statistical-safety warning rendered inline.
+
+## Data source/provenance status
+
+| Artifact | Source | Retrieval | Provenance recorded in |
+|---|---|---|---|
+| `data/psic_2026.rds` | PSA official workbook | Automated (direct URL) | `docs/DATA_SOURCES.md`, `data/psic_2026_metadata.rds` |
+| `data/psoc_2022.rds` | PSA official workbook | **Manual** (Cloudflare-blocked automation) | `docs/DATA_SOURCES.md`, `data/psoc_2022_metadata.rds` |
+| `data/psic_2019_to_2026_correspondence.rds` | Derived from PSIC 2019 (phscs) + PSIC 2026 (local artifact), corroborated by UN ISIC Rev.4↔Rev.5 table | Automated (UN source) + deterministic build-time computation | `docs/CORRESPONDENCE_SOURCES.md`, `data/psic_2019_to_2026_correspondence_metadata.rds` |
+
+All three are read-only at runtime — no network calls anywhere in the
+request path for any of them.
+
+## Tests
+
+`Rscript scripts/run_tests.R`:
+
+- **Before this milestone (baseline, re-verified at recovery):** 302/302 passing
+- **After this milestone: 485/485 passing, 0 failed, 0 warnings, 0 skipped**
+  (+183 new tests, 0 regressions)
+
+| New/changed test file | Covers |
+|---|---|
+| `test-psoc-2022.R` | Artifact existence/offline load, canonical schema, all 4 levels, structural counts (with honest documented discrepancy), referential integrity, the Mathematicians/Actuaries fixture, level filtering, unsupported-level/missing-artifact errors, registry current/archived resolution, no silent 2012-for-2022 substitution, live search |
+| `test-adapters.R` (modified) | PSOC level vocabulary renamed to canonical form; new "psoc 2012 is archived" assertion |
+| `test-parallel-search.R` | Defaults, independent result sets, verbatim reuse of `search_classification()` (equality-asserted, not just spot-checked), one-sided no-result/error isolation, archived-edition selection, per-system level filtering, per-system limits, leading-zero preservation, semantic labels |
+| `test-correspondence-schema.R`, `test-correspondence-build.R`, `test-correspondence-service.R` | Schema validation, source-audit doc presence, offline artifact load, character-typed codes, provenance/relation_type/confidence enums (including the `official` guard), real unchanged/split cases, reverse lookup, no-match safety, label search, absence of any numeric value/count/allocation column anywhere in the schema |
+
+## Manual UAT
+
+Performed live in a running Shiny session (`shiny::runApp('app.R')` under
+the renv-activated environment), verified via the browser automation
+tooling's DOM/network inspection rather than screenshots:
+
+- **PSOC version (spec section 29):** selecting PSOC shows edition "2022"
+  with all rows `status = current`; switching to "2012" shows all rows
+  `status = archived`; level names consistent across both editions.
+- **Dual search (spec section 30):** query "accountant" → PSOC panel shows
+  exactly `2411 ACCOUNTANTS`, PSIC panel shows "No results." independently
+  (proves one-sided no-match doesn't suppress the other); defaults
+  confirmed as PSOC "2022" / PSIC "2026" in the UI on load.
+- **PSIC correspondence (spec section 31):** browsed 2019→2026 (high-
+  confidence "renamed" rows shown correctly); searched a known split source
+  (`01179`) and confirmed both target candidates (`01171`, `01172`) render
+  with the statistical-safety warning inline; switched direction to
+  2026→2019 and confirmed reverse lookup returns the same relationship
+  from the other side.
+
+One real bug was found and fixed during this manual testing (see Known
+limitations).
+
+## Known limitations
+
+- **A genuine reactive-race bug was found and fixed**: the Search screen's
+  level-choice observer could receive a transiently mismatched
+  system/version pair (e.g. version `"2022"` arriving while
+  `classification_system` still read `"psgc"`) during rapid input
+  changes, calling `classification_levels()` with an invalid combination
+  and crashing that observer uncaught. Fixed with a defensive guard in
+  `app.R` that silently skips the stale combination (the system-change
+  observer's own update shortly settles it correctly).
+- **A DT-widget-in-hidden-tab rendering bug was found and fixed**: Shiny's
+  implicit suspend-when-hidden/resume-on-tab-shown behavior proved
+  unreliable in this app for outputs outside the default "Search" tab —
+  sometimes never triggering a first render, and for `DT::renderDT`
+  outputs specifically, sometimes freezing the widget at a broken
+  zero-width layout if it was ever built while its container was hidden.
+  Fixed by giving `page_navbar` a real `id = "main_nav"` and explicitly
+  gating every secondary-tab output on `req(input$main_nav == "<value>")`
+  combined with `outputOptions(suspendWhenHidden = FALSE)` — see the
+  detailed note in `docs/UI_CONTRACT.md` section 4. This pattern should be
+  followed for any future new tab's outputs.
+- **PSOC 2022's unit-group count (466) doesn't match PSA's technical-notes
+  figure (456)** — same class of discrepancy as PSIC Revision 5's groups
+  count (261 vs. 260, from the original MVP). Investigated (no duplicate
+  or malformed codes, full referential integrity holds); recorded as
+  honestly unexplained in `docs/DATA_SOURCES.md`, not forced to match.
+- **No official PSA PSIC 2019↔Revision 5 crosswalk exists** as of this
+  build (confirmed by source audit, not assumed) — every correspondence
+  row is `derived` or `suggested`. If PSA publishes one later, only rows
+  matching that document's explicit mappings may be relabeled `official`;
+  see `docs/CORRESPONDENCE_SOURCES.md`'s reconciliation note.
+- **Correspondence coverage above the sub-class level is limited to clean
+  exact-code matches** (no split/merge/discontinued/new bookkeeping for
+  section/division/group/class) — an explicit, documented scope limit
+  since the spec's exhaustiveness requirement is stated only for
+  sub-class.
+- **PSOC 2012 ↔ 2022 correspondence** (spec section 35) is explicitly
+  deferred, as directed by the spec ("Do not allow this to block the
+  current implementation... Record it as deferred").
+- All MVP-era known limitations (documented in prior versions of this
+  file, now superseded by this rewrite) remain: no formal WCAG audit, no
+  fuzzy search, `retrieved_at` in phscs/psgc metadata is build-date rather
+  than each package's own data vintage, a handful of pcoicop/pcpc rows use
+  a documented honest label fallback, and PSIC 2019 division→section
+  `parent_code` is `NA` (section codes are letters, not derivable by
+  truncation).
 
 ## Deferred V2 Features
 
-Per spec section 26 — not implemented, by design:
+Unchanged from the MVP baseline, per spec section 26 of the original
+build spec — see `docs/UI_CONTRACT.md` and the git history of this file
+for the full list (cross-system simultaneous search, fuzzy search,
+saved/favorite codes, formal WCAG audit, final visual branding, etc.).
+Additionally, per this milestone's own spec section 35: **PSOC 2012 ↔ 2022
+correspondence** is deferred pending a future authoritative source.
 
-- Cross-edition difference viewer / full PSIC 2019 ↔ Revision 5 crosswalk
-- PSGC visual history timeline / split-merge-abolition visualization
-  (the `trace_psgc_code()` service seam mentioned in spec section 7 was
-  **not** added in this build — flagging this as a gap against the spec's
-  "preserve a service seam for later" suggestion; it can be added without
-  touching any other contract)
-- Fuzzy search / typo tolerance
-- Search across all classification systems simultaneously
-- Saved/favorite codes, shareable deep links, downloadable citations
-- Admin dashboard, automatic PSA sync, PSA API staging
-- PostgreSQL, usage analytics, feedback system, multilingual UI
-- Formal WCAG audit
-- Final PSA visual branding/design system (explicitly the next phase, not
-  this one)
+## Deployment Status
+
+Unchanged from the MVP baseline: **not deployed to a public host** (no
+Posit Connect Cloud or equivalent credentials available in this
+environment). `renv.lock` remains the reproducible dependency record; no
+new dependencies were added for this milestone (correspondence scoring
+uses a hand-rolled token-similarity function rather than adding a
+`stringdist`-style package, per the project's smallest-dependency-surface
+preference).
 
 ## Claude Design Handoff Readiness
 
-**Ready.** Per spec section 22's requirement, everything Claude Design
-needs to change lives in `app.R`, `R/ui/*.R`, and `www/app.css`; nothing
-about the visual pass requires touching `R/adapters/`, `R/repository.R`,
-`R/search.R`, `R/registry.R`, `scripts/build_psic_2026.R`, `data/`, or any
-test. Full stable-ID/component/state inventory is in
-`docs/UI_CONTRACT.md`.
+**Ready.** Everything Claude Design needs to change for the three new
+screens (Dual Search, Compare PSIC Editions, plus the unchanged Search/
+About screens) lives in `app.R` and `R/ui/*.R`; nothing about the visual
+pass requires touching `R/adapters/`, `R/repository.R`, `R/search.R`,
+`R/parallel_search.R`, `R/correspondence/`, `R/registry.R`, any
+`scripts/build_*.R`, `data/`, or any test. Full stable-ID/component/state
+inventory — including the new PSOC version states, dual-search contract,
+and correspondence contract — is in `docs/UI_CONTRACT.md` sections 3, 4,
+8, 13, 14, and 15. The `input$main_nav` gate pattern (section 4) is
+explicitly documented so a future tab addition doesn't repeat the same
+rendering bug found and fixed in this milestone.
 
-## Files Changed
+## Files Changed (this milestone)
 
-New repository, all files created in this build:
-
+New files:
 ```
-.Rprofile
-.claude/launch.json
-.gitignore
-README.md
-app.R
-renv.lock
-renv/ (renv infrastructure)
-R/schema.R
-R/registry.R
-R/repository.R
-R/search.R
-R/adapters/adapter_phscs.R
-R/adapters/adapter_psgc.R
-R/adapters/adapter_psic_2026.R
-R/ui/ui_search.R
-R/ui/ui_details.R
-R/ui/ui_sources.R
-data/psic_2026.rds
-data/psic_2026_metadata.rds
-data-raw/PSIC_Revision_5_Detailed_Structure_30July2026.xlsx
-scripts/build_psic_2026.R
-scripts/run_tests.R
-docs/UI_CONTRACT.md
-docs/DATA_SOURCES.md
-docs/DEPLOYMENT.md
-tests/testthat/helper.R
-tests/testthat/test-schema.R
-tests/testthat/test-registry.R
-tests/testthat/test-adapters.R
-tests/testthat/test-psic-2026.R
-tests/testthat/test-search.R
-tests/testthat/test-repository.R
-www/app.css
-IMPLEMENTATION_STATUS.md
+R/adapters/adapter_psoc_2022.R
+R/correspondence/schema.R
+R/correspondence/scoring.R
+R/correspondence/isic_bridge.R
+R/correspondence/service.R
+R/parallel_search.R
+R/ui/ui_dual_search.R
+R/ui/ui_correspondence.R
+scripts/build_psoc_2022.R
+scripts/build_psic_correspondence.R
+data/psoc_2022.rds
+data/psoc_2022_metadata.rds
+data/psic_2019_to_2026_correspondence.rds
+data/psic_2019_to_2026_correspondence_metadata.rds
+data-raw/2022-Updates-to-the-2012-PSOC.xlsx
+data-raw/ISIC4-5_Correspondence_Table.xlsx
+docs/CORRESPONDENCE_SOURCES.md
+tests/testthat/test-psoc-2022.R
+tests/testthat/test-parallel-search.R
+tests/testthat/test-correspondence-schema.R
+tests/testthat/test-correspondence-build.R
+tests/testthat/test-correspondence-service.R
 ```
 
-No files were destructively modified — this was an empty repository
-(only the two spec markdown files) at the start of this build.
+Modified files:
+```
+R/registry.R          -- PSOC 2022/2012 version+level+current-version wiring
+R/repository.R        -- dispatch to adapter_psoc_2022 for system="psoc", version="2022"
+R/adapters/adapter_phscs.R  -- psoc 2012 status corrected to archived; level names renamed to canonical form
+app.R                  -- Dual Search + Compare PSIC Editions nav panels and server logic; page_navbar id="main_nav"; defensive version/system race guard
+tests/testthat/test-adapters.R  -- updated for renamed psoc levels + archived status
+docs/UI_CONTRACT.md    -- new stable IDs, PSOC version states, dual-search contract, correspondence contract, states table, main_nav gate pattern documented
+docs/DATA_SOURCES.md   -- new PSOC 2022 provenance section
+README.md              -- updated feature summary and rebuild commands
+```
+
+No MVP files were destructively rewritten — every change above is either
+a new file or a narrow, targeted edit to an existing one, with the
+specific reason documented inline at each edit site.

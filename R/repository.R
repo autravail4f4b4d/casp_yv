@@ -76,6 +76,9 @@ classification_levels <- function(system, version) {
   if (identical(system, "psic") && identical(version, "2026")) {
     return(psic2026_levels())
   }
+  if (identical(system, "psoc") && identical(version, "2022")) {
+    return(psoc2022_levels())
+  }
   if (identical(system, "psgc")) {
     return(psgc_levels(version))
   }
@@ -117,6 +120,9 @@ get_classification <- function(system, version, level = NULL) {
   }
   if (identical(system, "psic") && identical(version, "2026")) {
     return(psic2026_get(level = level))
+  }
+  if (identical(system, "psoc") && identical(version, "2022")) {
+    return(psoc2022_get(level = level))
   }
   phscs_get(system, version, level = level)
 }
@@ -174,6 +180,9 @@ classification_metadata <- function(system, version) {
   }
   if (identical(system, "psic") && identical(version, "2026")) {
     return(psic2026_metadata())
+  }
+  if (identical(system, "psoc") && identical(version, "2022")) {
+    return(psoc2022_metadata())
   }
   phscs_metadata(system, version)
 }
