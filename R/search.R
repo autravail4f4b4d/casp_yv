@@ -54,7 +54,34 @@ normalize_whitespace <- function(x) {
 #' @return A tibble with exactly CLASSIFICATION_SCHEMA_COLUMNS (no scratch
 #'   columns), at most `limit` rows, never NULL and never throwing on a
 #'   no-match query.
+#'
+#' @details This is a thin wrapper over `search_classification_data_result()`
+#'   returning only its `$data` element. Filtering and ranking are performed
+#'   exactly once per call -- there is no second pass to compute counts.
 search_classification_data <- function(data, query, level = NULL, limit = 100) {
+  search_classification_data_result(data, query, level = level, limit = limit)$data
+}
+
+#' Search a canonical classification tibble, reporting the true match total.
+#'
+#' Identical filtering/ranking to `search_classification_data()` -- same tiers,
+#' same order, same blank-query browse behavior, same extra-column
+#' passthrough -- but returns the count of ALL matching rows *before* `limit`
+#' was applied, so a caller can say "3,487 results · showing first 200"
+#' instead of misreporting the rendered row count as the match total.
+#'
+#' @inheritParams search_classification_data
+#'
+#' @return A list:
+#'   \describe{
+#'     \item{data}{the ranked result tibble, at most `limit` rows -- byte-for-byte
+#'       what `search_classification_data()` returns}
+#'     \item{total_matches}{integer(1). Every row that matched, before the limit}
+#'     \item{returned_count}{integer(1). `nrow(data)`}
+#'     \item{limit}{integer(1). The limit that was applied}
+#'     \item{is_truncated}{logical(1). `total_matches > returned_count`}
+#'   }
+search_classification_data_result <- function(data, query, level = NULL, limit = 100) {
   if (!is.null(level)) {
     data <- data[data$level == level, , drop = FALSE]
   }
@@ -70,7 +97,7 @@ search_classification_data <- function(data, query, level = NULL, limit = 100) {
     trimws(query) == ""
 
   if (is_blank_query) {
-    return(head(data, limit))
+    return(.search_count_result(head(data, limit), nrow(data), limit))
   }
 
   query_norm <- normalize_whitespace(tolower(query))
@@ -106,5 +133,74 @@ search_classification_data <- function(data, query, level = NULL, limit = 100) {
   # extras and are completely unaffected.
   extras <- setdiff(names(matched), c(CLASSIFICATION_SCHEMA_COLUMNS, ".rank_tier", ".orig_order"))
   result <- matched[, c(CLASSIFICATION_SCHEMA_COLUMNS, extras), drop = FALSE]
-  head(result, limit)
+  .search_count_result(head(result, limit), nrow(result), limit)
+}
+
+#' Assemble the count-aware result list. Internal.
+#'
+#' @param data the already-limited result tibble
+#' @param total integer(1) count of matches before the limit was applied
+#' @param limit integer(1) the limit that was applied
+#' @noRd
+.search_count_result <- function(data, total, limit) {
+  total <- as.integer(total)
+  returned <- as.integer(nrow(data))
+  list(
+    data           = data,
+    total_matches  = total,
+    returned_count = returned,
+    limit          = as.integer(limit),
+    is_truncated   = total > returned
+  )
+}
+
+#' Format a search result count for display. Pure -- no Shiny dependency.
+#'
+#' The single source of truth for result-count wording, so the UI can never
+#' re-invent it and can never print the cap ("200 results") as if it were the
+#' true match total.
+#'
+#' @param total_matches integer(1). All matching rows before the limit.
+#' @param returned_count integer(1). Rows actually returned/rendered.
+#' @param is_truncated logical(1). Whether matches were cut off by the limit.
+#' @param limit integer(1) or NULL. Only used as a fallback for the
+#'   unknown-total form when `returned_count` is unusable.
+#' @param total_is_exact logical(1). FALSE when the true total genuinely
+#'   cannot be known (e.g. an upstream source that only ever returns a page),
+#'   which yields the "200+ results" form instead of an invented number.
+#' @param is_browsing logical(1). TRUE for the blank-query browse mode, which
+#'   appends " · browsing".
+#'
+#' @return character(1).
+format_result_count <- function(total_matches, returned_count, is_truncated,
+                                 limit = NULL, total_is_exact = TRUE,
+                                 is_browsing = FALSE) {
+  total_matches  <- as.integer(total_matches)
+  returned_count <- as.integer(returned_count)
+  is_truncated   <- isTRUE(is_truncated)
+
+  fmt <- function(x) format(x, big.mark = ",", trim = TRUE, scientific = FALSE)
+
+  out <- if (!isTRUE(total_is_exact) && is_truncated) {
+    # The total is genuinely unknowable: report the floor, never a guess.
+    n <- if (length(returned_count) == 1L && !is.na(returned_count)) {
+      returned_count
+    } else {
+      as.integer(limit)
+    }
+    paste0(fmt(n), "+ results")
+  } else if (is.na(total_matches) || total_matches == 0L) {
+    "No results"
+  } else if (is_truncated) {
+    paste0(fmt(total_matches), " results · showing first ", fmt(returned_count))
+  } else if (total_matches == 1L) {
+    "1 result"
+  } else {
+    paste0(fmt(total_matches), " results")
+  }
+
+  if (isTRUE(is_browsing)) {
+    out <- paste0(out, " · browsing")
+  }
+  out
 }

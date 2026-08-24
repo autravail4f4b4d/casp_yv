@@ -86,11 +86,22 @@ server logic in the same change.
 | `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"rm_assistant"` / `"about"` |
 | `classification_result_count` | output (uiOutput) | Result count above the results table; reads the same reactive as the table so the two can never disagree |
 | `sources_panel` | output (uiOutput) | The About/Data Sources panel body |
-| `dual_search_query` | input (text) | Shared query searched against both PSOC and PSIC |
+| `dual_search_psoc_query` | input (text) | PSOC query. **Independent of PSIC** (UI-POST-02): typing here must never change any PSIC state |
+| `dual_search_psic_query` | input (text) | PSIC query. Independent of PSOC in the same way |
 | `dual_search_psoc_version` | input (select) | PSOC edition for the dual-search panel (default: current, "2022") |
 | `dual_search_psic_version` | input (select) | PSIC edition for the dual-search panel (default: current, "2026") |
 | `dual_search_psoc_results` | output (DT table) | Occupations (PSOC) result panel |
 | `dual_search_psic_results` | output (DT table) | Industries (PSIC) result panel |
+| `dual_search_psoc_count` | output (uiOutput) | PSOC result count for that panel only |
+| `dual_search_psic_count` | output (uiOutput) | PSIC result count for that panel only |
+| `dual_search_psoc_detail` | output (uiOutput) | PSOC selected-record detail; coexists with the PSIC detail |
+| `dual_search_psic_detail` | output (uiOutput) | PSIC selected-record detail; coexists with the PSOC detail |
+| `classification_level_is_informative` | output (reactive flag) | Drives the `conditionalPanel` around the Level control. FALSE when `level` merely restates `component` (UI-POST-03), in which case the control is hidden AND the level is forced to `NULL` server-side so a stale value cannot keep filtering |
+
+**Removed in UI-POST-02:** `dual_search_query`, the single shared input that
+searched both systems at once. It is gone deliberately — one input driving
+both panels is precisely what blurred the PSOC/PSIC distinction. Do not
+reintroduce a shared query control.
 | `dual_search_psoc_state` | output (uiOutput) | Error / "No results." message for the PSOC panel, independent of the PSIC panel |
 | `dual_search_psic_state` | output (uiOutput) | Error / "No results." message for the PSIC panel, independent of the PSOC panel |
 | `correspondence_direction` | input (select) | `"2019-2026"` or `"2026-2019"` — which way the correspondence lookup runs |
@@ -330,10 +341,18 @@ support this; switching `classification_version` between `"2022"` and
 
 ## 14. Dual-search contract
 
-- Stable IDs: see section 4 (`dual_search_query`,
-  `dual_search_psoc_version`, `dual_search_psic_version`,
-  `dual_search_psoc_results`, `dual_search_psic_results`,
-  `dual_search_psoc_state`, `dual_search_psic_state`).
+- Stable IDs: see section 4 (`dual_search_psoc_query`,
+  `dual_search_psic_query`, `dual_search_psoc_version`,
+  `dual_search_psic_version`, `dual_search_psoc_results`,
+  `dual_search_psic_results`, `dual_search_psoc_state`,
+  `dual_search_psic_state`, `dual_search_psoc_count`,
+  `dual_search_psic_count`, `dual_search_psoc_detail`,
+  `dual_search_psic_detail`).
+- **The two sides are independent (UI-POST-02).** Each owns its query,
+  edition, count, table and selection. No PSIC output may read a PSOC input
+  or vice versa. Clearing one side must leave the other intact, and both
+  detail panels may be populated simultaneously. An occupation must never be
+  used to infer an industry, or the reverse.
 - Service function: `search_parallel_classifications(query, systems,
   versions, levels, limit_per_system)` (`R/parallel_search.R`) — a thin
   orchestrator that calls `search_classification()` once per system inside
@@ -350,9 +369,15 @@ support this; switching `classification_version` between `"2022"` and
   - **error** — that system's `search_classification()` call raised a
     validation error (e.g. an unsupported version); the OTHER system's
     panel is entirely unaffected and still renders normally
-- Semantic labels are mandatory, not optional styling: "Occupations —
-  PSOC" and "Industries — PSIC" (`PARALLEL_SEARCH_SYSTEM_LABELS` in
-  `R/parallel_search.R`) must always appear on their respective panels.
+- Semantic labels are mandatory, not optional styling. As of UI-POST-02 the
+  panel headings are **"PSOC — Occupation"** and **"PSIC — Industry"**, each
+  with its explanatory line ("Describes what a person does." /
+  "Describes the economic activity of the establishment or business."), as
+  fixed by the refinement specification. These supersede the earlier
+  "Occupations — PSOC" / "Industries — PSIC" wording;
+  `PARALLEL_SEARCH_SYSTEM_LABELS` in `R/parallel_search.R` remains the label
+  source for the parallel-search service and is unchanged.
+  The headings must always appear on their respective panels.
   Claude Design may restyle the presentation of this distinction but must
   never remove it or imply the two codes are interchangeable — a PSOC code
   and a PSIC code describe different things (what a person does vs. what

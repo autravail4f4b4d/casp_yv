@@ -91,9 +91,22 @@ search_ui <- function() {
             choices = NULL, width = "100%"
           )
         ),
-        shiny::selectInput(
-          "classification_level", "Level",
-          choices = NULL, width = "100%"
+        # Level control (UI-POST-03).
+        #
+        # Shown only when Level adds information beyond Component. For the
+        # composite systems (PTSCS, PSCrCS) the level column repeats the
+        # component token exactly, so offering both asks the same question
+        # twice and exposes machine values such as `tourism_product`. The
+        # flag is derived from the artifact server-side by
+        # classification_level_is_informative(), never hard-coded per
+        # system, and `level` stays fully available in the data model and
+        # to every service function.
+        shiny::conditionalPanel(
+          condition = "output.classification_level_is_informative",
+          shiny::selectInput(
+            "classification_level", "Level",
+            choices = NULL, width = "100%"
+          )
         )
       ),
       shiny::tags$div(

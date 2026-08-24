@@ -1,6 +1,12 @@
 # Implementation Status — PSA Statistical Classifications Search
 
-> **Latest milestone: Pre-staging hardening** — see
+> **Latest milestone: Post–Connect Cloud staging UI refinement** — see
+> [Post–Connect Cloud staging UI refinement](#postconnect-cloud-staging-ui-refinement)
+> at the end of this document. Regression: **3000 / 3000 passing**
+> (0 fail / 0 warn / 0 skip), from a verified 2151 baseline.
+> `renv::status()` clean. Not yet republished to staging.
+
+> **Previous milestone: Pre-staging hardening** — see
 > [Pre-staging hardening milestone](#pre-staging-hardening-milestone) at the
 > end of this document. Regression: **1904 / 1904 passing** (from a verified
 > 1103 baseline). PSIC structural correspondence repaired, three new
@@ -1038,9 +1044,11 @@ claims are made from a live model.
   shinychat gap, documented in `docs/ASSISTANT_CONTRACT.md` §12.
 - **No human has visually reviewed the rendered UI.** Verification was
   structural (DOM/a11y/computed style), not visual.
-- **`renv.lock` is out of sync** — reported by `renv::status()` during test
-  runs. No new R packages were added by this milestone; a snapshot should be
-  taken before deployment.
+- ~~**`renv.lock` is out of sync**~~ — RESOLVED. This was a false positive:
+  a local closure named `use()` in `R/correspondence/precedence.R` was being
+  harvested by renv's dependency scanner as a package-declaring call.
+  Renaming it cleared all five phantom dependencies; `renv::status()` now
+  reports the project consistent.
 
 ## Staging readiness
 
@@ -1051,3 +1059,98 @@ All-levels default, redundant search removed, component controls, Sources
 cards, no footer overlap, no mobile regressions; targeted and full
 regression suites passing; all five destinations and both mobile floors
 verified.
+
+---
+
+# Post–Connect Cloud staging UI refinement
+
+Implements `POST_CONNECT_STAGING_UI_REFINEMENT_GRAPH.md` on
+`feature/pre-staging-hardening`. Presentation and search-contract work; no
+canonical classification content, correspondence edge, provenance,
+confidence, curated PSOC override or RM grounding rule was changed.
+
+**Regression: 3000 / 3000 passing, 0 fail / 0 warn / 0 skip** (from a
+verified 2151 baseline; +849 assertions, all newly added).
+`renv::status()`: *No issues found -- the project is in a consistent state.*
+No dependency changed, so the Connect manifest was deliberately **not**
+regenerated.
+
+## What changed, by finding
+
+| Finding | Outcome |
+| --- | --- |
+| UI-POST-01 Relationship terminology | Native `<details>` disclosures for Relationship, Provenance and Confidence in the Compare Editions panel. No JS tooltip dependency. |
+| UI-POST-02 PSOC + PSIC independence | Shared `dual_search_query` removed. Each side now owns its query, edition, count, table and selection. |
+| UI-POST-03 Component vs Level | Level hidden when it only restates Component; verdict derived from the artifact, not hard-coded. Public component and level labels throughout. |
+| UI-POST-04 Dropdown overlay | Root cause was elevation/contrast, not z-index or overflow. Fixed as a scoped surface treatment, plus a real horizontal-overflow fix. |
+| UI-POST-05 Result count | New count-aware search contract; the 200-row cap is never reported as the match total. |
+| UI-POST-06 Edition / Release | Humanised release labels, calmer rows, hover/focus/selected states, textual Current/Archived. |
+| UI-POST-07 PSCC source form | Structural rows preserved, hierarchy and breadcrumbs added, cross-reference search and labelling, honest level names. |
+
+## Result-count contract
+
+`search_classification_result()` / `search_classification_data_result()`
+return `list(data, total_matches, returned_count, limit, is_truncated)`.
+The pre-existing `search_classification()` and
+`search_classification_data()` keep their exact tibble-returning
+signatures, so RM tools and existing callers are untouched. Filtering and
+ranking run **once** per call. `format_result_count()` is the single pure
+source of the wording (`"3,487 results · showing first 200"`,
+`"1 result"`, `"No results"`, `"200+ results"`).
+
+## PSCC source-form model
+
+Artifact grew 21,742 → 24,180 rows and 10 → 26 columns. The canonical ten
+remain first and unchanged; sixteen extra columns carry `node_type`,
+`display_depth`, `display_description`, `raw_description`, `breadcrumb`,
+section/chapter/heading codes, `pscc_2022_code`, `unit_of_quantity`,
+`pscc_2019_code`, `ahtn_2022_code`, `is_selectable_code`,
+`is_structural_label`, `source_row`, `source_order`.
+
+Levels are now
+`section, chapter, heading, subheading, intermediate_category, commodity,
+structural_group`. The former `ahtn subheading` level is **gone**: AHTN 2022
+is a cross-reference, never a hierarchy level.
+
+### Corrections to the specification's §9.1 workbook audit
+
+The specification's counts were checked against
+`data-raw/commodity classification.xlsx` and several are wrong. Implemented
+against the actual workbook:
+
+| §9.1 claim | Actual |
+| --- | --- |
+| 1,240 Heading rows | **1,245** |
+| 2,297 eight-digit codes | **2,350** raw (2,346 after four same-code folds) |
+| 15,926 detailed rows | **16,049** |
+| 2,325 descriptor-only rows | 2,325 confirmed, but §9.1 omits **80 dash-less inline captions** and **66 sub-chapter rows** |
+| (not mentioned) | **9 Excel-numeric cells** (e.g. `8701.2099999999991`, `20.059999999999999`) already repaired deterministically and recorded in `metadata$numeric_cell_repairs` |
+
+### New defect found and fixed
+
+1,647 workbook descriptions separate their dash markers with **U+00A0**,
+which R's `[[:space:]]` does not match. Every one of those rows previously
+read as hierarchy depth 0, so their structure was silently invisible.
+Depth-1 rows went 2,795 → 3,656 once handled. Two further rows print a dash
+marker with no following space; both are preserved verbatim and recorded in
+`metadata$anomalies` (now 6 entries, was 4).
+
+## Known limitations
+
+- **Keyboard activation of the `<details>` disclosures could not be
+  exercised through the browser automation**: its key dispatch does not
+  trigger browser default actions — proven by a pristine, unstyled
+  `<details>` control also failing to open under the same keystroke. The
+  preconditions were verified instead (native `<summary>`, focusable, in the
+  tab order, 2px focus ring, activates on click). `display` is deliberately
+  left at `list-item`, because overriding it to a flex value strips native
+  disclosure semantics in Chromium and WebKit.
+- **`www/app.css` is served without a cache-busting query**, so a returning
+  browser can hold a stale stylesheet after a redeploy. Observed repeatedly
+  during this session's UAT. Not introduced here, but worth a hard refresh
+  when reviewing staging.
+- **Inline PSCC captions are placed as peers, not parents.** The workbook
+  gives no unambiguous evidence of parentage; hierarchy was not invented.
+- **No human has visually reviewed the rendered UI.** Verification was
+  structural (DOM geometry, computed style, hit-testing, accessibility
+  tree), not visual.

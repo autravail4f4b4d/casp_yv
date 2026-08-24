@@ -195,6 +195,28 @@ get_classification <- function(system, version, level = NULL, component = NULL) 
 #'   `limit` rows. Never errors on a no-match query; never returns NULL.
 search_classification <- function(system, version, query, level = NULL,
                                    limit = 100, component = NULL) {
+  search_classification_result(
+    system, version, query,
+    level = level, limit = limit, component = component
+  )$data
+}
+
+#' Search one system+version, reporting the true pre-limit match total.
+#'
+#' Same validation, same component/level filtering and same single ranking
+#' pass as `search_classification()` -- this is the function that one actually
+#' calls; `search_classification()` is now the tibble-only wrapper over it.
+#' Exists so the UI can distinguish "200 results" (all of them) from
+#' "3,487 results · showing first 200" (the cap).
+#'
+#' @inheritParams search_classification
+#'
+#' @return A list with `data`, `total_matches`, `returned_count`, `limit` and
+#'   `is_truncated` -- see `search_classification_data_result()` (R/search.R).
+#'   `total_matches` counts matches *after* the component and level filters
+#'   have been applied, and *before* `limit`.
+search_classification_result <- function(system, version, query, level = NULL,
+                                          limit = 100, component = NULL) {
   .validate_version(system, version)
   .validate_level(system, version, level)
   .validate_component(system, component)
@@ -204,7 +226,7 @@ search_classification <- function(system, version, query, level = NULL,
   # are ranked. The single deterministic ranking engine in R/search.R is
   # reused unchanged; no second ranking path exists for composite systems.
   data <- get_classification(system, version, level = NULL, component = component)
-  search_classification_data(data, query, level = level, limit = limit)
+  search_classification_data_result(data, query, level = level, limit = limit)
 }
 
 #' Look up a single classification entry by its exact code.

@@ -328,7 +328,32 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  /* Grid and flex items default to `min-width: auto`, i.e. they refuse to
+     shrink below their content's intrinsic minimum. Selectize sizes its
+     control from the widest option, and the widest System option is the
+     78-character PCOICOP name -- which measured a 383px sidebar inside a
+     375px viewport, i.e. 32px of horizontal page overflow. Allowing the
+     column to shrink is what fixes that at the source; the text ellipsises
+     inside the control instead of widening the page. */
+  min-width: 0;
 }
+
+.psa-search-body,
+.psa-results-split { min-width: 0; }
+
+.psa-search-body > *,
+.psa-results-split > * { min-width: 0; }
+
+.psa-sidebar .form-group,
+.psa-sidebar .selectize-control,
+.psa-sidebar .selectize-input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The results table is the other thing that can push the page sideways;
+   let it scroll inside its own column. */
+.psa-results-split .dataTables_wrapper { overflow-x: auto; }
 
 .psa-sidebar .form-group { margin-bottom: 0; }
 
@@ -350,27 +375,61 @@ summary:focus-visible,
   max-height: 232px;
 }
 
+/* UI-POST-06: the strong full-width rule between every row read as a data
+   table and made a 13-release PSGC history look far denser than it is.
+   Rows are separated by spacing and hover/selected state instead; a single
+   hairline is kept, inset from the edges and hidden on the selected row so
+   the selection reads as one unbroken block. */
 .psa-edition-group .radio {
   margin: 0;
-  border-top: 1px solid var(--color-divider);
+  position: relative;
 }
 
-.psa-edition-group .radio:first-child { border-top: none; }
+.psa-edition-group .radio + .radio::before {
+  content: "";
+  position: absolute;
+  inset-inline: 12px;
+  top: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.psa-edition-group .radio:has(input:checked)::before,
+.psa-edition-group .radio:has(input:checked) + .radio::before {
+  background: transparent;
+}
 
 .psa-edition-group .radio label {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* ~38px row: inside the 36-40px band the refinement asks for, and still a
+     comfortable pointer target because the whole label is clickable. */
+  min-height: 38px;
   margin: 0;
-  padding: 11px 13px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   color: var(--color-text);
   cursor: pointer;
 }
 
+.psa-edition-group .radio label:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
 .psa-edition-group .radio:has(input:checked) {
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* The radio input is visually inside the row but the ring must surround the
+   whole row, which is what the user actually perceives as the control. */
+.psa-edition-group .radio:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .psa-edition-group .radio input[type="radio"] {
@@ -380,6 +439,398 @@ summary:focus-visible,
 }
 
 .psa-edition-name { flex: 1 1 auto; }
+
+/* ---- Filter dropdown elevation (UI-POST-04) -----------------------------
+   MEASURED ROOT CAUSE, not a guess. With the System menu open at 375px the
+   DOM reports: no ancestor with a clipping overflow, a non-static position,
+   a transform or an isolation (the whole ancestor chain is clean); the menu
+   itself at position:absolute, z-index:1000, bounded to a 200px scrollable
+   content box; and elementFromPoint at three depths inside the open menu
+   returning .option every time. So the menu was already ABOVE the Edition
+   control, already bounded, already scrollable and not clipped.
+
+   What was actually wrong was that it was INVISIBLE AS A SURFACE:
+     background-color  rgb(15,17,25)          == body background, exactly
+     border            rgba(40,70,94,0.1)     ~ invisible at 10% alpha
+     box-shadow        rgba(0,0,0,0.176)      ~ black on near-black
+   and unselected options paint on a transparent background. The menu had no
+   perceptible edge, so its option text appeared to bleed through the bordered
+   Edition box behind it -- which is exactly the reported "fields are
+   overwritten / hidden" symptom.
+
+   The fix is therefore elevation and contrast, scoped to this component.
+   Deliberately NOT a large global z-index: 1000 already wins, and raising it
+   would have changed nothing while risking the navbar and RM overlays. */
+.selectize-control { position: relative; }
+
+.selectize-dropdown {
+  /* A genuinely distinct surface, one step above the page and above the
+     card surface, so the panel edge is unmistakable on a dark UI. */
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-text));
+  border: 1px solid color-mix(in srgb, var(--color-text) 22%, transparent);
+  border-radius: var(--radius-md);
+  /* Dark UIs get no useful depth cue from a black shadow. A deeper, more
+     opaque shadow plus a faint top highlight is what reads as "floating". */
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+  margin-top: 4px;
+  padding: 4px;
+  overflow: hidden;
+  /* Above the sibling filter controls and the bordered Edition box, and
+     still below Bootstrap's modal (1055) and offcanvas layers. */
+  z-index: 1030;
+  /* Selectize writes an inline `min-width` computed from its widest option
+     (measured 382.67px for the System list), which overflows a 375px
+     viewport. Inline styles can only be beaten with !important. The menu
+     then tracks its control's width and never exceeds the viewport. */
+  min-width: 0 !important;
+  max-width: calc(100vw - 24px);
+}
+
+/* Long option text truncates rather than widening the menu past the page.
+   `max-width` is load-bearing on `.item`: selectize gives it
+   `display: inline-block` with no width cap, so at 320px the 78-character
+   PCOICOP label rendered a 307px item inside a 272px control and pushed 24px
+   of scroll onto the document. `overflow: hidden` alone does nothing without
+   a width to overflow. */
+.selectize-dropdown .option,
+.selectize-input .item {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectize-input {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.selectize-dropdown .selectize-dropdown-content {
+  /* Bounded and scrollable, and never taller than the viewport on a short
+     window -- the fixed 200px alone could exceed a landscape phone. */
+  max-height: min(200px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.selectize-dropdown .option {
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  /* Kept ≥44px only where pointers are coarse; on a mouse this density is
+     correct for a 10-item filter list. */
+  cursor: pointer;
+}
+
+.selectize-dropdown .option:hover,
+.selectize-dropdown .option.active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-text);
+}
+
+/* Selectize marks the CURRENT value .selected; it must stay distinguishable
+   from the keyboard-cursor row (.active) rather than both being flooded. */
+.selectize-dropdown .option.selected {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.selectize-dropdown .option.selected.active {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* The closed control should read as an input, not as bare text on the page. */
+.selectize-input {
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-text)) !important;
+  border: 1px solid var(--color-divider) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+  color: var(--color-text) !important;
+}
+
+.selectize-input.focus,
+.selectize-input.dropdown-active {
+  border-color: var(--color-accent) !important;
+}
+
+/* Square off the join while the menu is open so control and menu read as
+   one object. */
+.selectize-input.dropdown-active::after { display: none; }
+
+/* ---- PSOC + PSIC: two independent panels (UI-POST-02) -------------------
+   The two sides are deliberately symmetrical and share no state. The layout
+   requirement that actually bites is `min-width: 0` on the grid and on every
+   descendant that contains a DT table: grid and flex items default to
+   `min-width: auto`, which refuses to shrink below their content, so a wide
+   results table would push horizontal overflow onto <body> instead of
+   scrolling inside its own panel. */
+.psa-dual { min-width: 0; }
+
+.psa-dual-hero { align-items: flex-start; }
+
+.psa-dual-title {
+  font-size: 20px;
+  margin: 0 0 6px;
+}
+
+.psa-dual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+
+.psa-dual-grid > * { min-width: 0; }
+
+.psa-dual-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.psa-dual-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.psa-dual-panel-title {
+  font-size: 16px;
+  margin: 0;
+}
+
+.psa-dual-edition { min-width: 150px; }
+
+.psa-dual-edition .control-label,
+.psa-dual-field .control-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.psa-dual-panel-help {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  margin: 4px 0 12px;
+}
+
+.psa-dual-field { position: relative; }
+
+.psa-dual-field .ph-magnifying-glass {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.psa-dual-field input.form-control { padding-left: 36px; }
+
+.psa-dual-count { margin-bottom: 6px; }
+
+.psa-dual-count .psa-result-count { padding-bottom: 4px; }
+
+/* The scroll container for the results table. Without this the DT's own
+   width escapes the panel at phone widths. */
+.psa-dual-results {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.psa-dual-detail {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.psa-dual-detail-head {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin: 0 0 8px;
+}
+
+.psa-dual-note {
+  margin-top: 18px;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* ---- PSCC commodity hierarchy (UI-POST-07) ------------------------------
+   A commodity record is a code + description sitting inside a
+   Section > Chapter > Heading > descriptor chain, with a unit and two
+   cross-references. The visual order below is the specification's: the
+   2022 PSCC code leads, the description follows, then the breadcrumb, then
+   secondary metadata -- never all concatenated into one title. */
+.psa-pscc-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.psa-pscc-code {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-accent-300);
+  overflow-wrap: anywhere;
+}
+
+.psa-pscc-description {
+  font-size: 14px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Structural nodes (descriptor rows, captions, sub-chapters) are context,
+   not selectable commodities. They are deliberately quieter and carry no
+   code line at all, so they can never be read as a final PSCC code. */
+.psa-pscc-structural .psa-pscc-description {
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-style: italic;
+}
+
+.psa-pscc-breadcrumb {
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.psa-pscc-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 2px;
+}
+
+.psa-pscc-meta {
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  overflow-wrap: anywhere;
+}
+
+/* "2019 PSCC cross-reference" / "AHTN 2022 cross-reference" -- the label is
+   what stops the value being mistaken for the current 2022 code. */
+.psa-pscc-meta-label {
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  margin-right: 4px;
+}
+
+.psa-pscc-match-reason {
+  font-size: 12.5px;
+  color: var(--color-accent-300);
+  border-left: 3px solid var(--color-accent-800);
+  padding: 4px 0 4px 8px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.psa-pscc-detail { min-width: 0; }
+
+.psa-pscc-detail .psa-pscc-meta-label { display: block; }
+
+/* ---- Compare Editions column terminology help (UI-POST-01) --------------
+   Native <details>/<summary> disclosures, one per column term: keyboard-
+   and touch-operable with no script and no tooltip dependency. The app-wide
+   `summary:focus-visible` rule above already supplies the focus ring; the
+   border-radius here just makes it hug the trigger. */
+.psa-col-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  max-width: 100%;
+}
+
+.psa-col-legend-title {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  flex: 0 0 auto;
+}
+
+.psa-term-help {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Opened, the disclosure takes the whole row so its body never has to
+   squeeze into a narrow flex track. This is what keeps 320px safe. */
+.psa-term-help[open] { flex: 1 1 100%; }
+
+/* `display` is deliberately left at <summary>'s default `list-item`.
+   Overriding it (to inline-flex, flex or block) strips the element's native
+   disclosure semantics in Chromium and WebKit: the accessibility tree
+   downgrades it to a generic node and Enter/Space stop toggling the
+   <details>. Verified here -- with inline-flex the browser reported the
+   trigger as `generic` rather than a disclosure. `list-style: none` removes
+   the marker without touching `display`, and `width: fit-content` keeps the
+   list-item box hugging its text so it still reads as an inline affordance. */
+.psa-term-help-trigger {
+  list-style: none;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--color-accent-300);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.psa-term-help-trigger::-webkit-details-marker { display: none; }
+.psa-term-help-trigger::marker { content: ""; }
+
+.psa-term-help-trigger:hover { color: var(--color-accent); }
+
+.psa-term-help-term {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.psa-term-help-trigger .ph-question {
+  font-size: 13px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.psa-term-help-body {
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 4px 0 2px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.psa-term-help-intro { margin: 0 0 6px; }
+
+.psa-term-help-list { margin: 0; }
+.psa-term-help-list dt { font-weight: 600; }
+.psa-term-help-list dd { margin: 0 0 6px; padding-left: 0; }
+.psa-term-help-list dd:last-child { margin-bottom: 0; }
 
 /* ---- Result tables ------------------------------------------------------ */
 .psa-result-count {
@@ -951,6 +1402,12 @@ table.dataTable tbody tr.selected td {
   .psa-search-body { grid-template-columns: 1fr; }
   .psa-results-split { grid-template-columns: 1fr; }
   .psa-hero { padding: 26px 0 20px; }
+
+  /* PSOC + PSIC stack vertically from tablet down (spec section 4). */
+  .psa-dual-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 
 /* Mobile: ≤575px, hard floor 375px. */
@@ -1028,6 +1485,54 @@ table.dataTable tbody tr.selected td {
   /* Reserved Ask RM slots are layout reservations, not content — at phone
      width the space is better given to the data itself. */
   .psa-askrm-reserved { display: none; }
+
+  /* --- PSOC + PSIC at phone width -------------------------------------- */
+  .psa-dual-grid { gap: 12px; }
+
+  .psa-dual-panel { padding: 12px; }
+
+  /* The edition select goes full width rather than squeezing the heading
+     into two characters. */
+  .psa-dual-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .psa-dual-panel-title { white-space: normal; }
+
+  .psa-dual-edition {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 16px is the iOS zoom-on-focus floor, same rule as the hero field. */
+  .psa-dual-field input.form-control { font-size: 16px; }
+
+  /* --- Compare Editions legend at phone width --------------------------- */
+  /* Stack the three triggers; each gets a full-width 44px tap target
+     (docs/UI_CONTRACT.md §11). */
+  .psa-col-legend { gap: 2px; }
+
+  .psa-term-help { flex: 1 1 100%; }
+
+  .psa-term-help-trigger {
+    min-height: 44px;
+    line-height: 36px;
+    width: 100%;
+  }
+}
+
+/* Hard floor: 320px. The dropdown must never exceed the viewport, and the
+   edition badge must stay on the same line as its label rather than
+   wrapping onto its own row. */
+@media (max-width: 359.98px) {
+  .psa-dual-panel { padding: 10px; }
+
+  .psa-edition-group .radio label {
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
 }
 
 /* Reduced motion: honour the OS preference for the streaming indicator. */

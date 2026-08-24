@@ -14,6 +14,13 @@
 #   pscc2022_levels()            -> hierarchy-ordered level vector
 #   pscc2022_get(level = NULL)   -> canonical tibble, optionally one level
 #   pscc2022_metadata()          -> provenance metadata list
+#   pscc2022_extra_columns()     -> the display/source-form columns that ride
+#                                   after the canonical ten
+#
+# The artifact carries the frozen canonical ten columns FIRST, in order, so
+# `R/search.R`'s `matched[, c(CLASSIFICATION_SCHEMA_COLUMNS, extras)]` keeps
+# working, followed by PSCC-specific display/source-form metadata. Human
+# labels for the level values live in `R/ui/ui_pscc.R::pscc_level_labels()`.
 
 PSCC_2022_DATA_PATH <- "data/pscc_2022.rds"
 PSCC_2022_METADATA_PATH <- "data/pscc_2022_metadata.rds"
@@ -66,14 +73,33 @@ pscc2022_versions <- function() {
 #' Available PSCC 2022 hierarchy levels, in hierarchy order.
 #'
 #' Derived from the official workbook's own structure:
-#'   section          -- "SECTION I - ..." (roman numeral)
-#'   chapter          -- "Chapter 1 - ..." (two-digit)
-#'   heading          -- NN.NN            (HS 4-digit)
-#'   subheading       -- NNNN.NN          (HS 6-digit)
-#'   ahtn subheading  -- NNNN.NN.NN       (AHTN 8-digit)
-#'   commodity        -- NNNN.NN.NN-NNN   (PSCC 11-digit)
+#'   section               -- "SECTION I - ..." (roman numeral)
+#'   chapter               -- "Chapter 1 - ..." (two-digit)
+#'   heading               -- NN.NN            (HS 4-digit)
+#'   subheading            -- NNNN.NN          (HS 6-digit)
+#'   intermediate_category -- NNNN.NN.NN       (8-digit)
+#'   commodity             -- NNNN.NN.NN-NNN   (PSCC 11-digit)
+#'   structural_group      -- code-less rows PSA prints to carry hierarchy
+#'                            (sub-chapters, dash descriptors, inline
+#'                            captions). NOT selectable classification codes.
+#'
+#' The 8-digit level is deliberately NOT called "ahtn subheading": AHTN 2022
+#' is a cross-reference column, not a level of the 2022 PSCC hierarchy, and
+#' must never appear in the public Level selector (spec 9.9/9.10). Where the
+#' workbook gives no formal PSA name for an intermediate row, the public label
+#' is "Intermediate category" rather than an invented official term -- see
+#' `pscc_level_labels()` in R/ui/ui_pscc.R.
 pscc2022_levels <- function() {
-  c("section", "chapter", "heading", "subheading", "ahtn subheading", "commodity")
+  c("section", "chapter", "heading", "subheading",
+    "intermediate_category", "commodity", "structural_group")
+}
+
+#' PSCC-specific columns carried after the canonical schema columns.
+#'
+#' @return character vector of the extra column names present in the runtime
+#'   artifact, in artifact order.
+pscc2022_extra_columns <- function(data_path = NULL) {
+  setdiff(names(pscc2022_get(data_path = data_path)), CLASSIFICATION_SCHEMA_COLUMNS)
 }
 
 #' Load the canonical PSCC 2022 tibble.
@@ -85,9 +111,11 @@ pscc2022_levels <- function() {
 #'   exists primarily so tests can point at a missing path without touching
 #'   the real committed artifact.
 #'
-#' @return A tibble with exactly `CLASSIFICATION_SCHEMA_COLUMNS`, all
-#'   character. Codes are strings throughout: leading zeros, dots, hyphens
-#'   and 3-digit suffixes are preserved exactly as published by PSA.
+#' @return A tibble whose FIRST ten columns are exactly
+#'   `CLASSIFICATION_SCHEMA_COLUMNS`, in order and all character, followed by
+#'   the PSCC display/source-form extras (`pscc2022_extra_columns()`). Codes
+#'   are strings throughout: leading zeros, dots, hyphens and 3-digit suffixes
+#'   are preserved exactly as published by PSA.
 pscc2022_get <- function(level = NULL, data_path = NULL) {
   path <- if (is.null(data_path)) .pscc2022_resolve_default_path(PSCC_2022_DATA_PATH) else data_path
   cache_key <- paste0("data::", path)

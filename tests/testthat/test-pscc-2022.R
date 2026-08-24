@@ -35,11 +35,15 @@ test_that("metadata carries the official PSA name and provenance", {
   expect_true(nzchar(meta$scope))
 })
 
-test_that("canonical tibble matches the frozen schema exactly", {
+test_that("canonical schema columns come first, in order, all character", {
   df <- pscc2022_get()
 
-  expect_identical(names(df), CLASSIFICATION_SCHEMA_COLUMNS)
-  expect_true(all(vapply(df, is.character, logical(1))))
+  # R/search.R does `matched[, c(CLASSIFICATION_SCHEMA_COLUMNS, extras)]`, so
+  # the frozen ten must stay leading and in order. PSCC display/source-form
+  # metadata rides strictly after them.
+  n <- length(CLASSIFICATION_SCHEMA_COLUMNS)
+  expect_identical(names(df)[seq_len(n)], CLASSIFICATION_SCHEMA_COLUMNS)
+  expect_true(all(vapply(df[CLASSIFICATION_SCHEMA_COLUMNS], is.character, logical(1))))
   expect_silent(validate_classification_tibble(df))
   expect_gt(nrow(df), 20000)
   expect_true(all(df$system == "pscc"))
@@ -102,8 +106,14 @@ test_that("real punctuated and hyphenated codes survive verbatim", {
   expect_false("9620.00.90-100" %in% codes)
 
   meta <- pscc2022_metadata()
-  expect_equal(length(meta$anomalies), 4L)
-  expect_true(all(vapply(meta$anomalies, function(a) a$code, character(1)) %in% codes))
+  # Four dot-separator commodity codes plus two dash markers printed without a
+  # following space (rows 22066 and 24645). All preserved verbatim.
+  expect_equal(length(meta$anomalies), 6L)
+  anomaly_codes <- vapply(meta$anomalies, function(a) a$code, character(1))
+  expect_length(setdiff(stats::na.omit(anomaly_codes), codes), 0L)
+  notes <- vapply(meta$anomalies, function(a) a$note, character(1))
+  expect_equal(sum(grepl("dot separator", notes)), 4L)
+  expect_equal(sum(grepl("without a following space", notes)), 2L)
 
   expect_gt(meta$parsed_counts$hyphenated_codes, 16000)
   expect_gt(meta$parsed_counts$punctuated_codes, 20000)
@@ -165,11 +175,16 @@ test_that("declared levels match the levels actually present", {
   levels <- pscc2022_levels()
   expect_identical(
     levels,
-    c("section", "chapter", "heading", "subheading", "ahtn subheading", "commodity")
+    c("section", "chapter", "heading", "subheading",
+      "intermediate_category", "commodity", "structural_group")
   )
   df <- pscc2022_get()
   expect_setequal(unique(df$level), levels)
   expect_identical(pscc2022_metadata()$levels, levels)
+
+  # AHTN 2022 is a cross-reference, never a hierarchy level (spec 9.9/9.10).
+  expect_false(any(grepl("ahtn", levels, ignore.case = TRUE)))
+  expect_false(any(grepl("ahtn", pscc_level_labels(), ignore.case = TRUE)))
 })
 
 test_that("level filter returns only that level and matches the full set", {
@@ -178,7 +193,7 @@ test_that("level filter returns only that level and matches the full set", {
   sections <- pscc2022_get(level = "section")
   expect_true(all(sections$level == "section"))
   expect_equal(nrow(sections), 21L)
-  expect_identical(names(sections), CLASSIFICATION_SCHEMA_COLUMNS)
+  expect_identical(names(sections), names(df))
 
   chapters <- pscc2022_get(level = "chapter")
   expect_equal(nrow(chapters), 98L)

@@ -14,6 +14,154 @@
 # A split or merge is NEVER flattened into a false one-to-one relationship
 # -- each target/source is listed separately in the relationship row.
 
+# ---- Column terminology help (UI-POST-01) ---------------------------------
+#
+# The three column concepts readers conflate are kept explicitly distinct:
+#
+#   Relationship -> WHAT HAPPENED to the concept between editions
+#                   (a structural change);
+#   Provenance   -> WHERE THE EVIDENCE for the mapping came from
+#                   (source / evidence);
+#   Confidence   -> HOW STRONG the mapping is (certainty), ordinal only.
+#
+# The glossary keys below are the *vocabulary constants* from
+# R/correspondence/schema.R, not re-typed literals. Nothing here restates a
+# code, a title, a count or any other value that lives in the correspondence
+# artifact, so the help text cannot drift away from the data. If the schema
+# vocabulary ever changes, `.correspondence_gloss_rows()` drops the stale
+# entry instead of describing a value the data no longer contains.
+
+#' Vocabulary constant lookup that tolerates the UI file being sourced on
+#' its own (tests, tooling) without R/correspondence/schema.R present.
+.corr_vocab <- function(name, fallback = character()) {
+  if (exists(name, inherits = TRUE)) as.character(get(name, inherits = TRUE)) else fallback
+}
+
+.CORRESPONDENCE_RELATION_GLOSS <- list(
+  split        = list(label = "Split",
+                      text  = "one old category became multiple new categories."),
+  merged       = list(label = "Merged",
+                      text  = "multiple old categories became one."),
+  reclassified = list(label = "Reclassified",
+                      text  = "the activity moved, or was recoded, to another category."),
+  unchanged    = list(label = "Continued / unchanged",
+                      text  = "the concept remains substantially the same.")
+)
+
+.CORRESPONDENCE_PROVENANCE_GLOSS <- list(
+  official  = list(label = "Official",
+                   text  = "the mapping is stated in a PSA-published correspondence document."),
+  derived   = list(label = "Derived",
+                   text  = paste(
+                     "this application worked the mapping out from the published",
+                     "classification structures. It is not a PSA ruling."
+                   )),
+  suggested = list(label = "Suggested",
+                   text  = paste(
+                     "a likely match this application proposes for review.",
+                     "Treat it as a lead to check, not as an official mapping."
+                   ))
+)
+
+.CORRESPONDENCE_CONFIDENCE_GLOSS <- list(
+  high     = list(label = "High",     text = "the evidence for this mapping is strong."),
+  moderate = list(label = "Moderate", text = "the evidence is partial; check it before relying on it."),
+  low      = list(label = "Low",      text = "the evidence is weak; verify against the source classifications.")
+)
+
+#' Render a glossary as a <dl>, keeping only terms still in the schema
+#' vocabulary so the help can never describe a retired value.
+.correspondence_gloss_rows <- function(gloss, allowed) {
+  keys <- if (length(allowed)) intersect(names(gloss), allowed) else names(gloss)
+  shiny::tags$dl(
+    class = "psa-term-help-list",
+    lapply(keys, function(k) {
+      shiny::tagList(
+        shiny::tags$dt(gloss[[k]]$label),
+        shiny::tags$dd(gloss[[k]]$text)
+      )
+    })
+  )
+}
+
+#' One term's help, as a native <details>/<summary> disclosure.
+#'
+#' <summary> on purpose, and not a <div>, an <i>, or a CSS `:hover` tooltip:
+#' it is a real focusable element in the tab order, it opens with Enter or
+#' Space, it opens on tap on touch devices (where `:hover` never fires), and
+#' the browser publishes its own expanded/collapsed state to assistive
+#' technology without any JavaScript. No tooltip library is introduced.
+#'
+#' The body is referenced by BOTH `aria-controls` (which region this trigger
+#' opens) and `aria-describedby` (so the definition is announced as the
+#' trigger's description). `aria-expanded` is deliberately NOT hand-written:
+#' the native element owns that state and a static attribute would go stale.
+.correspondence_term_help <- function(id, term, intro, gloss, allowed) {
+  body_id <- paste0(id, "-body")
+  shiny::tags$details(
+    class = "psa-term-help",
+    id = id,
+    shiny::tags$summary(
+      class = "psa-term-help-trigger",
+      `aria-label` = paste0("What does ", term, " mean?"),
+      `aria-controls` = body_id,
+      `aria-describedby` = body_id,
+      shiny::tags$span(class = "psa-term-help-term", term),
+      shiny::tags$i(class = "ph ph-question", `aria-hidden` = "true")
+    ),
+    shiny::tags$div(
+      id = body_id,
+      class = "psa-term-help-body",
+      role = "note",
+      shiny::tags$p(class = "psa-term-help-intro", intro),
+      .correspondence_gloss_rows(gloss, allowed)
+    )
+  )
+}
+
+#' The "What these columns mean" legend that sits directly above the results
+#' table. It is a sibling of DT::DTOutput("correspondence_results"), never a
+#' wrapper around it, so the table's own sorting and filtering are untouched.
+correspondence_column_legend <- function() {
+  relationship <- .correspondence_term_help(
+    "corr-help-relationship", "Relationship",
+    "How a classification changed between editions.",
+    .CORRESPONDENCE_RELATION_GLOSS,
+    .corr_vocab("CORRESPONDENCE_RELATION_TYPES")
+  )
+
+  provenance <- .correspondence_term_help(
+    "corr-help-provenance", "Provenance",
+    paste(
+      "Where the evidence for this correspondence came from — its source,",
+      "not how strong it is."
+    ),
+    .CORRESPONDENCE_PROVENANCE_GLOSS,
+    .corr_vocab("CORRESPONDENCE_PROVENANCE_VALUES")
+  )
+
+  confidence <- .correspondence_term_help(
+    "corr-help-confidence", "Confidence",
+    paste(
+      "How strong or certain this particular mapping is. It is an ordinal",
+      "rating, not a probability, and it is separate from where the evidence",
+      "came from."
+    ),
+    .CORRESPONDENCE_CONFIDENCE_GLOSS,
+    .corr_vocab("CORRESPONDENCE_CONFIDENCE_VALUES")
+  )
+
+  shiny::tags$div(
+    class = "psa-col-legend",
+    role = "group",
+    `aria-label` = "What these columns mean",
+    shiny::tags$span(class = "psa-col-legend-title", "What these columns mean"),
+    relationship,
+    provenance,
+    confidence
+  )
+}
+
 correspondence_ui <- function() {
   shiny::tagList(
     shiny::tags$div(
@@ -60,6 +208,11 @@ correspondence_ui <- function() {
           "Leave blank to browse. Each row is one relationship — a code ",
           "that split into several categories appears as several rows."
         ),
+        # Terminology help for the table's Relationship / Provenance /
+        # Confidence columns. A SIBLING of the DT output, never a wrapper:
+        # the table object itself is untouched, so DT's own sorting and
+        # filtering keep working exactly as before.
+        correspondence_column_legend(),
         DT::DTOutput("correspondence_results")
       )
     ),

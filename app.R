@@ -38,18 +38,11 @@ nav_label <- function(icon, text) {
   )
 }
 
-#' Human-readable label for a composite system's component id.
-#'
-#' Component ids are machine tokens from the adapters
-#' (`tourism_industry`, `creative_good_service`, ...). Title-casing the
-#' words is a presentation concern only -- the id itself is what travels to
-#' the repository, so nothing here can change which records are selected.
-.component_display_name <- function(ids) {
-  vapply(ids, function(id) {
-    words <- strsplit(gsub("_", " ", id), " ", fixed = TRUE)[[1]]
-    paste(toupper(substring(words, 1, 1)), substring(words, 2), sep = "", collapse = " ")
-  }, character(1), USE.NAMES = FALSE)
-}
+# NOTE: the former `.component_display_name()` helper lived here. It
+# title-cased the raw component token, which could never produce the
+# published category names ("Tourism Characteristic Products"). It has been
+# replaced by component_display_label() / component_choice_vector() in
+# R/ui/ui_labels.R, where the explicit mapping is defined and tested.
 
 ui <- bslib::page_navbar(
   title = "Statistical Classifications",
@@ -144,9 +137,13 @@ server <- function(input, output, session) {
     versions <- classification_versions(input$classification_system)
     current <- registry$current_version[registry$id == input$classification_system][[1]]
 
+    # UI-POST-06: the label is humanised (`Q1_2023` -> `Q1 2023`) while
+    # choiceValues stays the raw identifier the whole service layer expects,
+    # so nothing downstream sees the pretty form. Order is untouched, which
+    # keeps the release history chronological.
     choice_names <- lapply(versions, function(v) {
       shiny::tagList(
-        shiny::tags$span(class = "psa-edition-name", v),
+        shiny::tags$span(class = "psa-edition-name", release_display_label(v)),
         status_badge(if (identical(v, current)) "current" else "archived")
       )
     })
@@ -179,8 +176,14 @@ server <- function(input, output, session) {
     if (!input$classification_version %in% classification_versions(input$classification_system)) {
       return(invisible(NULL))
     }
+    # UI-POST-03: labels are humanised, values stay raw. `Bgy` shows as
+    # "Barangay" and `sub_major_group` as "Sub major group", but the
+    # repository still receives the exact level token it validates against.
     levels <- classification_levels(input$classification_system, input$classification_version)
-    level_choices <- c("All levels" = ALL_LEVELS_VALUE, stats::setNames(levels, levels))
+    level_choices <- c(
+      "All levels" = ALL_LEVELS_VALUE,
+      level_choice_vector(input$classification_system, levels)
+    )
     updateSelectInput(session, "classification_level", choices = level_choices, selected = ALL_LEVELS_VALUE)
 
     # --- Component control for composite systems (UI-05) -----------------
@@ -193,9 +196,11 @@ server <- function(input, output, session) {
     # -- the ordinary Level control is never renamed globally.
     components <- classification_components(input$classification_system)
     if (length(components) > 0L) {
+      # UI-POST-03: the published category names ("Tourism Characteristic
+      # Products", "Creative Goods and Services"), not a title-cased token.
       component_choices <- c(
         "All components" = ALL_COMPONENTS_VALUE,
-        stats::setNames(components, .component_display_name(components))
+        component_choice_vector(input$classification_system, components)
       )
       updateSelectInput(
         session, "classification_component",
@@ -213,6 +218,31 @@ server <- function(input, output, session) {
     length(classification_components(input$classification_system)) > 0L
   })
   outputOptions(output, "classification_is_composite", suspendWhenHidden = FALSE)
+
+  # --- Should the Level control be shown at all? (UI-POST-03) ------------
+  #
+  # Component is the primary public filter for composite systems. In both
+  # PTSCS and PSCrCS the `level` column repeats the component token exactly
+  # (audited: every component maps to exactly one level, and the two strings
+  # are identical), so offering Level asks the same question twice and leaks
+  # machine tokens like `tourism_product` into the UI.
+  #
+  # The verdict is DERIVED from the artifact by
+  # classification_level_is_informative(), not hard-coded per system: a
+  # future edition that introduces genuine sub-levels inside a component
+  # starts showing the control again with no change here.
+  output$classification_level_is_informative <- reactive({
+    req(input$classification_system, input$classification_version)
+    if (!input$classification_version %in% classification_versions(input$classification_system)) {
+      return(TRUE)
+    }
+    classification_level_is_informative(
+      input$classification_system,
+      input$classification_version,
+      component = current_component()
+    )
+  })
+  outputOptions(output, "classification_level_is_informative", suspendWhenHidden = FALSE)
 
   query_debounced <- reactive(input$classification_query) |> debounce(250)
 
@@ -235,6 +265,16 @@ server <- function(input, output, session) {
     if (!lvl %in% classification_levels(input$classification_system, input$classification_version)) {
       return(NULL)
     }
+    # UI-POST-03: when the Level control is hidden because it only restates
+    # Component, a level value left behind in the client input must not go
+    # on silently filtering results that the user can no longer see a
+    # control for. Hidden means inert, not merely invisible.
+    if (!classification_level_is_informative(
+      input$classification_system, input$classification_version,
+      component = current_component()
+    )) {
+      return(NULL)
+    }
     lvl
   })
 
@@ -251,13 +291,28 @@ server <- function(input, output, session) {
     cmp
   })
 
-  results <- reactive({
+  # UI-POST-03: changing Component can leave a Level selection that is no
+  # longer valid inside the new component. Reset to "All levels" so a stale
+  # choice can never silently narrow the result set.
+  observeEvent(input$classification_component, {
+    req(input$classification_system)
+    if (length(classification_components(input$classification_system)) == 0L) {
+      return(invisible(NULL))
+    }
+    updateSelectInput(session, "classification_level", selected = ALL_LEVELS_VALUE)
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+
+  # UI-POST-05: the search service now returns the true match total
+  # alongside the materialized page, so the count line and the table can
+  # never disagree and the 200-row rendering cap is never mistaken for the
+  # number of matches.
+  search_result <- reactive({
     req(input$classification_system, input$classification_version)
     validate(need(
       input$classification_version %in% classification_versions(input$classification_system),
       "Loading edition..."
     ))
-    search_classification(
+    res <- search_classification_result(
       system = input$classification_system,
       version = input$classification_version,
       query = query_debounced(),
@@ -265,23 +320,82 @@ server <- function(input, output, session) {
       limit = 200,
       component = current_component()
     )
+
+    # UI-POST-07 section 9.11: PSCC publishes two cross-reference columns
+    # (2019 PSCC and AHTN 2022) that the ordinary ranked search does not
+    # look at, because they are NOT this edition's codes. Searching a 2019
+    # code such as "0101.29.00-01" therefore returned nothing at all, even
+    # though the workbook maps it to a live 2022 commodity.
+    #
+    # The fallback runs ONLY when the ordinary search found nothing, so
+    # normal ranking and ordering are untouched for every other query --
+    # this adds a way to find a record, it does not reorder the ones that
+    # were already found. The match reason is surfaced separately so a
+    # cross-reference is never mistaken for the 2022 code itself.
+    res$match_reason <- NULL
+    if (identical(input$classification_system, "pscc") &&
+        res$total_matches == 0L &&
+        nzchar(trimws(query_debounced() %||% ""))) {
+      xr <- pscc_crossref_search(query_debounced(), limit = 200)
+      if (nrow(xr) > 0L) {
+        reason <- unique(xr$match_reason)
+        res <- list(
+          data = xr[, setdiff(names(xr), c("match_field", "matched_value", "match_reason")), drop = FALSE],
+          total_matches = nrow(xr),
+          returned_count = nrow(xr),
+          limit = 200L,
+          is_truncated = FALSE,
+          match_reason = if (length(reason) == 1L) reason else NULL
+        )
+      }
+    }
+    res
   })
 
+  # Every existing consumer of results() keeps working unchanged: it is now
+  # just the materialized slice of the count-aware result.
+  results <- reactive(search_result()$data)
+
   # Result count above the table (approved design). Reads the same
-  # reactive as the table itself, so the two can never disagree.
+  # reactive as the table itself, so the two can never disagree. The exact
+  # wording lives in format_result_count() in R/search.R -- a single pure
+  # function -- so the UI cannot reinvent the truncation phrasing.
   output$classification_result_count <- renderUI({
-    n <- nrow(results())
+    r <- search_result()
     tags$div(
-      class = "psa-result-count",
-      tags$strong(format(n, big.mark = ",")),
-      if (n == 1L) " result" else " results",
-      if (!nzchar(trimws(query_debounced() %||% ""))) " · browsing" else NULL
+      tags$div(
+        class = "psa-result-count",
+        format_result_count(
+          r$total_matches, r$returned_count, r$is_truncated,
+          limit = r$limit,
+          is_browsing = !nzchar(trimws(query_debounced() %||% ""))
+        )
+      ),
+      # "Matched 2019 PSCC cross-reference: 0101.29.00-01" -- shown only when
+      # the match came through a cross-reference column, so the user is never
+      # left thinking the code they typed is this edition's code.
+      pscc_match_reason_ui(r$match_reason)
     )
   })
 
   output$classification_results <- DT::renderDT({
     d <- results()
     display <- d[, c("code", "label", "level", "status")]
+    # UI-POST-03: the Level column is a public column too -- printing the raw
+    # token here would leak `sub_major_group` / `tourism_product` just as
+    # surely as the selector did. The underlying value is untouched.
+    display$level <- level_display_label(input$classification_system, display$level)
+    # UI-POST-07: PSCC carries genuine structural nodes (section captions,
+    # descriptor-only hierarchy rows, sub-chapter markers) alongside real
+    # commodity codes. Those nodes have no PSA code at all -- the adapter
+    # gives them a synthetic `PSCC-STRUCT-nnnnn` id purely so the canonical
+    # schema's non-NA code contract holds. Printing that id in the Code
+    # column would invite exactly the confusion the spec forbids, so the
+    # column shows an em dash and the Level column ("Structural group")
+    # carries the distinction instead. The underlying row is untouched.
+    if ("is_selectable_code" %in% names(d)) {
+      display$code[!d$is_selectable_code] <- "—"
+    }
     names(display) <- c("Code", "Label", "Level", "Status")
     DT::datatable(
       display,
@@ -308,7 +422,18 @@ server <- function(input, output, session) {
   })
 
   output$selected_entry <- renderUI({
-    entry_detail_ui(selected_entry())
+    entry <- selected_entry()
+    # UI-POST-07 section 9.12: a commodity record is not well served by the
+    # generic code/label detail block -- it needs its hierarchy breadcrumb,
+    # unit of quantity, and the 2019 PSCC / AHTN 2022 values shown as
+    # explicitly labelled CROSS-REFERENCES rather than as further codes of
+    # its own. PSCC therefore gets its own detail panel; every other system
+    # keeps the shared one.
+    if (identical(input$classification_system, "pscc") && nrow(entry) > 0L) {
+      pscc_detail_ui(entry)
+    } else {
+      entry_detail_ui(entry)
+    }
   })
 
   output$sources_panel <- renderUI({
@@ -322,10 +447,17 @@ server <- function(input, output, session) {
   # was found unreliable in practice for other outputs in this app.
   outputOptions(output, "sources_panel", suspendWhenHidden = FALSE)
 
-  # --- Dual Search: PSOC (occupations) + PSIC (industries), one query,
-  # independent result sets. Defaults to each system's current edition
-  # (PSOC 2022 / PSIC Revision 5 2026) per spec section 8, but either
-  # selector can be switched to an archived edition explicitly. ---
+  # --- PSOC + PSIC: TWO INDEPENDENT SEARCHES (UI-POST-02, spec section 4) --
+  #
+  # Each side owns its own query input, its own edition selector, its own
+  # count, its own table and its own selection/detail panel. There is no
+  # shared query reactive and no shared result object any more: no PSIC
+  # output reads any PSOC input, or vice versa, so a PSOC code can never
+  # imply a PSIC code by construction rather than merely by convention.
+  #
+  # Defaults are each system's current edition (PSOC 2022 / PSIC Revision 5
+  # 2026) per spec section 8; either selector can be switched to an archived
+  # edition independently of the other.
   updateSelectInput(
     session, "dual_search_psoc_version",
     choices = classification_versions("psoc"),
@@ -337,85 +469,114 @@ server <- function(input, output, session) {
     selected = registry$current_version[registry$id == "psic"][[1]]
   )
 
-  dual_query_debounced <- reactive(input$dual_search_query) |> debounce(250)
+  dual_psoc_query <- reactive(input$dual_search_psoc_query) |> debounce(250)
+  dual_psic_query <- reactive(input$dual_search_psic_query) |> debounce(250)
 
-  # These outputs are forced always-active (suspendWhenHidden = FALSE,
-  # below) so Dual Search results are ready the instant the tab is opened.
-  # That means this reactive can be asked to evaluate before the
-  # updateSelectInput() calls above have completed their client round-trip
-  # and input$dual_search_{psoc,psic}_version are still NULL -- req()-
-  # blocking on them here left the output permanently stuck in a blank/
-  # never-recomputed state in testing. Falling back to the registry's own
-  # current versions instead of blocking means this reactive always
-  # produces a real result and self-corrects once the real inputs arrive
-  # (which still invalidates and re-runs this reactive normally).
-  dual_results <- reactive({
-    psoc_version <- if (!is.null(input$dual_search_psoc_version)) {
-      input$dual_search_psoc_version
+  # Version fallback, unchanged in spirit from the previous single-query
+  # implementation: these outputs are forced always-active, so a side can be
+  # asked to evaluate before updateSelectInput()'s client round-trip has
+  # landed and input$dual_search_*_version is still NULL. req()-blocking here
+  # left the output permanently stuck in a blank/never-recomputed state in
+  # testing. Falling back to the registry's own current version always
+  # produces a real result and self-corrects once the real input arrives
+  # (which invalidates and re-runs the reactive normally).
+  dual_version <- function(system_id) {
+    v <- input[[paste0("dual_search_", system_id, "_version")]]
+    if (is.null(v) || !nzchar(v)) {
+      registry$current_version[registry$id == system_id][[1]]
     } else {
-      registry$current_version[registry$id == "psoc"][[1]]
+      v
     }
-    psic_version <- if (!is.null(input$dual_search_psic_version)) {
-      input$dual_search_psic_version
-    } else {
-      registry$current_version[registry$id == "psic"][[1]]
-    }
-    search_parallel_classifications(
-      query = dual_query_debounced(),
-      systems = c("psoc", "psic"),
-      versions = c(psoc = psoc_version, psic = psic_version),
-      limit_per_system = 100
+  }
+
+  # Per-side failure isolation (spec section 10). search_parallel_
+  # classifications() used to provide this; with two different queries a
+  # shared parallel call no longer fits, so the isolation is explicit here.
+  # A validation failure on one system must never blank the other side.
+  dual_side_search <- function(system_id, version, query) {
+    tryCatch(
+      list(
+        result = dual_search_side_result(system_id, version, query, limit = 100),
+        error = NULL
+      ),
+      error = function(e) list(result = NULL, error = conditionMessage(e))
     )
-  })
+  }
 
-  # A failure or no-match on one system's side must never suppress the
-  # other (spec section 10) -- each panel renders entirely from its own
-  # slice of dual_results(), independently of whatever happened on the
-  # other side.
-  #
+  dual_psoc <- reactive(
+    dual_side_search("psoc", dual_version("psoc"), dual_psoc_query())
+  )
+  dual_psic <- reactive(
+    dual_side_search("psic", dual_version("psic"), dual_psic_query())
+  )
+
   # Every output here is forced always-on (suspendWhenHidden = FALSE) AND
-  # explicitly gated on `req(input$main_nav == "dual_search")` as its
-  # first line. The gate is what actually matters: it stops the DT widget
-  # from ever being built while its nav_panel is hidden (a DT initialized
-  # at `display:none` freezes at a broken zero-width layout that never
-  # recovers, even after the tab becomes visible and the underlying data
-  # later changes -- verified directly in manual testing via server-side
-  # debug logging showing correct non-empty data being computed while the
-  # client still rendered nothing). Forcing the output always-on is then
-  # *safe* only because of that gate; relying on Shiny's own implicit
-  # suspend-when-hidden/resume-on-tab-shown behavior alone was found
-  # unreliable in this app for both plain renderUI and renderDT outputs.
-  render_dual_panel <- function(system_id, results_output_id, state_output_id) {
-    output[[state_output_id]] <- renderUI({
+  # explicitly gated on `req(input$main_nav == "dual_search")` as its FIRST
+  # line. The gate is what actually matters: it stops the DT widget from ever
+  # being built while its nav_panel is hidden (a DT initialized at
+  # `display:none` freezes at a broken zero-width layout that never recovers,
+  # even after the tab becomes visible and the underlying data later
+  # changes). Forcing the output always-on is safe only because of that gate.
+  render_dual_panel <- function(system_id, side, query_r) {
+    id <- function(suffix) paste0("dual_search_", system_id, "_", suffix)
+
+    output[[id("count")]] <- renderUI({
       req(input$main_nav == "dual_search")
-      res <- dual_results()
-      err <- res$errors[[system_id]]
-      d <- res$results[[system_id]]
-      if (!is.null(err)) {
-        tags$p(class = "text-danger small", paste("Error:", err))
-      } else if (is.null(d) || nrow(d) == 0L) {
+      s <- side()
+      if (!is.null(s$error)) return(NULL)
+      tags$div(
+        class = "psa-result-count",
+        dual_search_side_count_text(s$result, query_r())
+      )
+    })
+
+    output[[id("state")]] <- renderUI({
+      req(input$main_nav == "dual_search")
+      s <- side()
+      if (!is.null(s$error)) {
+        tags$p(class = "text-danger small", paste("Error:", s$error))
+      } else if (nrow(s$result$data) == 0L) {
         tags$p(class = "text-muted small", "No results.")
       } else {
         NULL
       }
     })
-    output[[results_output_id]] <- DT::renderDT({
+
+    output[[id("results")]] <- DT::renderDT({
       req(input$main_nav == "dual_search")
-      d <- dual_results()$results[[system_id]]
-      req(d)
+      s <- side()
+      req(is.null(s$error))
+      d <- s$result$data
       req(nrow(d) > 0L)
       display <- d[, c("code", "label", "level", "status")]
+      # Same public-label rule as the Search grid (UI-POST-03).
+      display$level <- level_display_label(system_id, display$level)
       names(display) <- c("Code", "Label", "Level", "Status")
       DT::datatable(
-        display, selection = "none", rownames = FALSE,
+        display, selection = "single", rownames = FALSE,
         options = list(pageLength = 10, dom = "tip"), class = "stripe hover"
       )
     })
-    outputOptions(output, state_output_id, suspendWhenHidden = FALSE)
-    outputOptions(output, results_output_id, suspendWhenHidden = FALSE)
+
+    # This side's selection is derived ONLY from this side's result and this
+    # side's rows_selected input -- both detail panels can therefore be
+    # populated at the same time, and neither can clear the other.
+    output[[id("detail")]] <- renderUI({
+      req(input$main_nav == "dual_search")
+      s <- side()
+      if (!is.null(s$error)) return(NULL)
+      entry_detail_ui(dual_search_side_selection(
+        s$result,
+        input[[paste0(id("results"), "_rows_selected")]]
+      ))
+    })
+
+    for (o in c("count", "state", "results", "detail")) {
+      outputOptions(output, id(o), suspendWhenHidden = FALSE)
+    }
   }
-  render_dual_panel("psoc", "dual_search_psoc_results", "dual_search_psoc_state")
-  render_dual_panel("psic", "dual_search_psic_results", "dual_search_psic_state")
+  render_dual_panel("psoc", dual_psoc, dual_psoc_query)
+  render_dual_panel("psic", dual_psic, dual_psic_query)
 
   # --- Compare PSIC Editions: bidirectional 2019<->2026 correspondence. ---
   correspondence_query_debounced <- reactive(input$correspondence_query) |> debounce(250)

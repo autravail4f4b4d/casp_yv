@@ -52,6 +52,12 @@ PARALLEL_SEARCH_SYSTEM_LABELS <- c(psoc = "Occupations", psic = "Industries")
 #'       search failed, or `NULL` if there were no errors. A failure on one
 #'       system's side never prevents the other system(s) from returning
 #'       results -- each system is searched inside its own `tryCatch`.}
+#'     \item{counts}{named list parallel to `results`, one entry per system:
+#'       `list(total_matches, returned_count, limit, is_truncated)` on
+#'       success, or `NULL` for a system that failed. Additive -- `results`
+#'       and `errors` keep exactly the shape they had before. This is what
+#'       lets each pane say "3,487 results · showing first 20" instead of
+#'       reporting `limit_per_system` as if it were the match total.}
 #'     \item{metadata}{named list `<system>_version` -> the version string
 #'       actually used for that system, e.g. `list(psoc_version = "2022",
 #'       psic_version = "2026")`}
@@ -63,6 +69,8 @@ search_parallel_classifications <- function(query,
                                              limit_per_system = 20) {
   results <- vector("list", length(systems))
   names(results) <- systems
+  counts <- vector("list", length(systems))
+  names(counts) <- systems
   errors <- list()
 
   for (sys in systems) {
@@ -70,15 +78,17 @@ search_parallel_classifications <- function(query,
     level <- if (!is.null(levels) && sys %in% names(levels)) levels[[sys]] else NULL
 
     out <- tryCatch(
-      search_classification(sys, version, query, level = level, limit = limit_per_system),
+      search_classification_result(sys, version, query, level = level, limit = limit_per_system),
       error = function(e) e
     )
 
     if (inherits(out, "error")) {
       errors[[sys]] <- conditionMessage(out)
       results[[sys]] <- NULL
+      counts[[sys]] <- NULL
     } else {
-      results[[sys]] <- out
+      results[[sys]] <- out$data
+      counts[[sys]] <- out[c("total_matches", "returned_count", "limit", "is_truncated")]
     }
   }
 
@@ -91,6 +101,7 @@ search_parallel_classifications <- function(query,
     query = query,
     systems = systems,
     results = results,
+    counts = counts,
     errors = if (length(errors) > 0L) errors else NULL,
     metadata = metadata
   )
