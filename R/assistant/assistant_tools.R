@@ -61,7 +61,9 @@ ASSISTANT_REGISTRY_FIELDS <- c(
 )
 
 ASSISTANT_PAIRING_FIELDS <- c(
-  "occupation", "confirmed_psoc", "source_industry", "original_psic",
+  "occupation", "confirmed_psoc", "confirmed_psoc_label",
+  "psoc_confidence", "psoc_provenance", "psoc_curation_note",
+  "source_industry", "original_psic",
   "psic_rev5_code", "psic_rev5_rule", "mapping_confidence", "mapping_note",
   "has_fixed_psic"
 )
@@ -450,6 +452,15 @@ assistant_classification_registry <- function() {
 #' `original_psic` and never dropped. Multi-code strings ("96211 / 96220")
 #' and ranges ("01171-01189") pass through verbatim.
 #'
+#' Each row carries two independent judgements that must not be conflated:
+#' `psoc_confidence` grades the OCCUPATION mapping and `mapping_confidence`
+#' grades the PSIC mapping. `psoc_provenance` is `"source_workbook"` for the
+#' published mapping or `"curated"` where the application has recorded an
+#' approved manual correction; curated rows carry their rationale, and any
+#' retained ambiguity, in `psoc_curation_note`. `confirmed_psoc_label` is
+#' the official PSOC 2022 title resolved from the canonical repository at
+#' build time, so it can never disagree with the classification of record.
+#'
 #' All filters are case-insensitive LITERAL substrings (never regex) and are
 #' AND-combined.
 #'
@@ -753,6 +764,10 @@ rm_assistant_tools <- function() {
         "establishment's PSIC - only its actual economic activity does.",
         "Some rows deliberately have no fixed PSIC code; when has_fixed_psic is false,",
         "ask what the establishment actually does instead of supplying a code.",
+        "psoc_confidence grades the OCCUPATION mapping; mapping_confidence grades the",
+        "PSIC mapping - do not read one as the other. Rows with psoc_provenance",
+        "'curated' are approved manual corrections and psoc_curation_note states the",
+        "rationale and any ambiguity that still has to be resolved with the user.",
         "Any code found here must still be verified with assistant_get_classification_entry()."
       ),
       arguments = list(

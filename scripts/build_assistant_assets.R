@@ -99,7 +99,18 @@ suppressPackageStartupMessages({
 
 PAIRINGS_SOURCE_XLSX <- "data-raw/CBMS_2024_2022_PSOC_PSIC_Rev5_Mapping.xlsx"
 PAIRINGS_SOURCE_SHEET <- "PSIC Rev5 Mapping"
+# The plainer PSOC sheet is row-aligned with the Rev5 sheet (verified: the
+# Occupation and PSOC-code vectors are identical) and is the only place the
+# workbook publishes a *PSOC* mapping confidence. The Rev5 sheet's
+# "PSIC Mapping Confidence" grades the industry mapping, not the occupation.
+PAIRINGS_PSOC_SHEET <- "2022 PSOC Mapping"
 PAIRINGS_OUTPUT_RDS <- "data/assistant_common_pairings.rds"
+
+# Authoritative source layer for approved manual corrections to the
+# occupation -> PSOC mapping. See data-raw/curated_psoc_overrides.README.md.
+# The workbook is an external artifact and is never edited; the generated
+# .rds is never patched directly either.
+PAIRINGS_OVERRIDES_CSV <- "data-raw/curated_psoc_overrides.csv"
 
 RULES_SOURCE_MD <- "PSIC_Chatbot_Classification_Rules.md"
 RULES_OUTPUT_RDS <- "data/assistant_psic_rules.rds"
@@ -112,10 +123,45 @@ SYNONYMS_OUTPUT_RDS <- "data/assistant_synonyms.rds"
 # ---------------------------------------------------------------------
 
 PAIRINGS_COLUMNS <- c(
+  # -- the nine workbook columns plus the derived no-fixed-PSIC flag ----
   "occupation", "confirmed_psoc", "source_industry", "original_psic",
   "psic_rev5_code", "psic_rev5_rule", "mapping_confidence", "mapping_note",
-  "psa_source", "has_fixed_psic"
+  "psa_source", "has_fixed_psic",
+  # -- the occupation layer --------------------------------------------
+  # confirmed_psoc_label is resolved from the canonical PSOC 2022
+  # repository at build time -- never copied from the workbook and never
+  # taken from the overrides file -- so the artifact cannot disagree with
+  # the classification of record. NA when a code does not resolve.
+  "confirmed_psoc_label",
+  # psoc_confidence grades the OCCUPATION mapping. mapping_confidence,
+  # above, grades the PSIC mapping. Different judgements, kept apart.
+  "psoc_confidence",
+  # "source_workbook" or "curated" (the application's approved/curated
+  # mapping category).
+  "psoc_provenance",
+  # Rationale and retained ambiguity for curated rows; NA otherwise.
+  "psoc_curation_note"
 )
+
+# Provenance vocabulary for the occupation mapping. Closed set.
+PAIRINGS_PROVENANCE_SOURCE <- "source_workbook"
+PAIRINGS_PROVENANCE_CURATED <- "curated"
+PAIRINGS_PROVENANCE_VALUES <- c(PAIRINGS_PROVENANCE_SOURCE, PAIRINGS_PROVENANCE_CURATED)
+
+PAIRINGS_OVERRIDE_COLUMNS <- c(
+  "occupation", "override_kind", "source_workbook_psoc", "curated_psoc",
+  "psoc_confidence", "psoc_provenance", "curation_note"
+)
+
+# A curated override is either a "correction" (the workbook's code is
+# replaced) or a "confirmation" (the workbook's code is already right and
+# the review is recorded against it, typically to raise confidence). The
+# kind is declared rather than inferred so a confirmation can never be
+# read, or presented, as a code change.
+PAIRINGS_OVERRIDE_CORRECTION <- "correction"
+PAIRINGS_OVERRIDE_CONFIRMATION <- "confirmation"
+PAIRINGS_OVERRIDE_KINDS <- c(PAIRINGS_OVERRIDE_CORRECTION,
+                             PAIRINGS_OVERRIDE_CONFIRMATION)
 
 # Source column name -> contract column name. Order here is also the
 # contract order for the nine character columns.
@@ -165,6 +211,195 @@ clean_text <- function(x) {
   # is NA, not "".
   cleaned[!is.na(cleaned) & cleaned == ""] <- NA_character_
   cleaned
+}
+
+# ---------------------------------------------------------------------
+# Canonical PSOC 2022 lookup
+#
+# The application's own repository is the only place a PSOC label may come
+# from. The workbook's occupation phrases are respondent-facing text, not
+# official titles, and the overrides file deliberately stores no label at
+# all, so the two can never drift apart.
+# ---------------------------------------------------------------------
+
+.psoc_repo_cache <- new.env(parent = emptyenv())
+
+# Sources the non-UI application code once per process and returns the
+# canonical PSOC 2022 unit-group table (code -> official label).
+psoc2022_unit_groups <- function() {
+  if (!is.null(.psoc_repo_cache$units)) return(.psoc_repo_cache$units)
+
+  if (!exists("psoc2022_get", mode = "function")) {
+    for (f in sort(list.files("R", pattern = "[.]R$", recursive = TRUE,
+                              full.names = TRUE))) {
+      if (!grepl("^R/ui/", f)) source(f)
+    }
+  }
+  if (!exists("psoc2022_get", mode = "function")) {
+    fail("Canonical PSOC 2022 accessor psoc2022_get() is unavailable. ",
+         "Labels must come from the repository; they are never invented here.")
+  }
+
+  d <- psoc2022_get()
+  units <- d[d$level == "unit_group", c("code", "label"), drop = FALSE]
+  units <- as.data.frame(units, stringsAsFactors = FALSE)
+  if (nrow(units) == 0L) {
+    fail("The canonical PSOC 2022 repository returned no unit groups.")
+  }
+  if (anyDuplicated(units$code)) {
+    fail("Duplicate PSOC 2022 unit-group codes in the canonical repository: ",
+         paste(unique(units$code[duplicated(units$code)]), collapse = ", "))
+  }
+
+  .psoc_repo_cache$units <- units
+  units
+}
+
+# Vectorised code -> official label. NA in, NA out; unresolved code gives
+# NA rather than a guess.
+psoc2022_label_for <- function(codes) {
+  units <- psoc2022_unit_groups()
+  units$label[match(as.character(codes), units$code)]
+}
+
+# ---------------------------------------------------------------------
+# Curated occupation-mapping overrides
+# ---------------------------------------------------------------------
+
+# Reads the approved overrides. Absent file is not an error: the build
+# then simply produces the workbook's own mapping, all rows provenance
+# "source_workbook". A malformed or unapplicable file IS an error --
+# silently dropping an approved correction is worse than failing.
+read_pairings_overrides <- function(path = PAIRINGS_OVERRIDES_CSV) {
+  if (!file.exists(path)) {
+    log_step("no curated override file at '", path, "'; ",
+             "every row keeps its workbook mapping")
+    return(NULL)
+  }
+
+  ov <- utils::read.csv(path, colClasses = "character",
+                        na.strings = character(0), check.names = FALSE)
+
+  missing_cols <- setdiff(PAIRINGS_OVERRIDE_COLUMNS, names(ov))
+  if (length(missing_cols) > 0) {
+    fail("Curated override file '", path, "' is missing column(s): ",
+         paste(missing_cols, collapse = ", "), ".")
+  }
+  ov <- ov[, PAIRINGS_OVERRIDE_COLUMNS, drop = FALSE]
+  for (nm in names(ov)) ov[[nm]] <- clean_text(ov[[nm]])
+
+  if (nrow(ov) == 0L) {
+    log_step("curated override file present but empty")
+    return(NULL)
+  }
+  if (anyDuplicated(ov$occupation)) {
+    fail("Curated override file has duplicate occupation key(s): ",
+         paste(unique(ov$occupation[duplicated(ov$occupation)]), collapse = ", "))
+  }
+
+  required <- c("occupation", "override_kind", "source_workbook_psoc",
+                "curated_psoc", "psoc_confidence", "psoc_provenance")
+  for (col in required) {
+    if (any(is.na(ov[[col]]))) {
+      fail("Curated override file has a missing '", col, "' value. ",
+           "Every override must be fully specified.")
+    }
+  }
+
+  bad_prov <- setdiff(ov$psoc_provenance, PAIRINGS_PROVENANCE_VALUES)
+  if (length(bad_prov) > 0) {
+    fail("Curated override file uses unknown psoc_provenance value(s): ",
+         paste(bad_prov, collapse = ", "), ". Allowed: ",
+         paste(PAIRINGS_PROVENANCE_VALUES, collapse = ", "), ".")
+  }
+
+  bad_kind <- setdiff(ov$override_kind, PAIRINGS_OVERRIDE_KINDS)
+  if (length(bad_kind) > 0) {
+    fail("Curated override file uses unknown override_kind value(s): ",
+         paste(bad_kind, collapse = ", "), ". Allowed: ",
+         paste(PAIRINGS_OVERRIDE_KINDS, collapse = ", "), ".")
+  }
+
+  # The declared kind must match what the row actually does, in both
+  # directions: a "correction" that changes nothing is a mislabelled
+  # review, and a "confirmation" that moves the code is a code change
+  # wearing the wrong label.
+  changes <- ov$source_workbook_psoc != ov$curated_psoc
+  wrong_correction <- ov$override_kind == PAIRINGS_OVERRIDE_CORRECTION & !changes
+  if (any(wrong_correction)) {
+    fail("Override(s) declared '", PAIRINGS_OVERRIDE_CORRECTION,
+         "' but leave the code unchanged: ",
+         paste(ov$occupation[wrong_correction], collapse = ", "),
+         ". Declare these as '", PAIRINGS_OVERRIDE_CONFIRMATION, "'.")
+  }
+  wrong_confirmation <- ov$override_kind == PAIRINGS_OVERRIDE_CONFIRMATION & changes
+  if (any(wrong_confirmation)) {
+    fail("Override(s) declared '", PAIRINGS_OVERRIDE_CONFIRMATION,
+         "' but change the code: ",
+         paste(ov$occupation[wrong_confirmation], collapse = ", "),
+         ". A confirmation must keep the workbook's own code.")
+  }
+
+  ov
+}
+
+# Applies the overrides to the assembled pairing table. Every override
+# must match exactly one row, and the workbook must still carry exactly
+# the code the override says it carries, so neither a workbook revision
+# nor a typo can pass unnoticed.
+apply_pairings_overrides <- function(out, ov) {
+  if (is.null(ov)) return(out)
+
+  known_codes <- psoc2022_unit_groups()$code
+
+  for (i in seq_len(nrow(ov))) {
+    occ <- ov$occupation[i]
+    idx <- which(out$occupation == occ)
+
+    if (length(idx) == 0L) {
+      fail("Curated override for occupation '", occ, "' matches no workbook row. ",
+           "The phrase must be preserved exactly as published.")
+    }
+    if (length(idx) > 1L) {
+      fail("Curated override for occupation '", occ, "' matches ", length(idx),
+           " workbook rows. The override key must identify exactly one row.")
+    }
+
+    found <- out$confirmed_psoc[idx]
+    if (!identical(found, ov$source_workbook_psoc[i])) {
+      fail("Curated override for '", occ, "' expects the workbook to carry PSOC '",
+           ov$source_workbook_psoc[i], "' but it now carries '", found,
+           "'. The upstream mapping changed -- re-review the override before ",
+           "applying it.")
+    }
+
+    target <- ov$curated_psoc[i]
+    if (!target %in% known_codes) {
+      fail("Curated override for '", occ, "' targets PSOC '", target,
+           "', which is not a 2022 PSOC unit group in the canonical ",
+           "repository. A curated mapping may not invent a code.")
+    }
+
+    out$confirmed_psoc[idx]     <- target
+    out$psoc_confidence[idx]    <- ov$psoc_confidence[i]
+    out$psoc_provenance[idx]    <- ov$psoc_provenance[i]
+    out$psoc_curation_note[idx] <- ov$curation_note[i]
+
+    movement <- if (identical(ov$override_kind[i], PAIRINGS_OVERRIDE_CONFIRMATION)) {
+      paste0(target, " confirmed (unchanged)")
+    } else {
+      paste0(ov$source_workbook_psoc[i], " -> ", target)
+    }
+    log_step("  ", ov$override_kind[i], ": '", occ, "' ", movement,
+             " (", psoc2022_label_for(target), "), confidence ",
+             ov$psoc_confidence[i], ", provenance ", ov$psoc_provenance[i])
+  }
+
+  n_corr <- sum(ov$override_kind == PAIRINGS_OVERRIDE_CORRECTION)
+  n_conf <- sum(ov$override_kind == PAIRINGS_OVERRIDE_CONFIRMATION)
+  log_step("curated overrides applied: ", nrow(ov),
+           " (", n_corr, " correction(s), ", n_conf, " confirmation(s))")
+  out
 }
 
 # ---------------------------------------------------------------------
@@ -522,6 +757,75 @@ build_common_pairings <- function(source_path = PAIRINGS_SOURCE_XLSX,
     log_step("  ", label, ": ", conf[[i]])
   }
   if (length(conf) == 0) warn("mapping_confidence has no values at all.")
+
+  # -- the occupation layer --------------------------------------------
+  # PSOC confidence comes from the plainer PSOC sheet, which is the only
+  # sheet that grades the occupation mapping. Joined positionally after
+  # asserting the two sheets are genuinely row-aligned; a name-based join
+  # would be wrong here because 25 occupation phrases recur across
+  # different source industries.
+  psoc_sheet <- readxl::read_excel(
+    source_path, sheet = PAIRINGS_PSOC_SHEET, col_types = "text", skip = 2
+  )
+  for (col in c("Occupation", "2022 PSOC Code", "Confidence")) {
+    if (!col %in% names(psoc_sheet)) {
+      fail("Sheet '", PAIRINGS_PSOC_SHEET, "' is missing column '", col, "'.")
+    }
+  }
+  if (nrow(psoc_sheet) != nrow(out)) {
+    fail("Sheet '", PAIRINGS_PSOC_SHEET, "' has ", nrow(psoc_sheet),
+         " rows but '", PAIRINGS_SOURCE_SHEET, "' has ", nrow(out),
+         "; the sheets are no longer row-aligned.")
+  }
+  if (!identical(clean_text(psoc_sheet$Occupation), out$occupation) ||
+      !identical(clean_text(psoc_sheet$`2022 PSOC Code`), out$confirmed_psoc)) {
+    fail("Sheets '", PAIRINGS_PSOC_SHEET, "' and '", PAIRINGS_SOURCE_SHEET,
+         "' disagree on occupation or PSOC code order. The positional join ",
+         "is no longer safe -- fix the parse rather than the expectation.")
+  }
+
+  out$psoc_confidence    <- clean_text(psoc_sheet$Confidence)
+  out$psoc_provenance    <- rep(PAIRINGS_PROVENANCE_SOURCE, nrow(out))
+  out$psoc_curation_note <- rep(NA_character_, nrow(out))
+
+  n_low_before <- sum(out$psoc_confidence == "Low", na.rm = TRUE)
+  log_step("PSOC-confidence rows graded Low by the workbook: ", n_low_before)
+
+  # -- approved curated corrections ------------------------------------
+  out <- apply_pairings_overrides(out, read_pairings_overrides())
+
+  # -- official labels, resolved from the canonical repository ---------
+  out$confirmed_psoc_label <- psoc2022_label_for(out$confirmed_psoc)
+  n_unresolved <- sum(is.na(out$confirmed_psoc_label))
+  log_step("confirmed_psoc resolved to a canonical PSOC 2022 label: ",
+           nrow(out) - n_unresolved, "/", nrow(out))
+  if (n_unresolved > 0) {
+    warn(n_unresolved, " confirmed_psoc value(s) do not resolve to a 2022 PSOC ",
+         "unit group; their label is NA (never guessed): ",
+         paste(unique(out$confirmed_psoc[is.na(out$confirmed_psoc_label)]),
+               collapse = ", "))
+  }
+
+  # Every curated row must be High-confidence, carry a rationale, and
+  # resolve to an official label. This is the acceptance condition for the
+  # curated layer, checked at build time rather than trusted.
+  cur <- out$psoc_provenance == PAIRINGS_PROVENANCE_CURATED
+  if (any(cur)) {
+    if (any(out$psoc_confidence[cur] != "High")) {
+      fail("A curated row is not High confidence: ",
+           paste(out$occupation[cur & out$psoc_confidence != "High"], collapse = ", "))
+    }
+    if (any(is.na(out$psoc_curation_note[cur]))) {
+      fail("A curated row has no rationale note: ",
+           paste(out$occupation[cur & is.na(out$psoc_curation_note)], collapse = ", "))
+    }
+    if (any(is.na(out$confirmed_psoc_label[cur]))) {
+      fail("A curated row's PSOC code did not resolve to a canonical label: ",
+           paste(out$occupation[cur & is.na(out$confirmed_psoc_label)], collapse = ", "))
+    }
+    log_step("curated rows: ", sum(cur), " (all High confidence, ",
+             "all with a rationale, all resolving to a canonical label)")
+  }
 
   # -- cosmetic reporting: multi-code and range forms preserved --------
   n_multi <- sum(grepl(" / ", out$psic_rev5_code, fixed = TRUE), na.rm = TRUE)

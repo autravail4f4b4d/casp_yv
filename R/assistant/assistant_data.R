@@ -104,10 +104,22 @@ ASSISTANT_SYNONYMS_PATH <- "data/assistant_synonyms.rds"
 #' @param data_path character or NULL. NULL (default) resolves the
 #'   committed artifact path from either the repo root or tests/testthat.
 #'
+#' The occupation mapping carries its own provenance and confidence,
+#' separate from the PSIC ones: `psoc_confidence` grades the occupation
+#' mapping (the workbook's own grade, or `"High"` once curated) while
+#' `mapping_confidence` grades the PSIC mapping. `psoc_provenance` is
+#' `"source_workbook"` or `"curated"`, the latter marking an approved
+#' manual correction recorded in `data-raw/curated_psoc_overrides.csv`;
+#' `psoc_curation_note` then holds its rationale and any retained
+#' ambiguity. `confirmed_psoc_label` is the official PSOC 2022 title,
+#' resolved from the canonical repository at build time rather than
+#' copied from the workbook.
+#'
 #' @return A tibble with columns occupation, confirmed_psoc,
 #'   source_industry, original_psic, psic_rev5_code, psic_rev5_rule,
-#'   mapping_confidence, mapping_note, psa_source (all character) and
-#'   has_fixed_psic (logical). NULL if the artifact is unavailable.
+#'   mapping_confidence, mapping_note, psa_source, confirmed_psoc_label,
+#'   psoc_confidence, psoc_provenance, psoc_curation_note (all character)
+#'   and has_fixed_psic (logical). NULL if the artifact is unavailable.
 assistant_common_pairings <- function(data_path = NULL) {
   path <- if (is.null(data_path)) {
     .assistant_resolve_default_path(ASSISTANT_COMMON_PAIRINGS_PATH)

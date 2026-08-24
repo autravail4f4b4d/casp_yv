@@ -13,7 +13,9 @@
 EXPECTED_PAIRINGS_COLUMNS <- c(
   "occupation", "confirmed_psoc", "source_industry", "original_psic",
   "psic_rev5_code", "psic_rev5_rule", "mapping_confidence", "mapping_note",
-  "psa_source", "has_fixed_psic"
+  "psa_source", "has_fixed_psic",
+  "confirmed_psoc_label", "psoc_confidence", "psoc_provenance",
+  "psoc_curation_note"
 )
 
 EXPECTED_PAIRINGS_CHARACTER_COLUMNS <-

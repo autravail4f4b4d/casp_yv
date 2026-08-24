@@ -49,7 +49,22 @@ fixture_pairings <- function() {
       ""
     ),
     psa_source = rep("CBMS 2024 PSOC-PSIC Rev5 mapping", 4L),
-    has_fixed_psic = c(FALSE, TRUE, TRUE, TRUE)
+    has_fixed_psic = c(FALSE, TRUE, TRUE, TRUE),
+    # The occupation layer. Row 3 stands in for an approved curated
+    # correction so the tool's handling of both provenances is exercised.
+    confirmed_psoc_label = c(
+      "ACCOUNTANTS",
+      "COMMUNITY HEALTH WORKERS",
+      "HAIRDRESSERS",
+      "FIELD CROP AND VEGETABLE GROWERS"
+    ),
+    psoc_confidence = c("High", "High", "High", "Low"),
+    psoc_provenance = c(
+      "source_workbook", "source_workbook", "curated", "source_workbook"
+    ),
+    psoc_curation_note = c(
+      NA_character_, NA_character_, "Approved curated correction.", NA_character_
+    )
   )
 }
 

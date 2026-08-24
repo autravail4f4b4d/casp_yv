@@ -93,10 +93,11 @@ Compact registry: `id, display_name, current_version, available_versions, catego
 ### `assistant_search_common_pairings(occupation = NULL, psoc_code = NULL, industry_context = NULL, original_psic = NULL, limit = 6)`
 Case-insensitive literal substring search (never regex) over the reviewed
 CBMS pairing table. Returns at most `limit` rows with
-`occupation, confirmed_psoc, source_industry, original_psic, psic_rev5_code, psic_rev5_rule, mapping_confidence, mapping_note`.
+`occupation, confirmed_psoc, confirmed_psoc_label, psoc_confidence, psoc_provenance, psoc_curation_note, source_industry, original_psic, psic_rev5_code, psic_rev5_rule, mapping_confidence, mapping_note, has_fixed_psic`.
 
-Two behaviours are load-bearing:
+Three behaviours are load-bearing:
 
+- **The occupation layer and the industry layer are graded separately.** `psoc_confidence` grades the occupation mapping; `mapping_confidence` grades the PSIC mapping. They are different judgements and are never conflated. `confirmed_psoc_label` is the official PSOC 2022 title resolved from the canonical repository at build time, never copied from the workbook, so the pairing table cannot disagree with the classification of record.
 - **No-fixed-PSIC rows are preserved as no-code evidence.** 44 of the 253 rows deliberately carry no Revision 5 code because the establishment's actual activity must be reported. Those rows keep `psic_rev5_code = NA` and `has_fixed_psic = FALSE`. They are never filled in from `original_psic` and never dropped.
 - **Every result carries a caveat field**, verbatim: *"Supporting evidence only. These are reviewed common PSOC-PSIC pairings, not an authority. A pairing does NOT establish a particular establishment's PSIC — the establishment's actual economic activity does. Any code taken from here must still be verified with `assistant_get_classification_entry()` before it is presented as an answer."* This lives in the tool result, not just the prompt.
 
@@ -228,6 +229,7 @@ per-case outcome in `IMPLEMENTATION_STATUS.md`.
 - **Enter does not submit** in shinychat 0.4.0's composer; the send button is required. Upstream behaviour, not configured here.
 - **`assistant_get_psic_rule()` quality is bounded by the compaction.** The 12 rules are a hand-authored ~19% distillation of the source document, reviewable in `scripts/build_assistant_assets.R`. Rule text the compaction omits is not available to RM at runtime.
 - **The pairing workbook's `mapping_confidence` is PSA-source confidence**, not a calibrated probability, and is passed through unmodified.
+- **Curated occupation mappings are an application judgement, not PSA correspondence.** `psoc_provenance` is `source_workbook` for the published mapping or `curated` for an approved manual correction recorded in `data-raw/curated_psoc_overrides.csv`; the value is deliberately outside the `official`/`derived`/`suggested` correspondence vocabulary so a curated mapping can never read as an official PSA table. Curated rows are `High` confidence, carry their rationale and any retained ambiguity in `psoc_curation_note`, and are still subject to the pairing caveat: the code must be verified with `assistant_get_classification_entry()` before it is presented. An override is declared as either a `correction` (the workbook's code is replaced) or a `confirmation` (the workbook's code was already right and only the review outcome is recorded), so a confirmation can never be read as a code change. The build hard-fails if the workbook no longer carries the code an override says it carries, if an override matches more or fewer than one row, if it targets a code that does not exist in the canonical PSOC 2022 repository, or if the declared kind disagrees with whether the code actually moved.
 
 ## 13. What a design pass may and may not change
 
