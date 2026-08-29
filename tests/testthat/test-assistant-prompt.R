@@ -114,6 +114,44 @@ test_that("the RM system prompt includes intent routing across systems", {
   expect_contains_ci(txt, "do not force every query into PSOC or PSIC")
 })
 
+test_that("intent routing now names every registered system, including pscc/ptscs/pscrcs", {
+  # These three were previously absent from the prompt entirely -- part of
+  # why live RM answered system-metadata questions about them from
+  # unverified memory instead of routing to a tool.
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "PSCC")
+  expect_contains_ci(txt, "PTSCS")
+  expect_contains_ci(txt, "PSCrCS")
+  expect_contains_ci(txt, "PSCC and PSCCS are completely")
+})
+
+test_that("the RM system prompt routes system-metadata questions away from entry search", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "classification-system questions")
+  expect_contains_ci(txt, "components of PTSCS")
+  expect_contains_ci(txt, "components of PSCrCS")
+  expect_contains_ci(txt, "never with the classification-search tool")
+})
+
+test_that("the RM system prompt states the hierarchy contract by name", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "hierarchy_role")
+  expect_contains_ci(txt, "most_specific")
+  expect_contains_ci(txt, "do not present an ancestor as an equal answer")
+})
+
+test_that("the RM system prompt states the ambiguity/clarification contract by name", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "clarifying_question")
+  expect_contains_ci(txt, "clarification_options")
+  expect_contains_ci(txt, "do not invent additional options")
+})
+
+test_that("the RM system prompt forbids naming internal tools by their function names", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "never mention a tool or function by its internal name")
+})
+
 # --- rm_system_prompt() ----------------------------------------------------
 
 test_that("rm_system_prompt() memoizes: repeated calls return the same text", {

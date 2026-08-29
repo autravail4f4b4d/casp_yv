@@ -46,9 +46,16 @@ ASSISTANT_SHORT_DESCRIPTION_CHARS <- 200L
 
 # Compact field sets. Kept as constants so the tests can assert exactly
 # which columns are (and are not) exposed to the model.
+# `hierarchy_role`/`hierarchy_of` are derived (not raw schema columns --
+# `parent_code` itself stays out of this compact shape, matching the
+# existing "no full canonical schema" contract) by
+# `assistant_hierarchy_annotate()`, added by the RM orchestration hardening
+# milestone so the model can tell an ancestor code from the most-specific
+# verified match without seeing raw parent_code plumbing.
 ASSISTANT_SEARCH_FIELDS <- c(
   "system", "version", "level", "code", "label",
-  "short_description", "status", "source"
+  "short_description", "status", "source",
+  "hierarchy_role", "hierarchy_of"
 )
 
 ASSISTANT_ENTRY_FIELDS <- c(
@@ -316,6 +323,14 @@ assistant_search_classification <- function(system, query, version = NULL,
 
     shortlist$short_description <- .assistant_truncate(shortlist$description)
 
+    # RM orchestration hardening: annotate hierarchy (ancestor vs.
+    # most-specific verified match) BEFORE ambiguity, since an ancestor row
+    # is not itself a clarification candidate -- only ambiguity among the
+    # remaining leaves matters. Both steps are pure functions of columns
+    # already in `shortlist` (no extra repository calls).
+    shortlist <- assistant_hierarchy_annotate(shortlist)
+    ambiguity <- assistant_ambiguity_check(shortlist)
+
     list(
       system = system,
       version = version,
@@ -324,6 +339,9 @@ assistant_search_classification <- function(system, query, version = NULL,
       total_matches = total,
       returned = nrow(shortlist),
       truncated = total > nrow(shortlist),
+      ambiguous = ambiguity$ambiguous,
+      clarifying_question = ambiguity$clarifying_question,
+      clarification_options = ambiguity$options,
       results = .assistant_rows(shortlist, ASSISTANT_SEARCH_FIELDS)
     )
   }
@@ -638,7 +656,8 @@ RM_ASSISTANT_TOOL_NAMES <- c(
   "assistant_get_classification_entry",
   "assistant_classification_registry",
   "assistant_search_common_pairings",
-  "assistant_get_psic_rule"
+  "assistant_get_psic_rule",
+  "assistant_get_classification_system_info"
 )
 
 .assistant_read_only_annotations <- function() {
@@ -837,6 +856,35 @@ rm_assistant_tools <- function() {
         )
       ),
       name = "assistant_get_psic_rule",
+      annotations = annotations
+    ),
+
+    ellmer::tool(
+      function(system) {
+        assistant_get_classification_system_info(system = system)
+      },
+      paste(
+        "Get verified canonical metadata about ONE classification SYSTEM",
+        "itself (its official name, current/available editions, hierarchy",
+        "levels and, for composite systems, its components) - NOT a search",
+        "for a specific code or entry.",
+        "Use this for questions about what a system IS, what it covers, or",
+        "its structure, e.g. 'What is PSCCS?', 'What are the components of",
+        "PTSCS?', or 'What are the components of PSCrCS?'.",
+        "For a comparison such as 'What is the difference between PSCC and",
+        "PSCCS?', call this tool once per system and compare only the",
+        "verified fields returned - do not answer from memory.",
+        "Do NOT use assistant_search_classification() for system-level",
+        "questions like these; that tool searches for classification",
+        "entries and is the wrong tool for what a system itself is or does."
+      ),
+      arguments = list(
+        system = ellmer::type_enum(
+          values = systems_enum,
+          description = "Classification system id."
+        )
+      ),
+      name = "assistant_get_classification_system_info",
       annotations = annotations
     )
   )

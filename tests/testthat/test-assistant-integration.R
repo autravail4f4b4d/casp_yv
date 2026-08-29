@@ -139,10 +139,10 @@ test_that("a fake API key is never echoed into user-visible status text", {
 })
 
 # ---------------------------------------------------------------------------
-# The model's code-bearing surface is exactly the five read-only tools
+# The model's code-bearing surface is exactly the six read-only tools
 # ---------------------------------------------------------------------------
 
-test_that("exactly the five approved read-only tools are registered", {
+test_that("exactly the six approved read-only tools are registered", {
   skip_if_not_installed("ellmer")
 
   tools <- rm_assistant_tools()
@@ -153,7 +153,8 @@ test_that("exactly the five approved read-only tools are registered", {
     "assistant_get_classification_entry",
     "assistant_classification_registry",
     "assistant_search_common_pairings",
-    "assistant_get_psic_rule"
+    "assistant_get_psic_rule",
+    "assistant_get_classification_system_info"
   ))
 
   # No synonym capability in V1 -- no approved source exists, and a
@@ -175,7 +176,7 @@ test_that("the client registers the tools it was given", {
 
       client <- create_rm_chat_client(tools = rm_assistant_tools())
       expect_false(is.null(client))
-      expect_equal(length(client$get_tools()), 5L)
+      expect_equal(length(client$get_tools()), 6L)
     }
   )
 })

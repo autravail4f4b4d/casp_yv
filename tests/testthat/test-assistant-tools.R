@@ -138,14 +138,17 @@ test_that("pairings search returns at most 6 rows by default and clamps at 25", 
 # Compactness — no full canonical schema, no full descriptions
 # ---------------------------------------------------------------------------
 
-test_that("search results expose only the 8 compact fields", {
+test_that("search results expose only the compact fields, plus derived hierarchy roles", {
   res <- assistant_search_classification("psoc", "accountant")
 
   expect_gt(length(res$results), 0L)
   row <- res$results[[1L]]
 
   expect_equal(names(row), ASSISTANT_SEARCH_FIELDS)
+  expect_true(all(c("hierarchy_role", "hierarchy_of") %in% names(row)))
   # The full canonical 10-column schema must NOT reach the model here.
+  # `hierarchy_role`/`hierarchy_of` are DERIVED fields, not raw schema
+  # columns -- raw `parent_code` itself stays hidden.
   expect_false("source_url" %in% names(row))
   expect_false("parent_code" %in% names(row))
   expect_false("description" %in% names(row))
@@ -535,13 +538,13 @@ test_that("the synonym stub is unavailable and never fabricates candidates", {
 # Registered tool surface
 # ---------------------------------------------------------------------------
 
-test_that("rm_assistant_tools() registers exactly the five read-only tools", {
+test_that("rm_assistant_tools() registers exactly the six read-only tools", {
   skip_if_not_installed("ellmer")
 
   tools <- rm_assistant_tools()
 
   expect_type(tools, "list")
-  expect_equal(length(tools), 5L)
+  expect_equal(length(tools), 6L)
   expect_true(all(vapply(
     tools, function(t) inherits(t, "ellmer::ToolDef"), logical(1)
   )))
@@ -558,7 +561,8 @@ test_that("rm_assistant_tools() registers exactly the five read-only tools", {
     "assistant_get_classification_entry",
     "assistant_classification_registry",
     "assistant_search_common_pairings",
-    "assistant_get_psic_rule"
+    "assistant_get_psic_rule",
+    "assistant_get_classification_system_info"
   ))
 })
 
