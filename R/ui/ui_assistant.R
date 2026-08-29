@@ -171,7 +171,7 @@ rm_assistant_failure_ui <- function(message = NULL) {
   shiny::tags$div(
     class = "psa-rm-failure",
     role = "status",
-    shiny::tags$i(class = "ph ph-warning", `aria-hidden` = "true"),
+    lucide_icon("triangle-alert", 17),
     shiny::tags$div(
       message,
       shiny::tags$div(

@@ -107,7 +107,7 @@ dual_search_panel_ui <- function(system_id) {
 
     shiny::tags$div(
       class = "psa-dual-field",
-      shiny::tags$i(class = "ph ph-magnifying-glass", `aria-hidden` = "true"),
+      lucide_icon("search", 20),
       shiny::textInput(
         dual_search_id(system_id, "query"),
         side$query_label,

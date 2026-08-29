@@ -216,7 +216,8 @@ search_classification <- function(system, version, query, level = NULL,
 #'   `total_matches` counts matches *after* the component and level filters
 #'   have been applied, and *before* `limit`.
 search_classification_result <- function(system, version, query, level = NULL,
-                                          limit = 100, component = NULL) {
+                                          limit = 100, component = NULL,
+                                          hybrid = TRUE) {
   .validate_version(system, version)
   .validate_level(system, version, level)
   .validate_component(system, component)
@@ -226,7 +227,37 @@ search_classification_result <- function(system, version, query, level = NULL,
   # are ranked. The single deterministic ranking engine in R/search.R is
   # reused unchanged; no second ranking path exists for composite systems.
   data <- get_classification(system, version, level = NULL, component = component)
-  search_classification_data_result(data, query, level = level, limit = limit)
+
+  # Prebuilt approximate-retrieval indexes, loaded once per R process and
+  # shared across Shiny sessions. Either may be absent -- a deployment with
+  # no built index, or no configured embedding backend, simply runs with
+  # fewer candidate generators. Retrieval degrades; it never fails.
+  # The level filter is applied HERE rather than inside the ranking function
+  # so the cached corpus lines up row-for-row with the data being ranked.
+  # (`level` is already validated above.) The corpus is then cached per
+  # system/version/component/level and reused for the process lifetime.
+  if (!is.null(level)) {
+    data <- data[data$level == level, , drop = FALSE]
+  }
+
+  corpus <- NULL
+  ngram_index <- NULL
+  embedding_index <- NULL
+  if (hybrid) {
+    corpus <- retrieval_corpus_get(data, system, version,
+                                   component = component, level = level)
+    # Loaded AND validated once per process, not per query.
+    ngram_index <- retrieval_index_for("ngram", system, version, corpus,
+                                       component = component, level = level)
+    embedding_index <- retrieval_index_for("embeddings", system, version, corpus,
+                                           component = component, level = level)
+  }
+
+  search_classification_data_result(
+    data, query, level = NULL, limit = limit, hybrid = hybrid,
+    ngram_index = ngram_index, embedding_index = embedding_index,
+    corpus = corpus
+  )
 }
 
 #' Look up a single classification entry by its exact code.

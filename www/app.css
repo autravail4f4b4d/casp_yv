@@ -7,89 +7,273 @@
    correspondence or RM grounding behavior. Stable Shiny input/output IDs
    are documented in docs/UI_CONTRACT.md and are untouched by this file.
 
-   Two colors carry meaning and are not decorative:
-     accent  -> "current" edition / verified / active nav
-     ochre   -> "archived" edition / caution / statistical-safety warning
-   Both are ALWAYS paired with visible text (never color alone), per
-   docs/UI_CONTRACT.md §10.
+   Visual system: "Subtle Gradient" (HANDOFF-CLAUDE-CODE.md v2.0,
+   28 Aug 2026), which supersedes v1.0's Nocturne dark system.
+
+   Colour meanings (handoff §12.6) — every one always paired with visible
+   text, never colour alone, per docs/UI_CONTRACT.md §10:
+     plum  #54436b -> selection, activity, brand, and ALL normal
+                      classification relationships (split/merged/
+                      reclassified/continued)
+     cream #f6f1ea -> recession, emptiness, unavailability
+     green #2f7a63 -> verified against PSA data (mark + eyebrow only)
+     brick #b84a3a -> ACTUAL FAILURE ONLY (RM mid-stream failure, load or
+                      action failures). Never for a classification
+                      relationship.
+     blue  #2f5f8f -> links
+     grey  #6b6d72 -> secondary information, archived editions
+
+   Ochre/amber/yellow do not exist in this system. Archived is quiet, not
+   warned.
    ========================================================================= */
+/* ---- Lucide icons, inlined as local SVG ---------------------------------
+   HANDOFF v2.0 §21 specifies Lucide. The reference design file loads it
+   from a CDN; this application must not, so each glyph is inlined as SVG
+   by lucide_icon() in R/ui/ui_icons.R.
 
-/* ---- Phosphor icons, vendored locally -----------------------------------
-   The approved mockup pulls Phosphor from unpkg. Vendored here instead so a
-   public deployment makes no third-party request per visitor (no CDN
-   dependency, no visitor IP disclosed to unpkg, works on restricted
-   networks). Only the ten glyphs the design actually uses are declared.
-   Every icon in this app is paired with a visible text label, so even a
-   failed font load degrades to readable text rather than a blank square. */
-@font-face {
-  font-family: "Phosphor";
-  src: url("Phosphor.woff2") format("woff2");
-  font-weight: normal;
-  font-style: normal;
-  font-display: block;
+   This replaces the v1.0 vendored Phosphor webfont outright. Inline SVG is
+   strictly better here: no font file to download, glyphs inherit
+   currentColor so one rule themes them all, and a failed load is
+   impossible -- an icon font that fails renders a blank square, whereas
+   inline paths are part of the document. */
+.lucide {
+  flex: 0 0 auto;
+  vertical-align: -0.125em;
 }
 
-.ph {
-  font-family: "Phosphor" !important;
-  speak: never;
-  font-style: normal;
-  font-weight: normal;
-  font-variant: normal;
-  text-transform: none;
-  line-height: 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* ---- Design tokens — "Subtle Gradient" ----------------------------------
+   Verbatim from _ds/subtle-gradient/tokens/*.css in the approved Claude
+   Design project (HANDOFF-CLAUDE-CODE.md v2.0, 28 Aug 2026), which
+   supersedes v1.0's Nocturne dark system entirely.
 
-.ph-magnifying-glass:before { content: "\e30c"; }
-.ph-arrows-left-right:before { content: "\e0a0"; }
-.ph-arrows-split:before      { content: "\ed3c"; }
-.ph-arrows-merge:before      { content: "\ed3e"; }
-.ph-sparkle:before           { content: "\e6a2"; }
-.ph-info:before              { content: "\e2ce"; }
-.ph-check-circle:before      { content: "\e184"; }
-.ph-warning:before           { content: "\e4e0"; }
-.ph-arrow-up:before          { content: "\e08e"; }
-.ph-stop:before              { content: "\e46c"; }
-.ph-arrow-clockwise:before   { content: "\e036"; }
-
-/* ---- Design tokens ------------------------------------------------------
-   The mockup referenced a design-system stylesheet that was not part of the
-   handoff bundle, so the token values below are derived from the mockup's
-   own inline usage and the explicit values fixed in HANDOFF-CLAUDE-CODE.md
-   (§8 archived ochre, §4 hero metrics, §7 verified card). */
+   The v1.0 token NAMES are retained below as aliases onto the new palette.
+   That is deliberate: ~1,500 lines of functional and responsive CSS -- the
+   selectize overflow fix, the sidebar min-width fix, the dropdown
+   elevation fix, the DT and RM composer rules -- already reference
+   --color-text / --color-divider / --color-accent. Re-pointing the aliases
+   re-themes every one of those rules atomically, with no risk of dropping
+   a hard-won fix while hand-editing each selector. New work should use the
+   semantic names. */
 :root {
-  --color-bg:        #0f1119;
-  --color-surface:   #151824;
-  --color-text:      oklch(0.95 0.012 255);
+  /* == Base: plum ramp == */
+  --plum: #54436b;
+  --plum-deep: #443653;
+  --plum-press: #67557e;
+  --plum-tint: #77678b;
 
-  --color-accent:      oklch(0.74 0.125 195);
-  --color-accent-300:  oklch(0.84 0.095 195);
-  --color-accent-800:  oklch(0.45 0.085 195);
+  /* == Base: ink == */
+  --ink: #202124;
+  --ink-mute: #6b6d72;
+  --white: #ffffff;
 
-  /* Reserved exclusively for archived-state signalling: line, border and
-     text only, never a background flood (design system's "accent as line,
-     not flood" rule, extended to this second semantic color). */
-  --color-archived-line: oklch(0.66 0.125 70);
-  --color-archived-text: oklch(0.80 0.10 70);
+  /* == Base: canvas == */
+  --cream: #f6f1ea;
+  --lavender: #f4eff8;
 
-  --color-divider: color-mix(in srgb, var(--color-text) 12%, transparent);
+  /* == Base: line == */
+  --hairline: #e6e6e6;
+  --hairline-strong: #000000;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* == Base: chromatic == */
+  --blue: #2f5f8f;
+  --blue-hover: #416fa1;
 
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 26px;
+  /* == Base: semantic == */
+  --red: #b84a3a;
+  --green: #2f7a63;
 
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* == Base: mesh gradient stops == */
+  --mesh-peach: #fcecdf;
+  --mesh-lavender: #e9e1f2;
+  --mesh-sage: #e4ebe1;
+
+  /* == Semantic: brand == */
+  --color-primary: var(--plum);
+  --color-primary-deep: var(--plum-deep);
+  --color-primary-press: var(--plum-press);
+  --color-primary-tint: var(--plum-tint);
+  --color-on-primary: var(--white);
+
+  /* == Semantic: text == */
+  --text-body: var(--ink);
+  --text-mute: var(--ink-mute);
+  --text-on-primary: var(--white);
+  --text-on-primary-mute: #d9d1e2;
+  --text-link: var(--blue);
+  --text-link-hover: var(--blue-hover);
+
+  /* == Semantic: surface == */
+  --surface-canvas: var(--white);
+  --surface-card: var(--white);
+  --surface-cream: var(--cream);
+  --surface-lavender: var(--lavender);
+  --surface-plum: var(--plum);
+
+  /* == Semantic: border == */
+  --border-hairline: var(--hairline);
+  --border-strong: var(--hairline-strong);
+  --border-on-plum: var(--plum-tint);
+
+  /* == Semantic: status == */
+  --status-error: var(--red);
+  --status-success: var(--green);
+
+  /* == Mesh backgrounds (radial stacks, never a raster) == */
+  --mesh-band:
+    radial-gradient(50% 80% at 20% 50%, var(--mesh-lavender) 0%, rgba(233, 225, 242, 0) 70%),
+    radial-gradient(45% 90% at 82% 40%, var(--mesh-peach) 0%, rgba(252, 236, 223, 0) 72%),
+    var(--cream);
+  --mesh-soft: linear-gradient(135deg, var(--cream) 0%, var(--lavender) 100%);
+
+  /* == Elevation ==
+     Only three things carry shadow: the app panel, toasts, and a floating
+     action. Cards, rows, tags and fields are separated by hairline plus
+     surface tint, never by shadow. */
+  --elev-0: none;
+  --elev-1: rgba(0, 0, 0, 0.1) 0 5px 20px 0;
+  --elev-2: rgba(0, 0, 0, 0.1) 0 0 32px 0;
+  --elev-3: rgba(0, 0, 0, 0.2) 0 1px 10px 0;
+  --elev-4: rgb(103, 85, 126) 0 0 0 1px inset;
+  --shadow-button-floating: var(--elev-1);
+  --shadow-mockup: var(--elev-2);
+  --shadow-toast: var(--elev-3);
+  --ring-plum-inset: var(--elev-4);
+
+  /* == Radius ==
+     The 4px-field / 90px-button split is load-bearing: fields read as
+     fields, buttons read as buttons. Do not harmonise them. */
+  --radius-xs: 2px;
+  --radius-4: 4px;
+  --radius-8: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-xxl: 48px;
+  --radius-pill: 90px;
+  --radius-input: var(--radius-4);
+  --radius-card: var(--radius-xl);
+  --radius-mockup: var(--radius-lg);
+  --radius-button: var(--radius-pill);
+
+  /* == Spacing == */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-huge: 28px;
+  --pad-card: 32px;
+  --pad-card-band: 48px;
+  --pad-button-y: 14px;
+  --pad-button-x: 28px;
+  --pad-button-secondary-y: 10px;
+  --pad-button-secondary-x: 30px;
+  --pad-input-y: 10px;
+  --pad-input-x: 12px;
+  --pad-pill-y: 4px;
+  --pad-pill-x: 12px;
+  --pad-nav-y: 16px;
+  --pad-nav-x: 24px;
+  --section-y-transactional: 48px;
+  --container-max: 1240px;
+
+  /* == Typography ==
+     One family, no webfont, no monospace family (codes use tabular
+     figures in the sans stack -- see .mono below). */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-sans);
+
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --size-display-md: 32px;
+  --size-heading-lg: 24px;
+  --size-heading-md: 22px;
+  --size-heading-sm: 18px;
+  --size-body-lg: 18px;
+  --size-body-md: 16px;
+  --size-button-cap: 14.4px;
+  --size-caption: 14px;
+  --size-micro-cap: 12px;
+
+  --leading-display-tight: 1.12;
+  --leading-display: 1.25;
+  --leading-heading: 1.33;
+  --leading-heading-md: 1.4;
+  --leading-body: 1.55;
+  --leading-body-strong: 1.5;
+  --leading-heading-sm: 1.56;
+  --leading-caption: 1.43;
+  --leading-flat: 1;
+  --leading-button: 1.38;
+
+  --track-display-lg: -0.6px;
+  --track-display-md: -0.256px;
+  --track-heading-lg: -0.096px;
+  --track-heading-sm: -0.0216px;
+  --track-body: 0;
+  --track-body-strong: 0.16px;
+  --track-button-cap: 0.144px;
+  --track-caption: 0.1px;
+  --track-micro-cap: 0.96px;
+
+  --type-display-md: var(--weight-bold) var(--size-display-md)/var(--leading-display) var(--font-display);
+  --type-heading-lg: var(--weight-bold) var(--size-heading-lg)/var(--leading-heading) var(--font-display);
+  --type-heading-md: var(--weight-semibold) var(--size-heading-md)/var(--leading-heading-md) var(--font-display);
+  --type-heading-sm: var(--weight-semibold) var(--size-heading-sm)/var(--leading-heading-sm) var(--font-display);
+  --type-body-lg: var(--weight-regular) var(--size-body-lg)/var(--leading-body) var(--font-sans);
+  --type-body-md: var(--weight-regular) var(--size-body-md)/var(--leading-body) var(--font-sans);
+  --type-body-strong: var(--weight-bold) var(--size-body-md)/var(--leading-body-strong) var(--font-sans);
+  --type-button-cap: var(--weight-bold) var(--size-button-cap)/var(--leading-flat) var(--font-sans);
+  --type-caption: var(--weight-regular) var(--size-caption)/var(--leading-caption) var(--font-sans);
+  --type-micro-cap: var(--weight-bold) var(--size-micro-cap)/var(--leading-flat) var(--font-sans);
+
+  /* == v1.0 compatibility aliases ==
+     Re-pointed onto the Subtle Gradient palette. Nothing below introduces
+     a new value; each is an alias so pre-existing functional selectors
+     re-theme without being rewritten. */
+  --color-bg: var(--surface-canvas);
+  --color-surface: var(--surface-card);
+  --color-text: var(--text-body);
+  --color-accent: var(--color-primary);
+  /* v1.0's 9-step accent ramp does not exist in this system. -300 was the
+     "lighter accent on dark" step and -800 the "deep accent" step; on a
+     light ground those roles collapse onto the two real plum steps. */
+  --color-accent-300: var(--color-primary);
+  --color-accent-800: var(--color-primary-deep);
+  /* Ochre is DELETED from the system (handoff §19.2). Archived is quiet,
+     not warned, so the former archived line/text tokens now resolve to the
+     neutral .tag-quiet colours. */
+  --color-archived-line: var(--border-hairline);
+  --color-archived-text: var(--text-mute);
+  --color-divider: var(--border-hairline);
+  --radius-sm: var(--radius-4);
+  --radius-md: var(--radius-8);
+  --space-3: var(--space-md);
+  --space-4: var(--space-lg);
+  --space-6: var(--space-huge);
+  --font-body: var(--font-sans);
 }
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
 
 body {
-  background: var(--color-bg);
-  font-family: var(--font-body);
+  background: var(--surface-canvas);
+  color: var(--text-body);
+  font: var(--type-body-md);
+  letter-spacing: var(--track-body);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+a { color: var(--text-link); text-decoration: none; }
+
+a:hover { color: var(--text-link-hover); text-decoration: underline; }
+
+::selection { background: var(--surface-lavender); color: var(--ink); }
 
 /* ---- Page flow: the global footer must never be overlaid (UI-01) --------
    ROOT CAUSE of the reported overlap: the footer is NOT fixed or sticky --
@@ -138,10 +322,16 @@ body.bslib-page-fill > .container-fluid > .tab-content > .tab-pane.html-fill-ite
   min-height: 0;
 }
 
+/* Classification codes are the app's primary data. Handoff §11 sets them
+   in the SANS stack with tabular figures rather than a monospace family:
+   tabular-nums already gives the column alignment a code list needs, and
+   the sans face keeps codes visually part of the same document as the
+   titles beside them. There is no --font-mono in this system. */
 .mono,
 .psa-code {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-display-md);
 }
 
 /* ---- Focus visibility (docs/UI_CONTRACT.md §11) -------------------------
@@ -166,43 +356,55 @@ summary:focus-visible,
 .form-control:focus-visible,
 .form-select:focus-visible,
 .rm-assistant-card .suggestion:focus-visible {
-  outline: 2px solid var(--color-accent) !important;
+  outline: 2px solid var(--color-primary-press) !important;
   outline-offset: 2px !important;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-input);
+}
+
+/* Fields additionally take the plum inset ring on plain :focus, so pointer
+   users see the field engage. The 2px/2px outline above is what satisfies
+   WCAG 2.2 §2.4.13 focus appearance; the 1px inset ring alone does not
+   (handoff §16), so both are applied, not one instead of the other. */
+.form-control:focus,
+.form-select:focus,
+.selectize-input.focus {
+  box-shadow: var(--ring-plum-inset) !important;
+  border-color: var(--color-primary) !important;
 }
 
 /* ---- Status vocabulary (one set, used identically everywhere) -----------
    Search, PSOC + PSIC, Compare Editions, Sources and the RM verified card
    all use these two classes so no surface can imply a different authority
    than another. */
+/* Status tags (handoff §12.1). Both states always carry their word, so the
+   distinction never rests on colour. */
 .psa-tag {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1.6;
+  padding: var(--pad-pill-y) var(--pad-pill-x);
+  border-radius: var(--radius-pill);
+  font: var(--type-micro-cap);
+  letter-spacing: var(--track-micro-cap);
+  text-transform: uppercase;
   white-space: nowrap;
+  border: none;
 }
 
+/* Current: solid plum fill, white text. */
 .psa-tag-current {
-  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  color: var(--color-accent-300);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 34%, transparent);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
-/* Outlined only — never filled. */
-.psa-tag-archived {
-  background: transparent;
-  border: 1px solid var(--color-archived-line);
-  color: var(--color-archived-text);
-}
-
+/* Archived: QUIET, not warned. An archived edition is a legitimate,
+   deliberately supported choice, so it gets a white chip with a hairline
+   ring -- never ochre, amber or red (handoff §12.1, §19.2). */
+.psa-tag-archived,
 .psa-tag-neutral {
-  background: color-mix(in srgb, var(--color-text) 8%, transparent);
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
-  border: 1px solid transparent;
+  background: var(--surface-canvas);
+  color: var(--text-mute);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
 }
 
 /* ---- Top navigation -----------------------------------------------------
@@ -244,16 +446,21 @@ summary:focus-visible,
   background: transparent !important;
 }
 
-.navbar .nav-link .ph {
+.navbar .nav-link .lucide {
   font-size: 17px;
 }
 
 /* ---- Search hero (HANDOFF §4) ------------------------------------------- */
+/* The mesh band is used in EXACTLY ONE PLACE in the whole app (handoff
+   §6.2 rule 1): the Search hero. It is what makes Search read as the
+   default destination. Radial gradient stack, never a raster or SVG; it
+   carries no border and no shadow, and nothing below 16px sits on it. */
 .psa-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 0 26px;
+  padding: var(--pad-card-band) var(--space-huge) 40px;
+  background: var(--mesh-band);
 }
 
 .psa-hero-field {
@@ -262,13 +469,12 @@ summary:focus-visible,
   max-width: 100%;
 }
 
-.psa-hero-field .ph-magnifying-glass {
+.psa-hero-field .lucide {
   position: absolute;
-  left: 16px;
+  left: 18px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 20px;
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  color: var(--text-mute);
   pointer-events: none;
   z-index: 3;
 }
@@ -290,13 +496,24 @@ summary:focus-visible,
   border: 0;
 }
 
+/* Handoff §8.1: 56px tall, --type-body-lg (18px), icon at left:18 so the
+   text clears it at padding-left:50. 4px radius, because it is a field --
+   the 90px pill is reserved for real buttons (§3.4). */
 .psa-hero-field input.form-control {
   min-height: 56px;
-  font-size: 19px;
-  padding-left: 46px;
+  font: var(--type-body-lg);
+  letter-spacing: var(--track-body-lg, -0.0216px);
+  padding: 0 var(--space-xl) 0 50px;
   width: 100%;
   box-sizing: border-box;
-  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+}
+
+.psa-hero-field input.form-control:focus,
+.psa-hero-field input.form-control:focus-visible {
+  box-shadow: var(--ring-plum-inset);
 }
 
 /* The design calls for ~45% text opacity here, which measured 4.08:1
@@ -305,10 +522,14 @@ summary:focus-visible,
    that passes (55% -> 5.51:1). Accessibility takes precedence over the
    exact opacity value; the intent, a clearly secondary helper line, is
    preserved. Same reasoning for the two other muted values below. */
+/* --text-mute #6b6d72 measures 5.3:1 on white and 5.0:1 on cream — both
+   clear WCAG AA for this 14px text, so the solid token is used directly
+   rather than the opacity mix the dark theme needed. */
 .psa-hero-help {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin: var(--space-md) 0 0;
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  color: var(--text-mute);
 }
 
 /* ---- Search body layout (HANDOFF §4) ------------------------------------ */
@@ -464,16 +685,19 @@ summary:focus-visible,
 .selectize-control { position: relative; }
 
 .selectize-dropdown {
-  /* A genuinely distinct surface, one step above the page and above the
-     card surface, so the panel edge is unmistakable on a dark UI. */
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-text));
-  border: 1px solid color-mix(in srgb, var(--color-text) 22%, transparent);
-  border-radius: var(--radius-md);
-  /* Dark UIs get no useful depth cue from a black shadow. A deeper, more
-     opaque shadow plus a faint top highlight is what reads as "floating". */
-  box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.35);
+  /* PRESERVED FIX, re-derived for the light theme. The original defect was
+     measured, not guessed: the open menu's background was byte-identical
+     to the page background, its border was 10%-alpha and its shadow was
+     black-on-near-black, so the panel had no perceptible edge and its
+     option text appeared to bleed through the control behind it.
+     Re-theming does not make that go away -- on this system a white menu
+     on a white page is the SAME defect. The edge is therefore carried by a
+     solid hairline plus a real shadow, which is what reads as "floating"
+     on a light ground (where the dark theme needed the reverse). */
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-8);
+  box-shadow: var(--shadow-button-floating);
   margin-top: 4px;
   padding: 4px;
   overflow: hidden;
@@ -628,7 +852,7 @@ summary:focus-visible,
 
 .psa-dual-field { position: relative; }
 
-.psa-dual-field .ph-magnifying-glass {
+.psa-dual-field .lucide {
   position: absolute;
   left: 12px;
   top: 50%;
@@ -806,7 +1030,7 @@ summary:focus-visible,
   text-underline-offset: 3px;
 }
 
-.psa-term-help-trigger .ph-question {
+.psa-term-help-trigger .lucide {
   font-size: 13px;
   margin-left: 5px;
   vertical-align: middle;
@@ -881,15 +1105,27 @@ table.dataTable tbody tr.selected td {
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
+/* Selected-entry hero code. Handoff §11 fixes this at 40px/700 in plum;
+   that is the DESKTOP value, not a floor. Codes in this app range from
+   "95320" to "0101.29.00-001" to long PSGC codes, and a hard 40px overflows
+   a 320px viewport. clamp() keeps the design's 40px wherever there is room
+   and scales down rather than letting a code push the page sideways --
+   which the handoff also forbids ("never truncate a code"). */
 .psa-detail-code {
-  font-size: 40px;
-  line-height: 1;
+  font-size: clamp(26px, 7.5vw, 40px);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-display-tight);
+  letter-spacing: var(--track-display-lg);
+  color: var(--color-primary);
+  overflow-wrap: anywhere;
 }
 
 .psa-detail-title {
-  margin: 10px 0 0;
-  font-size: 21px;
-  line-height: 1.25;
+  margin: var(--space-md) 0 0;
+  font: var(--type-heading-md);
+  letter-spacing: var(--track-heading-lg);
+  color: var(--text-body);
+  overflow-wrap: anywhere;
 }
 
 .psa-detail-meta {
@@ -911,19 +1147,24 @@ table.dataTable tbody tr.selected td {
 
 .psa-source-line a { font-size: 13px; }
 
+/* Verified result (handoff §12.2). The card itself is NEUTRAL -- white,
+   hairline, no green fill and no green border. Only the mark and the
+   eyebrow are green. This is deliberate: a flooded green card reads as a
+   stronger claim than "this code came back from a tool", and Search and RM
+   share this component precisely so RM cannot look more authoritative than
+   Search. */
 .psa-verified-card {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid var(--color-accent-800);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-canvas);
 }
 
-.psa-verified-card .ph-check-circle {
-  font-size: 21px;
-  color: var(--color-accent-300);
+.psa-verified-card .lucide {
+  color: var(--status-success);
   margin-top: 2px;
 }
 
@@ -943,19 +1184,96 @@ table.dataTable tbody tr.selected td {
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px dashed color-mix(in srgb, var(--color-text) 20%, transparent);
-  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-hairline);
+  /* 4px, NOT the 90px button pill (handoff §17). The pill radius is what
+     marks a real control, so nothing clickable-looking ships unwired. */
+  border-radius: var(--radius-input);
   /* Kept at the design's 35% (2.94:1). This is the one place the
      sub-AA value is retained deliberately: the element is aria-hidden,
      inert and conveys no information -- it exists only to reserve layout
-     space for a future control. Its low prominence IS the point, and
-     WCAG 1.4.3 does not apply to text that is not exposed as content.
-     When this slot is wired into a real control it MUST be raised to at
-     least 50% (4.76:1) along with gaining button semantics. */
-  color: color-mix(in srgb, var(--color-text) 35%, transparent);
-  font-size: 12px;
+     space for a future control. The handoff sets it at --text-mute, which
+     also happens to clear WCAG AA (5.3:1) rather than the v1.0 value's
+     2.94:1, so the accessible choice and the design choice agree here. */
+  color: var(--text-mute);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
   cursor: default;
   user-select: none;
+}
+
+/* ---- Buttons (handoff §13) ----------------------------------------------
+   Three treatments only: primary, secondary, outline -- all pill.
+   The 90px --radius-pill is a RADIUS, not a width: a pill radius on a
+   short button simply produces a fully-rounded end cap, and long labels
+   size naturally. Nothing here sets a fixed width, so no action is ever
+   truncated or compressed to hit a nominal 90px. */
+.btn {
+  border-radius: var(--radius-pill);
+  font: var(--type-button-cap);
+  letter-spacing: var(--track-button-cap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 34px;
+  transition: background 160ms cubic-bezier(.2, .6, .2, 1),
+              color 160ms cubic-bezier(.2, .6, .2, 1),
+              box-shadow 160ms cubic-bezier(.2, .6, .2, 1);
+}
+
+.btn-primary,
+.btn.btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: var(--pad-button-y) var(--pad-button-x);
+}
+
+.btn-primary:hover,
+.btn.btn-primary:hover {
+  background: var(--color-primary-deep);
+  border-color: var(--color-primary-deep);
+  color: var(--color-on-primary);
+}
+
+.btn-primary:active,
+.btn.btn-primary:active {
+  background: var(--color-primary-press);
+  border-color: var(--color-primary-press);
+}
+
+.btn-secondary,
+.btn.btn-secondary,
+.btn-default {
+  background: var(--surface-lavender);
+  border-color: transparent;
+  color: var(--text-body);
+  padding: var(--pad-button-secondary-y) var(--pad-button-secondary-x);
+}
+
+.btn-secondary:hover,
+.btn.btn-secondary:hover,
+.btn-default:hover {
+  background: #ebe1f4;
+  color: var(--text-body);
+}
+
+.btn-outline-primary {
+  background: transparent;
+  border: 2px solid var(--color-primary);
+  color: var(--text-body);
+  padding: 8px 20px;
+}
+
+.btn-outline-primary:hover {
+  background: rgba(84, 67, 107, 0.08);
+  color: var(--text-body);
+}
+
+.btn:disabled,
+.btn.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---- PSOC + PSIC -------------------------------------------------------- */
@@ -998,9 +1316,12 @@ table.dataTable tbody tr.selected td {
   border-radius: var(--radius-md);
 }
 
+/* Relationship glyph: plum, 20x20, centred in the 40px middle column
+   (handoff §12.3). Never an error colour. */
 .psa-corr-arrow {
-  font-size: 18px;
-  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
   justify-self: center;
 }
 
@@ -1013,27 +1334,36 @@ table.dataTable tbody tr.selected td {
 /* Statistical-safety warning. Mandatory presentation, not optional
    styling — rendered verbatim from CORRESPONDENCE_STATISTICAL_WARNING for
    split / merged / complex relationships. */
+/* Statistical-safety notice (handoff §12.3) — NEUTRAL / PLUM, NOT ERROR.
+   This is the one substantive semantic correction from v1.0, which framed
+   it as an ochre warning box. Split, merged and complex are normal,
+   expected classification outcomes; the notice tells a statistician how to
+   handle a legitimate structural change, so styling it as a failure
+   actively misinforms. Forbidden here: --status-error, --red, any
+   ochre/amber, triangle-alert or any warning glyph, and any red/amber
+   border, fill, icon or text. */
 .psa-stat-warning {
-  margin-top: 14px;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent);
-  border: 1px solid var(--color-archived-line);
-  font-size: 13px;
-  line-height: 1.55;
-  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+  margin-top: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  border-radius: var(--radius-8);
+  background: var(--surface-lavender);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+  border: none;
+  font: var(--type-body-md);
+  color: var(--text-body);
 }
 
-.psa-stat-warning .ph-warning {
-  color: var(--color-archived-text);
-  margin-right: 6px;
+.psa-stat-warning .lucide {
+  color: var(--color-primary);
+  margin-right: var(--space-sm);
 }
 
-/* No-match rows keep an explicit message rather than an empty cell. */
+/* No-match rows keep an explicit message rather than an empty cell. These
+   are also NOT errors -- same neutral treatment (handoff §12.3). */
 .psa-no-counterpart {
-  font-size: 13px;
+  font: var(--type-body-md);
   font-style: italic;
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  color: var(--text-mute);
 }
 
 /* ---- RM Assistant ------------------------------------------------------- */
@@ -1075,7 +1405,7 @@ table.dataTable tbody tr.selected td {
   justify-content: center;
 }
 
-.psa-rm-avatar .ph {
+.psa-rm-avatar .lucide {
   font-size: 22px;
   color: var(--color-accent);
 }
@@ -1092,21 +1422,24 @@ table.dataTable tbody tr.selected td {
 /* Mid-stream provider-failure presentation. Inert markup for now: real
    failure detection is an unresolved upstream shinychat gap, documented in
    docs/ASSISTANT_CONTRACT.md §12 and explicitly deferred by HANDOFF §13. */
+/* This is the ONE place brick is used (handoff §12.4): a genuine failure,
+   a request that did not complete. Treatment is border + icon + text only,
+   never a fill -- a flooded error panel shouts louder than the situation
+   warrants and competes with the preserved transcript beside it. */
 .psa-rm-failure {
   display: flex;
-  gap: 10px;
+  gap: var(--space-md);
   align-items: flex-start;
-  padding: 12px 14px;
-  border: 1px solid var(--color-archived-line);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, oklch(0.66 0.125 70) 8%, transparent);
-  font-size: 13px;
-  line-height: 1.55;
+  padding: var(--space-lg) var(--space-xl);
+  border: 1px solid var(--status-error);
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: var(--type-body-md);
+  color: var(--text-body);
 }
 
-.psa-rm-failure .ph-warning {
-  font-size: 16px;
-  color: var(--color-archived-text);
+.psa-rm-failure .lucide {
+  color: var(--status-error);
   margin-top: 2px;
 }
 

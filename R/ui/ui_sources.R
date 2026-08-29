@@ -420,7 +420,7 @@
 
     shiny::tags$div(
       class = "psa-stat-warning",
-      shiny::tags$i(class = "ph ph-warning", `aria-hidden` = "true"),
+      lucide_icon("triangle-alert", 17),
       CORRESPONDENCE_STATISTICAL_WARNING
     ),
 

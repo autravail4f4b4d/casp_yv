@@ -260,3 +260,77 @@ test_that("each side's result contains only its own system's records", {
       names(psoc)
   ))
 })
+
+# ---------------------------------------------------------------------
+# Asymmetric success/failure through the hybrid engine
+# ---------------------------------------------------------------------
+#
+# These name the scenarios explicitly rather than leaving them implicit in
+# the interleaving tests above: a query that only the hybrid tiers can
+# answer on one side must not affect a genuinely-zero-match query on the
+# other side, in either direction.
+
+test_that("PSOC succeeds via a hybrid tier while PSIC has no match, without leakage", {
+  skip_if_not(exists("search_classification_result"))
+
+  psoc_v <- classification_versions("psoc")[[1]]
+  psic_v <- classification_versions("psic")[[1]]
+
+  # "heavy truck driver" only resolves through tiers 7/8 -- there is no
+  # exact/prefix/substring hit in PSOC 2022 for this exact phrase.
+  psoc <- dual_search_side_result("psoc", psoc_v, "heavy truck driver", limit = 10L)
+  psic <- dual_search_side_result("psic", psic_v, "qqqxzzvwk", limit = 10L)
+
+  expect_gt(psoc$total_matches, 0L)
+  expect_true("8332" %in% psoc$data$code)
+  expect_equal(psic$total_matches, 0L)
+  expect_equal(nrow(psic$data), 0L)
+})
+
+test_that("PSIC succeeds via a hybrid tier while PSOC has no match, without leakage", {
+  skip_if_not(exists("search_classification_result"))
+
+  psoc_v <- classification_versions("psoc")[[1]]
+  psic_v <- classification_versions("psic")[[1]]
+
+  psic <- dual_search_side_result("psic", psic_v, "bakery products manufacture", limit = 10L)
+  psoc <- dual_search_side_result("psoc", psoc_v, "qqqxzzvwk", limit = 10L)
+
+  expect_gt(psic$total_matches, 0L)
+  expect_equal(psoc$total_matches, 0L)
+  expect_equal(nrow(psoc$data), 0L)
+})
+
+test_that("both sides can succeed via hybrid tiers simultaneously with disjoint codes", {
+  skip_if_not(exists("search_classification_result"))
+
+  psoc_v <- classification_versions("psoc")[[1]]
+  psic_v <- classification_versions("psic")[[1]]
+
+  psoc <- dual_search_side_result("psoc", psoc_v, "heavy truck driver", limit = 10L)
+  psic <- dual_search_side_result("psic", psic_v, "bakery", limit = 10L)
+
+  expect_gt(psoc$total_matches, 0L)
+  expect_gt(psic$total_matches, 0L)
+  expect_length(intersect(psoc$data$code, psic$data$code), 0L)
+  expect_true(all(psoc$data$system == "psoc"))
+  expect_true(all(psic$data$system == "psic"))
+})
+
+test_that("selecting a row on one side never populates the other side's selection", {
+  skip_if_not(exists("search_classification_result"))
+  skip_if_not(exists("dual_search_side_selection"))
+
+  psoc_v <- classification_versions("psoc")[[1]]
+  psic_v <- classification_versions("psic")[[1]]
+
+  psoc <- dual_search_side_result("psoc", psoc_v, "heavy truck driver", limit = 10L)
+  psic <- dual_search_side_result("psic", psic_v, "bakery", limit = 10L)
+
+  psoc_selected <- dual_search_side_selection(psoc, 1L)
+  psic_unselected <- dual_search_side_selection(psic, NULL)
+
+  expect_equal(nrow(psoc_selected), 1L)
+  expect_equal(nrow(psic_unselected), 0L)
+  expect_true(all(psoc_selected$system == "psoc"))
+})

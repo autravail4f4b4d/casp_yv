@@ -109,7 +109,7 @@ verified_result_card <- function(entry) {
 
   shiny::tags$div(
     class = "psa-verified-card",
-    shiny::tags$i(class = "ph ph-check-circle", `aria-hidden` = "true"),
+    lucide_icon("circle-check", 20),
     shiny::tags$div(
       shiny::tags$div(
         class = "psa-eyebrow",

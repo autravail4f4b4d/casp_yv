@@ -58,8 +58,13 @@ normalize_whitespace <- function(x) {
 #' @details This is a thin wrapper over `search_classification_data_result()`
 #'   returning only its `$data` element. Filtering and ranking are performed
 #'   exactly once per call -- there is no second pass to compute counts.
-search_classification_data <- function(data, query, level = NULL, limit = 100) {
-  search_classification_data_result(data, query, level = level, limit = limit)$data
+search_classification_data <- function(data, query, level = NULL, limit = 100,
+                                       hybrid = TRUE, ngram_index = NULL,
+                                       embedding_index = NULL) {
+  search_classification_data_result(
+    data, query, level = level, limit = limit, hybrid = hybrid,
+    ngram_index = ngram_index, embedding_index = embedding_index
+  )$data
 }
 
 #' Search a canonical classification tibble, reporting the true match total.
@@ -81,7 +86,22 @@ search_classification_data <- function(data, query, level = NULL, limit = 100) {
 #'     \item{limit}{integer(1). The limit that was applied}
 #'     \item{is_truncated}{logical(1). `total_matches > returned_count`}
 #'   }
-search_classification_data_result <- function(data, query, level = NULL, limit = 100) {
+#' @param hybrid logical(1). Enable the tier 7/8 recall tiers. TRUE by
+#'   default; set FALSE to reproduce the pre-hybrid deterministic ranking
+#'   exactly, which is what the evaluation harness uses for its baseline
+#'   profile.
+#' @param ngram_index,embedding_index optional prebuilt indexes for the
+#'   approximate tiers. NULL (default) simply omits that tier -- retrieval
+#'   degrades, it never fails.
+#' @param corpus optional prebuilt `retrieval_corpus()` for `data` AFTER any
+#'   level filtering. Supplying it avoids re-normalizing and re-tokenizing
+#'   every label on each query, which measured ~4.1s on the 24,180-row PSCC
+#'   table. Must line up row-for-row with the filtered `data`; a mismatched
+#'   corpus is ignored rather than trusted, because misaligned indices would
+#'   resolve candidates to the wrong records.
+search_classification_data_result <- function(data, query, level = NULL, limit = 100,
+                                              hybrid = TRUE, ngram_index = NULL,
+                                              embedding_index = NULL, corpus = NULL) {
   if (!is.null(level)) {
     data <- data[data$level == level, , drop = FALSE]
   }
@@ -107,6 +127,9 @@ search_classification_data_result <- function(data, query, level = NULL, limit =
   description_norm <- normalize_whitespace(tolower(data$description))
 
   tier <- rep(NA_integer_, nrow(data))
+  # Ordering WITHIN the fused tier 8. Left at NA for tiers 1-7, whose order
+  # is source order exactly as before.
+  fused_rank <- rep(NA_integer_, nrow(data))
 
   tier[is.na(tier) & code_lower == query_norm] <- 1L
   tier[is.na(tier) & stringr::str_starts(code_lower, stringr::fixed(query_norm))] <- 2L
@@ -116,12 +139,94 @@ search_classification_data_result <- function(data, query, level = NULL, limit =
   tier[is.na(tier) & !is.na(description_norm) &
          stringr::str_detect(description_norm, stringr::fixed(query_norm))] <- 6L
 
+  # --- Hybrid recall tiers 7 and 8 -------------------------------------
+  #
+  # Tiers 1-6 above are untouched, and both new tiers sit strictly below
+  # them, so every result the deterministic engine already returned keeps
+  # its exact previous rank. These tiers can only ADD candidates underneath.
+  #
+  # WHY THIS EXISTS: tier 5 is a whole-query LITERAL substring test, so
+  # "heavy truck driver" does not match "HEAVY TRUCK AND LORRY DRIVERS" --
+  # the interposed "and lorry" breaks contiguity even though every query
+  # token is present. That query returned zero results in Search and in RM.
+  #
+  # Tier 7 fixes precisely that with order-independent token containment.
+  # Tier 8 covers what tokens cannot: typos, where the token is not present
+  # at all and only edit distance or shared character n-grams can recover
+  # the record.
+  #
+  # Both are skipped when the deterministic tiers already filled the page:
+  # this runs on a Shiny reactive per keystroke, and a query with plenty of
+  # exact hits has nothing to gain from approximate retrieval.
+  # A CODE-SHAPED QUERY NEVER ENTERS APPROXIMATE RETRIEVAL.
+  #
+  # Codes are identifiers, not prose. This application's central data rule
+  # is that they are exact strings in which leading zeros and punctuation
+  # carry meaning, so "0111" must never match "1111" and "01x1x1x11" must
+  # never match "01.1.1.11". Edit distance and character n-grams are built
+  # to ignore exactly those differences, which makes them actively wrong
+  # here -- an approximate code match is indistinguishable, to a user, from
+  # the application having found their code.
+  #
+  # It also preserves the PSCC cross-reference fallback, which fires only
+  # when the primary ranked search returns nothing: letting the hybrid
+  # tiers return 24 loose text matches for the 2019 code "0101.29.00-01"
+  # would suppress the fallback and lose the cross-reference entirely.
+  #
+  # Codes remain fully served by tiers 1 and 2 (exact and prefix), which
+  # are exact string operations.
+  query_is_code <- isTRUE(retrieval_is_code_like(query_norm))
+
+  deterministic_hits <- sum(!is.na(tier))
+  if (isTRUE(hybrid) && !query_is_code && deterministic_hits < limit && nrow(data) > 0L) {
+    if (is.null(corpus) || !identical(corpus$n, nrow(data))) {
+      corpus <- retrieval_corpus(data)
+    }
+    # An index is a row-offset map into the canonical table, so a stale one
+    # would resolve candidates to the WRONG records with full confidence.
+    # Validity is therefore a correctness gate -- but it walks the whole
+    # corpus, so it is performed and cached ONCE per process by
+    # retrieval_index_for() at the repository layer, not here. Direct
+    # callers of this function that pass an index by hand are responsible
+    # for it matching the data they passed.
+    query_tokens <- retrieval_tokens(query_norm)[[1]]
+
+    # Tier 7 -- every query token present in the label, any order.
+    token_hits <- retrieval_token_all_match(query_tokens, corpus)
+    if (length(token_hits)) {
+      tier[intersect(which(is.na(tier)), token_hits)] <- 7L
+    }
+
+    # Tier 8 -- fused approximate candidates. Ordered among themselves by
+    # RRF score, which is carried in `.fused_rank` so the sort below keeps
+    # the fusion's ordering instead of falling back to source order.
+    fused <- retrieval_hybrid_candidates(
+      query = query_norm,
+      corpus = corpus,
+      ngram_index = ngram_index,
+      embedding_index = embedding_index
+    )
+    if (nrow(fused) > 0L) {
+      new_idx <- fused$idx[is.na(tier[fused$idx])]
+      if (length(new_idx)) {
+        tier[new_idx] <- 8L
+        fused_rank[new_idx] <- match(new_idx, fused$idx)
+      }
+    }
+  }
+
   matched <- data
   matched$.rank_tier <- tier
   matched$.orig_order <- seq_len(nrow(data))
+  # NA sorts last within a tier, and only tier 8 rows carry a value, so
+  # tiers 1-7 order by source position exactly as they always did while
+  # tier 8 orders by fusion rank.
+  matched$.fused_rank <- fused_rank
 
   matched <- matched[!is.na(matched$.rank_tier), , drop = FALSE]
-  matched <- dplyr::arrange(matched, .data$.rank_tier, .data$.orig_order)
+  matched <- dplyr::arrange(
+    matched, .data$.rank_tier, .data$.fused_rank, .data$.orig_order
+  )
 
   # Canonical columns first, then any extra columns the adapter supplied,
   # then drop the scratch ranking columns. Composite/thematic systems
@@ -131,7 +236,7 @@ search_classification_data_result <- function(data, query, level = NULL, limit =
   # statistical meaning of the record and has to remain visible in result
   # details, not just in an unsearched browse. Ordinary systems have no
   # extras and are completely unaffected.
-  extras <- setdiff(names(matched), c(CLASSIFICATION_SCHEMA_COLUMNS, ".rank_tier", ".orig_order"))
+  extras <- setdiff(names(matched), c(CLASSIFICATION_SCHEMA_COLUMNS, ".rank_tier", ".orig_order", ".fused_rank"))
   result <- matched[, c(CLASSIFICATION_SCHEMA_COLUMNS, extras), drop = FALSE]
   .search_count_result(head(result, limit), nrow(result), limit)
 }

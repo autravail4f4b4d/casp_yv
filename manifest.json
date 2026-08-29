@@ -2741,26 +2741,29 @@
     }
   },
   "files": {
-    ".claude/launch.json": {
-      "checksum": "85be3cb57819cf8d50d4d95131901a33"
-    },
     ".Rprofile": {
-      "checksum": "107b8602c231e5de120765f970fc639a"
+      "checksum": "3acdbf4e77c8835b532f159e3af1e1fa"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "773c03724232f7edf2587d0174bd3fcc"
     },
     "app.R": {
-      "checksum": "1c2f882e292edc4e45da5fadd3cc7e81"
+      "checksum": "e918b9ee42d5106a66755b3d8cb7ee2f"
     },
     "CLAUDE.md": {
       "checksum": "ccb20af466e6ae7c5cfc7e3eb39d22f7"
+    },
+    "CLAUDE_CODE_HYBRID_RETRIEVAL_IMPLEMENTATION.md": {
+      "checksum": "a0a051a6ec7da4a34c84b1560482cf0a"
     },
     "data-raw/2022-Updates-to-the-2012-PSOC.xlsx": {
       "checksum": "27f4eaf9b4030972d008c3f51292c276"
     },
     "data-raw/CBMS_2024_2022_PSOC_PSIC_Rev5_Mapping.xlsx": {
       "checksum": "4639055a0182b8d22560c1e27dc41e1c"
+    },
+    "data-raw/commodity classification.xlsx": {
+      "checksum": "0cfae7f9ac0b6aa82eb716099589136e"
     },
     "data-raw/curated_psoc_overrides.csv": {
       "checksum": "3d67c0d8f70cd0fb52df8a564f22166e"
@@ -2783,6 +2786,15 @@
     "data-raw/PTSCS-Version-2.1.xlsx": {
       "checksum": "1a094fa1e5d7ab9b17c3d1aaec70799f"
     },
+    "data-raw/retrieval_eval_cases.csv": {
+      "checksum": "036d8b16b3bc6b197566e14eefd6951d"
+    },
+    "data-raw/retrieval_eval_holdout_cases.csv": {
+      "checksum": "ada3f80fea17fe40aa96431087d0e020"
+    },
+    "data-raw/retrieval_eval_holdout2_cases.csv": {
+      "checksum": "b15e17ad6f71316d6a529e3b6b1cda98"
+    },
     "data/assistant_common_pairings.rds": {
       "checksum": "6903e336c5048ec00bb315018209e14d"
     },
@@ -2790,10 +2802,10 @@
       "checksum": "99c7a4eb321611eb36d7bc8ad7ef8bdf"
     },
     "data/pscc_2022.rds": {
-      "checksum": "92457bc86679ab1dec850928dfb9393a"
+      "checksum": "9db29b234a8b94419aca870aa31db9f8"
     },
     "data/pscc_2022_metadata.rds": {
-      "checksum": "0ca0c7735ba230eb88bb28bbdb5cce61"
+      "checksum": "1c1fca34f76ed47ee57f074778fcedd4"
     },
     "data/pscrcs_2025.rds": {
       "checksum": "61898fdddd0095cc24a7afc19fa13320"
@@ -2825,6 +2837,36 @@
     "data/ptscs_2025_v2_1_metadata.rds": {
       "checksum": "fd778d31fc79851046e91e2d5fe6d5a5"
     },
+    "data/retrieval_ngram_pcoicop_2020.rds": {
+      "checksum": "1443acf489e2d002464b8df3d7fd5646"
+    },
+    "data/retrieval_ngram_pcpc_2002.rds": {
+      "checksum": "fab8341bff0f201fc0563ca2cdb5e4bb"
+    },
+    "data/retrieval_ngram_pscc_2022.rds": {
+      "checksum": "a4b530d203b9ea2068998b39baa1fd5d"
+    },
+    "data/retrieval_ngram_psccs_2018.rds": {
+      "checksum": "54abd359347501943b2de4d6df671dbb"
+    },
+    "data/retrieval_ngram_psced_2017.rds": {
+      "checksum": "85e1b33480d3259db71eeb863578fc06"
+    },
+    "data/retrieval_ngram_pscrcs_2025.rds": {
+      "checksum": "5d79d1cf5c4d9b0b386f0ccef5da6d79"
+    },
+    "data/retrieval_ngram_psgc_Q2_2026.rds": {
+      "checksum": "8d66776cad1a38b3c78a74c9039e4a7c"
+    },
+    "data/retrieval_ngram_psic_2026.rds": {
+      "checksum": "141730749b1e70b2776de395faed5ac8"
+    },
+    "data/retrieval_ngram_psoc_2022.rds": {
+      "checksum": "a4dc6b267bfde1c6fc3d618c6df7b232"
+    },
+    "data/retrieval_ngram_ptscs_2025-v2.1.rds": {
+      "checksum": "95ee83b66460c5e2e08d6c55677c0e5c"
+    },
     "docs/ASSISTANT_CONTRACT.md": {
       "checksum": "e1a42f855f2c419713138c4e4443dbd9"
     },
@@ -2838,13 +2880,19 @@
       "checksum": "5ce5db0a1203558bd27e04c0a2f668cd"
     },
     "docs/UI_CONTRACT.md": {
-      "checksum": "8131358949ec8ade405592fae8a91d28"
+      "checksum": "ad878400e385bfb9ee9fdc0eb8bfc392"
     },
     "HANDOFF-CLAUDE-CODE.md": {
       "checksum": "b3524722b0b9997319d8dbb7db0d4d71"
     },
+    "HYBRID_CLASSIFICATION_RETRIEVAL_GRAPH.md": {
+      "checksum": "1c24f400fcd5f4a8f2bf2f0c31df9268"
+    },
     "IMPLEMENTATION_STATUS.md": {
-      "checksum": "f180ac7672190bd9384f120577be52eb"
+      "checksum": "4e994d9a73ee64134e0e6c31b9f6113a"
+    },
+    "POST_CONNECT_STAGING_UI_REFINEMENT_GRAPH.md": {
+      "checksum": "3c036ddecf6f3b9e6123652d3827e3e2"
     },
     "PRE_STAGING_PARALLEL_EXECUTION_MASTER.md": {
       "checksum": "083fa1e4eb8cbb085642ad37f0700ec5"
@@ -2874,7 +2922,7 @@
       "checksum": "607774eb266287c40f752814d451ca31"
     },
     "R/adapters/adapter_pscc_2022.R": {
-      "checksum": "e928cf6dbade488539376a472cd1ff30"
+      "checksum": "4e0490b1b80c2ba9b5ca323949470d3b"
     },
     "R/adapters/adapter_pscrcs_2025.R": {
       "checksum": "d640ff4e74f5ed8f79e6260cef638bd9"
@@ -2901,7 +2949,10 @@
       "checksum": "1f636ead9cf3ccfbf835ceec8098a9b7"
     },
     "R/assistant/assistant_tools.R": {
-      "checksum": "5218acd8ef206bb898bf4d09df86a6f9"
+      "checksum": "0ac5ecfc7f176fa1034204aebc5294e0"
+    },
+    "R/composite_levels.R": {
+      "checksum": "6caefb449fa6e13af9a70ac3a9e42ea9"
     },
     "R/correspondence/isic_bridge.R": {
       "checksum": "5aa64c589a4963fff21a039619ba24d8"
@@ -2922,37 +2973,73 @@
       "checksum": "f9a81f22478196111370e2c3b999bdc2"
     },
     "R/parallel_search.R": {
-      "checksum": "b9a255a494094587190ad54108e141a2"
+      "checksum": "145709b7c206a54fcc79cd5eb6dc386b"
     },
     "R/registry.R": {
       "checksum": "e83ab4bd5d038013e788269fcf2cacdd"
     },
     "R/repository.R": {
-      "checksum": "80de38f8d89d30de7a69bbd8fef8f2f3"
+      "checksum": "1867c828fcb45533402383e717d01538"
+    },
+    "R/retrieval/retrieval_corpus.R": {
+      "checksum": "2fed046341ff2cc2dfe1e55d1b2dbd4c"
+    },
+    "R/retrieval/retrieval_embedding_provider.R": {
+      "checksum": "6ad5b8339b400658e83b87f76de768bd"
+    },
+    "R/retrieval/retrieval_embeddings.R": {
+      "checksum": "6cb76f2f7e0f66ad080ca0f6a988aa72"
+    },
+    "R/retrieval/retrieval_engine.R": {
+      "checksum": "0968897c70ef504bea59096fa4b88054"
+    },
+    "R/retrieval/retrieval_eval.R": {
+      "checksum": "35cda1894b39eb22bc595536a7c4ab04"
+    },
+    "R/retrieval/retrieval_evidence.R": {
+      "checksum": "9e23c32a2fe1fc16857789ad78e2bf99"
+    },
+    "R/retrieval/retrieval_fuzzy.R": {
+      "checksum": "b29f3f0685e5eda2aba2758272aba5f3"
+    },
+    "R/retrieval/retrieval_ngram.R": {
+      "checksum": "99a49d757cf3a66348ec030fa4929da3"
+    },
+    "R/retrieval/retrieval_normalize.R": {
+      "checksum": "dd466de54893def4d4b6555aa158e893"
     },
     "R/schema.R": {
       "checksum": "7997be60197f02750c93dcd2d3281726"
     },
     "R/search.R": {
-      "checksum": "f749ee9825108e8bbc2026dfd572f9df"
+      "checksum": "3a835d2d9745aac9cc8691d87ea5354b"
     },
     "R/ui/ui_assistant.R": {
-      "checksum": "74765f05620e9bca61d47a8f2eb2b94d"
+      "checksum": "77d999e26df6f48ce9677f6bc04569ac"
     },
     "R/ui/ui_correspondence.R": {
-      "checksum": "b779bfd107c869d808922c80d8368d4f"
+      "checksum": "51d026c9f193a3975dd13f751261abb0"
     },
     "R/ui/ui_details.R": {
-      "checksum": "8d994c6d7c0140b7af6ed120a89e6c17"
+      "checksum": "6a1b231f1d74637ce612213aa3ba7a57"
     },
     "R/ui/ui_dual_search.R": {
-      "checksum": "e386d7b3b6800cdcbb2f8d25a0f3974c"
+      "checksum": "ca73c25d4e577802ca3c662f442592d6"
+    },
+    "R/ui/ui_icons.R": {
+      "checksum": "09f6e6c355b783f7537a8595f710c3c4"
+    },
+    "R/ui/ui_labels.R": {
+      "checksum": "af2f0be5027a3c82b5df873082408a87"
+    },
+    "R/ui/ui_pscc.R": {
+      "checksum": "fa88dc125b164738de309082de1d3b58"
     },
     "R/ui/ui_search.R": {
-      "checksum": "ebc3f2595437aa104eae556510efcd23"
+      "checksum": "ecf846c56667f23de5f57f8631199b6b"
     },
     "R/ui/ui_sources.R": {
-      "checksum": "931436e254aeb0de844b28070913b32f"
+      "checksum": "b2f1bf533e023db71c5e9e3c5ede48f4"
     },
     "README.md": {
       "checksum": "178898d042dd0efbdf73261a865f9c94"
@@ -2964,7 +3051,7 @@
       "checksum": "4d669c3fddcfa4b9b3359f116c0c79e5"
     },
     "scripts/build_pscc_2022.R": {
-      "checksum": "d5799a7535aa1a536e1727cacef21192"
+      "checksum": "582d8641a360bcb1c8393eaabf665726"
     },
     "scripts/build_pscrcs_2025.R": {
       "checksum": "cad39951a707a8b27f84023186510366"
@@ -2980,6 +3067,15 @@
     },
     "scripts/build_ptscs_2025.R": {
       "checksum": "06c587f11ddd209abd57336e8072e4a1"
+    },
+    "scripts/build_retrieval_embeddings.R": {
+      "checksum": "c565aceb4030e8a07a0a260d4ade8058"
+    },
+    "scripts/build_retrieval_ngram_index.R": {
+      "checksum": "79677f1fdb7012039319d48a05a3c954"
+    },
+    "scripts/evaluate_retrieval.R": {
+      "checksum": "14ab4fedb020c02dc79a24ffcdb77ae6"
     },
     "scripts/run_tests.R": {
       "checksum": "a1d0ad84c07b593b11127b23371ecf47"
@@ -3005,6 +3101,9 @@
     "tests/testthat/test-assistant-prompt.R": {
       "checksum": "6cbc1d77076e1d474f70027e15d1fdf3"
     },
+    "tests/testthat/test-assistant-tool-registry.R": {
+      "checksum": "a8b40888d3e121174b0486d0cc66e317"
+    },
     "tests/testthat/test-assistant-tools.R": {
       "checksum": "dbf8bfc6b21612e7d985891c5f2b17b4"
     },
@@ -3026,14 +3125,29 @@
     "tests/testthat/test-correspondence-structural.R": {
       "checksum": "f62cae47a38139e7300c651901d5e9aa"
     },
+    "tests/testthat/test-correspondence-tooltip.R": {
+      "checksum": "ec2e54d6cfc8e3ea3750d21552962983"
+    },
     "tests/testthat/test-curated-psoc-overrides.R": {
       "checksum": "7ddd4fb20e3216d80eb8de98b2b338ff"
     },
+    "tests/testthat/test-design-semantics.R": {
+      "checksum": "68d788929e38ab944dcbf564305873fb"
+    },
+    "tests/testthat/test-dual-search-independence.R": {
+      "checksum": "3a7a9cbcd936fada47d791d593806cca"
+    },
     "tests/testthat/test-parallel-search.R": {
-      "checksum": "fd18799b0c23044bf4512b4a20689d7d"
+      "checksum": "0f16c2e373f04d44a19f7a42b8058175"
     },
     "tests/testthat/test-pscc-2022.R": {
-      "checksum": "e108d183c68b5b755c84910cb3ba5acd"
+      "checksum": "966854db74f335b4854adec767576b50"
+    },
+    "tests/testthat/test-pscc-crossref-fallback.R": {
+      "checksum": "5f50c44e66f6af67c5eeff6284232ece"
+    },
+    "tests/testthat/test-pscc-hierarchy.R": {
+      "checksum": "6a8040f147d6f7e20f170cdd3bd45051"
     },
     "tests/testthat/test-pscrcs-2025.R": {
       "checksum": "dcc8714ef0ff42b60047cca3ca7d838e"
@@ -3051,19 +3165,40 @@
       "checksum": "4e7eb8908b540c65ee7338ddefd5ca12"
     },
     "tests/testthat/test-repository.R": {
-      "checksum": "50bfd50389d28d31c4b6e57717a240f7"
+      "checksum": "1e11621aeda579c5375c09ffec2d5978"
+    },
+    "tests/testthat/test-retrieval-embeddings.R": {
+      "checksum": "d777300084fad95f57bfb59c45e9f640"
+    },
+    "tests/testthat/test-retrieval-eval.R": {
+      "checksum": "414232aa65420436f9944115e043b1ce"
+    },
+    "tests/testthat/test-retrieval-fuzzy.R": {
+      "checksum": "b9623e02d543757ba12645455c2ada60"
+    },
+    "tests/testthat/test-retrieval-integration.R": {
+      "checksum": "cc6bc6908c50bdc1eaa1979001815cd4"
+    },
+    "tests/testthat/test-retrieval-ngram.R": {
+      "checksum": "f5c2255e89c3e241f2510a2f7ded13e9"
     },
     "tests/testthat/test-schema.R": {
       "checksum": "c5d2bd87b97cb6a0f862029ce4db2883"
     },
+    "tests/testthat/test-search-counts.R": {
+      "checksum": "ef4632fea1ccbf811f4e99876b21b7bd"
+    },
     "tests/testthat/test-search.R": {
       "checksum": "94d6a245ce8b0823760205eae90b3850"
+    },
+    "tests/testthat/test-ui-labels.R": {
+      "checksum": "da9f4dd7a8af41b85fe904a89d0c0039"
     },
     "unified-app-primary.dc.html": {
       "checksum": "a0dd32dfddc961862a5c1984e01df1b4"
     },
     "www/app.css": {
-      "checksum": "c12a5c4b9df89f91d52f4fccd51d90d7"
+      "checksum": "0c5a8f7206414f3f562a00e3e522babb"
     },
     "www/Phosphor.woff2": {
       "checksum": "527636c38907af87d10e6b15ac392648"

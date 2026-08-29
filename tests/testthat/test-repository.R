@@ -81,9 +81,20 @@ test_that("search_classification wraps the search engine over live repository da
   expect_true(all(browse$level == "section"))
 
   # No-match query never errors.
-  none <- search_classification("psic", "2026", "zzzzznomatch")
+  #
+  # The query was changed from "zzzzznomatch" to a string with no embedded
+  # word. That original contains "match", and once approximate retrieval
+  # was added it legitimately found "Manufacture of matches" (character
+  # n-gram cosine 0.575) -- correct behaviour for a fuzzy tier, not a
+  # defect, but it made the string a poor stand-in for "no match". Verified
+  # that genuinely unrelated gibberish still returns nothing at all.
+  none <- search_classification("psic", "2026", "qqqxzzvwk")
   expect_equal(nrow(none), 0)
   expect_equal(names(none), CLASSIFICATION_SCHEMA_COLUMNS)
+
+  # The original point of this case -- a no-match query must never error --
+  # holds for the substring-bearing string too, whatever it returns.
+  expect_silent(search_classification("psic", "2026", "zzzzznomatch"))
 })
 
 test_that("search_classification validates system/version/level the same way get_classification does", {

@@ -26,14 +26,16 @@ library(bslib)
 ALL_LEVELS_VALUE <- "__all_levels__"
 ALL_COMPONENTS_VALUE <- "__all_components__"
 
-#' Tab label: Phosphor glyph + visible text.
+#' Tab label: Lucide glyph + visible text.
 #'
 #' The icon is decorative and `aria-hidden`; the visible text is the tab's
 #' accessible name. bslib's navset supplies the role="tab"/aria-selected
-#' semantics around this, which the restyle preserves.
+#' semantics around this, which the restyle preserves. Glyphs are inlined
+#' local SVG (R/ui/ui_icons.R) -- no CDN request and no icon font, so a tab
+#' can never render as a blank square on a restricted network.
 nav_label <- function(icon, text) {
   shiny::tagList(
-    shiny::tags$i(class = paste("ph", icon), `aria-hidden` = "true"),
+    lucide_icon(icon, 18, class = "psa-nav-icon"),
     text
   )
 }
@@ -46,21 +48,29 @@ nav_label <- function(icon, text) {
 
 ui <- bslib::page_navbar(
   title = "Statistical Classifications",
-  # Dark ("nocturne") theme from the approved design. Setting bg/fg/primary
-  # on bs_theme rather than overriding a light Bootstrap in CSS means every
-  # Bootstrap component -- form controls, cards, tables, DT -- inherits a
-  # coherent dark palette instead of needing per-component overrides.
+  # "Subtle Gradient" light theme (HANDOFF-CLAUDE-CODE.md v2.0), which
+  # supersedes the v1.0 Nocturne dark system entirely.
+  #
+  # Setting bg/fg/primary on bs_theme rather than overriding Bootstrap in
+  # CSS is what makes every Bootstrap component -- form controls, cards,
+  # tables, DT -- inherit the palette coherently. It is also why the
+  # dark-to-light inversion has to happen HERE and not only in app.css: a
+  # stylesheet override alone would leave DT, selectize and the navbar
+  # rendering dark chrome under light content.
   theme = bslib::bs_theme(
     version = 5,
-    bg = "#0f1119",
-    fg = "#eef0f7",
-    primary = "#3ec8d0",
-    "body-bg" = "#0f1119",
-    "card-bg" = "#151824",
+    bg = "#ffffff",
+    fg = "#202124",
+    primary = "#54436b",
+    "body-bg" = "#ffffff",
+    "card-bg" = "#ffffff",
+    "border-color" = "#e6e6e6",
+    "link-color" = "#2f5f8f",
+    "link-hover-color" = "#416fa1",
     # System font stack deliberately -- no webfont download, so the app has
     # no third-party runtime dependency and no first-paint font swap.
     base_font = bslib::font_collection(
-      "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"
+      "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"
     )
   ),
   # `id` makes the active tab available server-side as `input$main_nav`,
@@ -81,11 +91,11 @@ ui <- bslib::page_navbar(
   # nav_label() pairs each label with its Phosphor glyph. The icon is
   # aria-hidden -- the visible text is the accessible name, so the tab is
   # never announced as an icon and never relies on the glyph loading.
-  bslib::nav_panel(nav_label("ph-magnifying-glass", "Search"),
+  bslib::nav_panel(nav_label("search", "Search"),
                    value = "search", search_ui()),
-  bslib::nav_panel(nav_label("ph-arrows-left-right", "PSOC + PSIC"),
+  bslib::nav_panel(nav_label("arrow-left-right", "PSOC + PSIC"),
                    value = "dual_search", dual_search_ui()),
-  bslib::nav_panel(nav_label("ph-arrows-split", "Compare Editions"),
+  bslib::nav_panel(nav_label("split", "Compare Editions"),
                    value = "correspondence", correspondence_ui()),
   # RM Assistant. Which panel body is built is decided ONCE at startup from
   # the deployment's provider configuration: a deployment either has a
@@ -94,7 +104,7 @@ ui <- bslib::page_navbar(
   # completely unaffected -- that independence is the whole point, and is
   # asserted by tests/testthat/test-assistant-integration.R.
   bslib::nav_panel(
-    nav_label("ph-sparkle", "RM Assistant"), value = "rm_assistant",
+    nav_label("sparkles", "RM Assistant"), value = "rm_assistant",
     local({
       st <- rm_assistant_status()
       if (isTRUE(st$enabled) && isTRUE(st$available)) {
@@ -104,7 +114,7 @@ ui <- bslib::page_navbar(
       }
     })
   ),
-  bslib::nav_panel(nav_label("ph-info", "Sources"),
+  bslib::nav_panel(nav_label("info", "Sources"),
                    value = "about", shiny::uiOutput("sources_panel")),
   footer = shiny::tags$footer(
     class = "text-muted small p-2 border-top mt-2",
@@ -407,7 +417,21 @@ server <- function(input, output, session) {
       # field, which queries the whole classification repository. Human UAT
       # found the pair confusing. Sorting ("t" table), pagination ("p") and
       # the result-count info line ("i") are all retained.
-      options = list(pageLength = 15, dom = "tip"),
+      #
+      # order = list() (pre-commit retrieval hardening audit, H12): DataTables'
+      # own default is an initial ascending sort on column 0, applied purely
+      # as STRING comparison -- so "833" (a prefix of "8332") sorts before
+      # "8332" regardless of which one the server ranked first. This was
+      # invisible before hybrid retrieval because an exact-code/exact-title
+      # match was always the ONLY row returned; the hybrid tiers can now add
+      # a second, lower-relevance row underneath it, and DT's default sort
+      # was silently displaying that lower-relevance row on top -- exactly
+      # backwards from "exact code/title outranks everything" (core contract
+      # 1-2), even though the server's own `data` was already ordered
+      # correctly. Disabling only the INITIAL sort restores server order on
+      # first paint; `ordering` stays at its default TRUE, so a user can
+      # still click a header to sort interactively.
+      options = list(pageLength = 15, dom = "tip", order = list()),
       class = "stripe hover"
     )
   })
@@ -552,9 +576,15 @@ server <- function(input, output, session) {
       # Same public-label rule as the Search grid (UI-POST-03).
       display$level <- level_display_label(system_id, display$level)
       names(display) <- c("Code", "Label", "Level", "Status")
+      # order = list(): same fix and same reason as the Search results table
+      # (H12) -- this panel is fed by the same hybrid-aware
+      # search_classification_result(), so it carries the identical latent
+      # risk of DT's default string-ascending sort displacing an exact
+      # code/title match beneath a lower-relevance hybrid-tier row.
       DT::datatable(
         display, selection = "single", rownames = FALSE,
-        options = list(pageLength = 10, dom = "tip"), class = "stripe hover"
+        options = list(pageLength = 10, dom = "tip", order = list()),
+        class = "stripe hover"
       )
     })
 

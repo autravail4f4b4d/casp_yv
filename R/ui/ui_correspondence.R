@@ -107,7 +107,7 @@
       `aria-controls` = body_id,
       `aria-describedby` = body_id,
       shiny::tags$span(class = "psa-term-help-term", term),
-      shiny::tags$i(class = "ph ph-question", `aria-hidden` = "true")
+      lucide_icon("circle-help", 14)
     ),
     shiny::tags$div(
       id = body_id,
@@ -228,7 +228,7 @@ correspondence_ui <- function() {
           shiny::tags$span(
             class = "psa-askrm-reserved",
             `aria-hidden` = "true",
-            shiny::tags$i(class = "ph ph-sparkle"),
+            lucide_icon("sparkles", 14),
             "Ask RM to explain this change"
           )
         ),
@@ -307,11 +307,15 @@ correspondence_detail_ui <- function(row) {
 
   # Cardinality drives the arrow glyph so a split/merge is visually
   # distinguishable from a one-to-one at a glance.
+  # Lucide glyphs per handoff §12.3: `split` for a split, `merge` for a
+  # merge, `arrow-right` for a one-to-one reclassification. Rendered in
+  # --color-primary, NEVER in an error colour: a split or a merge is a
+  # normal classification outcome, not a failure (§12.3, §12.6).
   arrow_icon <- switch(row$relation_type,
-    split   = "ph-arrows-split",
-    merged  = "ph-arrows-merge",
-    complex = "ph-arrows-split",
-    "ph-arrows-left-right"
+    split   = "split",
+    merged  = "merge",
+    complex = "split",
+    "arrow-left-right"
   )
 
   needs_statistical_warning <- row$relation_type %in% c("split", "merged", "complex")
@@ -323,9 +327,9 @@ correspondence_detail_ui <- function(row) {
         row$from_code, row$from_label, row$from_level, row$from_version,
         "(no prior counterpart — new in this edition)"
       ),
-      shiny::tags$i(
-        class = paste("ph", arrow_icon, "psa-corr-arrow"),
-        `aria-hidden` = "true"
+      shiny::tags$span(
+        class = "psa-corr-arrow",
+        lucide_icon(arrow_icon, 20)
       ),
       .correspondence_side(
         row$to_code, row$to_label, row$to_level, row$to_version,
@@ -355,10 +359,17 @@ correspondence_detail_ui <- function(row) {
     # statistical-safety warning for every split / merged / complex
     # relationship.
     if (needs_statistical_warning) {
+      # Handoff §12.3, and this is a requirement rather than a preference:
+      # a split, merge or complex relationship is a NORMAL, expected
+      # classification outcome, not an error. The notice is a
+      # methodological instruction to a statistician, not a failure report,
+      # so it takes the neutral/plum treatment and reuses the relationship
+      # glyph. triangle-alert and every red/ochre/amber value are
+      # explicitly forbidden here.
       shiny::tags$div(
         class = "psa-stat-warning",
         role = "note",
-        shiny::tags$i(class = "ph ph-warning", `aria-hidden` = "true"),
+        lucide_icon(arrow_icon, 17),
         CORRESPONDENCE_STATISTICAL_WARNING
       )
     }

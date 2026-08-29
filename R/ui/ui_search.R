@@ -38,7 +38,7 @@ search_ui <- function() {
       shiny::tags$h2(class = "visually-hidden", "Search classifications"),
       shiny::tags$div(
         class = "psa-hero-field",
-        shiny::tags$i(class = "ph ph-magnifying-glass", `aria-hidden` = "true"),
+        lucide_icon("search", 20),
         shiny::textInput(
           "classification_query",
           "Search a classification code or keyword",
@@ -126,7 +126,7 @@ search_ui <- function() {
             shiny::tags$span(
               class = "psa-askrm-reserved",
               `aria-hidden` = "true",
-              shiny::tags$i(class = "ph ph-sparkle"),
+              lucide_icon("sparkles", 14),
               "Ask RM about this"
             )
           ),

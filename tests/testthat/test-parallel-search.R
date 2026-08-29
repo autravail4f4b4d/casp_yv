@@ -27,9 +27,11 @@ test_that("reuses the existing canonical ranking -- exact-code and label ranking
 })
 
 test_that("a no-result query on one system does not suppress the other", {
-  # A query engineered to hit in PSIC (a real PSIC label fragment) but be
-  # nonsense for PSOC.
-  res <- search_parallel_classifications("zzzzznomatchzzzzz")
+  # Gibberish for both systems. The string no longer embeds "match": with
+  # approximate retrieval in place, "...nomatch..." legitimately finds
+  # "Manufacture of matches" in PSIC, which made it a poor stand-in for
+  # "no result" even though the isolation property under test is unchanged.
+  res <- search_parallel_classifications("qqqxzzvwkjjj")
   expect_equal(nrow(res$results$psoc), 0)
   expect_equal(nrow(res$results$psic), 0)
   expect_equal(names(res$results$psoc), CLASSIFICATION_SCHEMA_COLUMNS)

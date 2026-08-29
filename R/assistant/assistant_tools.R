@@ -663,7 +663,20 @@ rm_assistant_tools <- function() {
   }
   annotations <- .assistant_read_only_annotations()
 
-  systems_enum <- c("psgc", "psic", "psoc", "psced", "pcoicop", "pcpc", "psccs")
+  # DERIVED FROM THE CANONICAL REGISTRY, never restated by hand.
+  #
+  # This was previously a literal seven-element list written when the app
+  # carried seven systems. Three systems were added afterwards -- pscc
+  # (commodities), ptscs (tourism) and pscrcs (creative) -- and the enum was
+  # never updated, so `ellmer`'s schema actively FORBADE the model from
+  # naming them. RM could not answer "What is PSCC code 0101.29.00-001?" or
+  # "What are the components of PTSCS?" at all: the failure was in the tool
+  # contract, not in the model or the data.
+  #
+  # Deriving the enum removes the whole class of bug -- registering a new
+  # system now exposes it to RM automatically, and the two enums below can
+  # never drift apart from each other or from the repository.
+  systems_enum <- classification_registry()$id
 
   list(
     ellmer::tool(
@@ -684,7 +697,16 @@ rm_assistant_tools <- function() {
       arguments = list(
         system = ellmer::type_enum(
           values = systems_enum,
-          description = "Classification system id. psoc = occupations, psic = industries/economic activity, psgc = geography, psced = education, pcoicop/pcpc/psccs = products and consumption."
+          description = paste(
+            "Classification system id.",
+            "psoc = occupations (what a person does);",
+            "psic = industries / economic activity of an establishment;",
+            "psgc = geography; psced = education;",
+            "pcoicop and pcpc = consumption and products;",
+            "pscc = traded commodities (Philippine Standard Commodity Classification);",
+            "psccs = CRIME statistics -- a completely different system from pscc, never interchange them;",
+            "ptscs = tourism; pscrcs = creative economy."
+          )
         ),
         query = ellmer::type_string(
           "Search text: an occupation title, activity description, product name or code fragment."

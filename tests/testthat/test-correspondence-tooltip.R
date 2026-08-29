@@ -114,10 +114,32 @@ test_that("help content is programmatically associated with its trigger", {
 })
 
 test_that("decorative icons in the help are hidden from assistive technology", {
+  # Asserted against the BEHAVIOUR, not the icon vendor: the help carries
+  # one decorative glyph per term and none of them may reach the
+  # accessibility tree. (The icon set moved from a Phosphor webfont <i> to
+  # inline Lucide SVG in the Subtle Gradient pass; the requirement that
+  # every decorative glyph is aria-hidden is unchanged, so the test now
+  # matches any icon element rather than one vendor's class name.)
   html <- .corr_help_html()
-  icons <- regmatches(html, gregexpr('<i class="ph ph-question"[^>]*>', html))[[1]]
-  expect_equal(length(icons), 3L)
+
+  icons <- regmatches(html, gregexpr("<svg[^>]*>|<i [^>]*>", html))[[1]]
+
+  # One glyph per term, at minimum. The rendered region also carries the
+  # reserved "Ask RM" sparkle, which is decorative in exactly the same way,
+  # so the count is a floor rather than an equality -- what actually
+  # matters is that EVERY icon here is hidden, not how many there are.
+  expect_gte(length(icons), 3L)
   for (i in icons) expect_match(i, 'aria-hidden="true"', fixed = TRUE)
+
+  # And nothing decorative slipped in with a label or a tab stop.
+  for (i in icons) {
+    expect_false(grepl("aria-label", i, fixed = TRUE))
+    expect_false(grepl("tabindex", i, fixed = TRUE))
+  }
+
+  # The three terms themselves are still each present and focusable.
+  triggers <- regmatches(html, gregexpr("<summary[^>]*>", html))[[1]]
+  expect_equal(length(triggers), 3L)
 })
 
 test_that("the DT output is still present and not wrapped", {
