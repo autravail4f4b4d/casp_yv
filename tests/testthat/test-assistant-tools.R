@@ -538,13 +538,13 @@ test_that("the synonym stub is unavailable and never fabricates candidates", {
 # Registered tool surface
 # ---------------------------------------------------------------------------
 
-test_that("rm_assistant_tools() registers exactly the six read-only tools", {
+test_that("rm_assistant_tools() registers exactly the eight read-only tools", {
   skip_if_not_installed("ellmer")
 
   tools <- rm_assistant_tools()
 
   expect_type(tools, "list")
-  expect_equal(length(tools), 6L)
+  expect_equal(length(tools), 8L)
   expect_true(all(vapply(
     tools, function(t) inherits(t, "ellmer::ToolDef"), logical(1)
   )))
@@ -562,7 +562,9 @@ test_that("rm_assistant_tools() registers exactly the six read-only tools", {
     "assistant_classification_registry",
     "assistant_search_common_pairings",
     "assistant_get_psic_rule",
-    "assistant_get_classification_system_info"
+    "assistant_get_classification_system_info",
+    "assistant_code_occupation_and_activity",
+    "assistant_coding_level"
   ))
 })
 

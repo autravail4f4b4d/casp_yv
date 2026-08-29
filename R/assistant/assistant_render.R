@@ -57,7 +57,9 @@ ASSISTANT_INTERNAL_TOOL_NAME_LITERALS <- c(
   "assistant_classification_registry",
   "assistant_search_common_pairings",
   "assistant_get_psic_rule",
-  "assistant_get_classification_system_info"
+  "assistant_get_classification_system_info",
+  "assistant_code_occupation_and_activity",
+  "assistant_coding_level"
 )
 
 #' Render one ellmer Content chunk exactly as the live chat will.

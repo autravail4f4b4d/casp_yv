@@ -657,7 +657,9 @@ RM_ASSISTANT_TOOL_NAMES <- c(
   "assistant_classification_registry",
   "assistant_search_common_pairings",
   "assistant_get_psic_rule",
-  "assistant_get_classification_system_info"
+  "assistant_get_classification_system_info",
+  "assistant_code_occupation_and_activity",
+  "assistant_coding_level"
 )
 
 .assistant_read_only_annotations <- function() {
@@ -885,6 +887,88 @@ rm_assistant_tools <- function() {
         )
       ),
       name = "assistant_get_classification_system_info",
+      annotations = annotations
+    ),
+
+    ellmer::tool(
+      function(occupation = NULL, establishment_activity = NULL) {
+        assistant_code_occupation_and_activity(
+          occupation = occupation,
+          establishment_activity = establishment_activity
+        )
+      },
+      paste(
+        "THE tool for coding a person's occupation and/or their",
+        "establishment's economic activity. Use it whenever the user asks",
+        "for a PSOC and a PSIC together, or describes a job in a workplace.",
+        "You MUST decompose the user's sentence into two separate slots",
+        "before calling: 'occupation' is what the PERSON does (e.g.",
+        "'nurse', 'corn farmer', 'secondary education teacher');",
+        "'establishment_activity' is what the ESTABLISHMENT mainly does",
+        "(e.g. 'private hospital', 'growing of corn', 'private general",
+        "secondary education'). Never pass the user's whole sentence to",
+        "both - that retrieves nothing.",
+        "OMIT establishment_activity entirely when the user has not said",
+        "what the establishment does; the tool will return a real-world",
+        "clarification question to ask instead of guessing a PSIC.",
+        "Results are already canonically verified, hierarchy-annotated and",
+        "level-labelled: prefer the candidate whose coding_role is",
+        "'detailed', and report PSOC and PSIC as two separate answers."
+      ),
+      arguments = list(
+        occupation = ellmer::type_string(
+          paste(
+            "What the PERSON does - the occupation or main duties only.",
+            "Strip out the workplace. Use official-sounding wording when",
+            "you can (e.g. 'secondary education teacher' rather than",
+            "'teacher in a private high school')."
+          ),
+          required = FALSE
+        ),
+        establishment_activity = ellmer::type_string(
+          paste(
+            "What the ESTABLISHMENT mainly does - its principal economic",
+            "activity, product or service, including public/private where",
+            "the user said it. OMIT this argument entirely if the user did",
+            "not say; do not guess it from the occupation."
+          ),
+          required = FALSE
+        )
+      ),
+      name = "assistant_code_occupation_and_activity",
+      annotations = annotations
+    ),
+
+    ellmer::tool(
+      function(system, code, version = NULL) {
+        assistant_coding_level(system = system, version = version, code = code)
+      },
+      paste(
+        "Report the classification LEVEL and coding role of one verified",
+        "code: its canonical level, its depth, and whether it is a",
+        "'detailed' operational coding level or a broader 'aggregate'",
+        "hierarchy code.",
+        "Use it when the user asks about a specific code (e.g. 'What is",
+        "PSOC 833?') so you can state the level faithfully.",
+        "For PSOC: 1 digit = Major Group, 2 = Sub-major Group, 3 = Minor",
+        "Group, 4 = Unit Group, and the Unit Group is the detailed coding",
+        "target. Never describe an aggregate code as the detailed",
+        "occupation coding result."
+      ),
+      arguments = list(
+        system = ellmer::type_enum(
+          values = systems_enum,
+          description = "Classification system id."
+        ),
+        code = ellmer::type_string(
+          "The exact code as a string, keeping leading zeros."
+        ),
+        version = ellmer::type_string(
+          "Optional edition. Omit to use the current edition.",
+          required = FALSE
+        )
+      ),
+      name = "assistant_coding_level",
       annotations = annotations
     )
   )

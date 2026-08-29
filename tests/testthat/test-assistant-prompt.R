@@ -82,13 +82,13 @@ test_that("the RM system prompt carries the PSIC vague-term probing guidance", {
   expect_contains_ci(txt, "contractor")
   expect_contains_ci(txt, "general services")
   expect_contains_ci(txt, "probing question")
-  expect_contains_ci(txt, "business name or physical appearance")
+  expect_contains_ci(txt, "business name or appearance")
 })
 
 test_that("the RM system prompt forbids inferring PSIC from occupation", {
   expect_contains_ci(
     prompt_txt(),
-    "do not infer the employer's PSIC from the worker's occupation"
+    "do not infer the employer's PSIC from the occupation alone"
   )
 })
 
@@ -137,19 +137,47 @@ test_that("the RM system prompt states the hierarchy contract by name", {
   txt <- prompt_txt()
   expect_contains_ci(txt, "hierarchy_role")
   expect_contains_ci(txt, "most_specific")
-  expect_contains_ci(txt, "do not present an ancestor as an equal answer")
+  expect_contains_ci(txt, "never as an equally valid answer")
 })
 
 test_that("the RM system prompt states the ambiguity/clarification contract by name", {
   txt <- prompt_txt()
   expect_contains_ci(txt, "clarifying_question")
   expect_contains_ci(txt, "clarification_options")
-  expect_contains_ci(txt, "do not invent additional options")
+  expect_contains_ci(txt, "never invent options and never silently pick one")
 })
 
 test_that("the RM system prompt forbids naming internal tools by their function names", {
   txt <- prompt_txt()
   expect_contains_ci(txt, "never mention a tool or function by its internal name")
+})
+
+test_that("the RM system prompt states the contextual PSOC/PSIC decomposition contract", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "psoc codes the occupation")
+  expect_contains_ci(txt, "establishment's principal economic activity")
+  expect_contains_ci(txt, "two separate slots")
+  expect_contains_ci(txt, "never pass the user's whole sentence to both")
+  expect_contains_ci(txt, "no universal \"corresponding psic\"")
+})
+
+test_that("the RM system prompt states the PSOC level ladder and detailed target", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "1 digit = Major Group")
+  expect_contains_ci(txt, "4 = Unit Group")
+  expect_contains_ci(txt, "coding_role")
+  expect_contains_ci(txt, "aggregate hierarchy codes")
+})
+
+test_that("the RM system prompt forbids surfacing contextually implausible candidates", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "not contextually plausible")
+  expect_contains_ci(txt, "not even with a caveat")
+})
+
+test_that("the RM system prompt keeps common pairings non-authoritative", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "never establishes a rule that occupation X always means PSIC Y")
 })
 
 # --- rm_system_prompt() ----------------------------------------------------

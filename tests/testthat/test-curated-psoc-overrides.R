@@ -36,7 +36,14 @@ APPROVED_PSOC_MAPPINGS <- list(
   # confidence was raised.
   list(occupation = "Truck Driver",    psoc = "8332",
        label = "HEAVY TRUCK AND LORRY DRIVERS",
-       kind = "confirmation", workbook_psoc = "8332")
+       kind = "confirmation", workbook_psoc = "8332"),
+  # PSA survey coding guidance codes the BHW to community health work
+  # rather than the institution-based patient-care assistance the
+  # workbook chose. "Barangay health aide" is a DIFFERENT occupation term
+  # and stays at 5321; the two must not be merged.
+  list(occupation = "Barangay Health Worker (BHW)", psoc = "3253",
+       label = "COMMUNITY HEALTH WORKERS",
+       kind = "correction", workbook_psoc = "5321")
 )
 
 pairing_row <- function(occupation) {
