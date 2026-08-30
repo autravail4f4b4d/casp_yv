@@ -144,6 +144,36 @@ test_that("a refused description blocks PSIC and asks what it actually does", {
   expect_false(grepl("PSIC|which code", r$clarification_question, ignore.case = TRUE))
 })
 
+test_that("a government employer is not mistaken for a manpower arrangement (regression)", {
+  # Measured live: "statistician in a national government agency" asked
+  # WHO PAYS THE WAGE, because the bare substring "agency" appeared in
+  # "national government AGENCY". Spec 47: do not invoke outsourcing
+  # wage-payer logic unless outsourcing evidence exists.
+  expect_false(assistant_activity_mentions_outsourcing("national government agency"))
+  expect_false(assistant_activity_mentions_outsourcing("government agency"))
+  expect_false(assistant_activity_mentions_outsourcing("city government"))
+  expect_false(assistant_activity_mentions_outsourcing("Philippine Statistics Authority"))
+  expect_false(assistant_activity_mentions_outsourcing("a regional government office"))
+
+  p <- assistant_coding_service("statistician", "national government agency")
+  expect_false(identical(p$clarification$missing_slot, "wage_payer"))
+  expect_identical(p$occupation$selected_code, "2122")
+})
+
+test_that("real outsourcing evidence still triggers the wage-payer rule", {
+  expect_true(assistant_activity_mentions_outsourcing("manpower agency at a hospital"))
+  expect_true(assistant_activity_mentions_outsourcing(
+    "deployed at a hospital through a manpower agency"))
+  expect_true(assistant_activity_mentions_outsourcing("outsourced to a hospital"))
+  expect_true(assistant_activity_mentions_outsourcing("hired through a recruitment agency"))
+  expect_true(assistant_activity_mentions_outsourcing("job order worker"))
+  # Even inside a government workplace, a genuine manpower arrangement
+  # still matches a strong hint -- the government suppression above cannot
+  # hide a real outsourcing case.
+  expect_true(assistant_activity_mentions_outsourcing(
+    "deployed at the city government through a manpower agency"))
+})
+
 test_that("an outsourcing arrangement blocks PSIC until the payer is known", {
   for (a in c("manpower agency", "outsourcing agency", "job order at a city hall")) {
     r <- assistant_code_occupation_and_activity("carpenter", a)

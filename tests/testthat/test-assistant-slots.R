@@ -20,18 +20,57 @@ test_that("an unknown phrase expands to itself only, never to something invented
 
 test_that("the controlled vocabulary maps words to words, never to codes", {
   # A code-shaped expansion would move authority out of the canonical
-  # repository, which the specification forbids outright.
-  all_targets <- unlist(ASSISTANT_QUERY_EXPANSIONS, use.names = FALSE)
+  # repository, which the specification forbids outright. Applies to BOTH
+  # tables -- occupation wording and establishment-activity wording.
+  all_targets <- unlist(c(ASSISTANT_QUERY_EXPANSIONS, ASSISTANT_ACTIVITY_EXPANSIONS),
+                        use.names = FALSE)
   expect_false(any(grepl("^[0-9]", all_targets)))
   expect_false(any(grepl("^[A-Z]$", all_targets)))
 })
 
-test_that("no expansion maps an occupation to an industry activity", {
+test_that("no OCCUPATION expansion maps to an industry activity", {
   # Guards the "no giant occupation -> industry lookup table" rule: an
-  # expansion target must never be phrased as an establishment activity.
+  # occupation expansion target must never be phrased as an establishment
+  # activity. Establishment-activity wording lives in a separate table
+  # (checked below), so this rule is now structural -- an entry can only
+  # break it by being placed in the wrong table.
   all_targets <- unlist(ASSISTANT_QUERY_EXPANSIONS, use.names = FALSE)
-  expect_false(any(grepl("activities of |manufacture of |public administration",
+  expect_false(any(grepl("activities of |manufacture of |public administration|growing of ",
                          all_targets, ignore.case = TRUE)))
+})
+
+test_that("the activity table holds establishment wording only, never an occupation title", {
+  # The mirror rule. An occupation title in the ACTIVITY table would
+  # reintroduce occupation -> industry inference by the back door.
+  occupation_suffixes <- "\\b(farmer|driver|teacher|nurse|worker|clerk|agent|seller|vendor|engineer|carpenter|janitor|aide|officer|administrator|statistician)s?\\b"
+  keys <- names(ASSISTANT_ACTIVITY_EXPANSIONS)
+  offenders <- keys[grepl(occupation_suffixes, keys, ignore.case = TRUE)]
+  expect_identical(offenders, character(0))
+
+  targets <- unlist(ASSISTANT_ACTIVITY_EXPANSIONS, use.names = FALSE)
+  bad_targets <- targets[grepl(occupation_suffixes, targets, ignore.case = TRUE)]
+  expect_identical(bad_targets, character(0))
+})
+
+test_that("the two expansion tables do not define the same key twice", {
+  expect_identical(
+    intersect(names(ASSISTANT_QUERY_EXPANSIONS), names(ASSISTANT_ACTIVITY_EXPANSIONS)),
+    character(0)
+  )
+})
+
+test_that("a multi-word key expands inside a longer phrase, not only as the whole phrase", {
+  # The measured recall hole: "high school" -> "secondary education" had
+  # existed for milestones but only ever fired on an exact match, so
+  # "teacher in a private high school" never got it and the PSIC slot
+  # could not reach private secondary education at all.
+  out <- assistant_expand_query("private high school")
+  expect_true("secondary education" %in% out)
+  expect_identical(out[[1L]], "private high school")
+
+  expect_true("growing of corn" %in% assistant_expand_query("corn farming in their own farm"))
+  expect_true("public administration local government" %in%
+                assistant_expand_query("works at the city government"))
 })
 
 test_that("supplying an establishment activity means no clarification is needed", {

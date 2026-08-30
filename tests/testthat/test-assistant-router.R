@@ -122,3 +122,102 @@ test_that("a system question supersedes a pending question", {
   expect_identical(r$route, "system_information")
   expect_false(r$is_clarification_reply)
 })
+
+# --- multi-input routing (W3, spec 25/26) ----------------------------------
+#
+# The live defect: this exact paste routed as ONE contextual_coding request
+# and collapsed to a single answer, because the router normalises
+# whitespace before routing so the newlines were gone by then.
+
+.router_batch_six <- paste(
+  c("grab taxi driver psoc",
+    "food panda bicycle driver psoc",
+    "vulcanizer psoc",
+    "online seller psoc",
+    "data scientist psoc",
+    "esports player psoc"),
+  collapse = "\n"
+)
+
+test_that("six independent requests in one turn route as a batch, not one request", {
+  r <- assistant_route_request(.router_batch_six)
+  expect_identical(r$route, "batch_contextual_coding")
+  expect_length(r$items, 6L)
+  expect_identical(
+    vapply(r$items, function(it) it$text, character(1)),
+    c("grab taxi driver psoc", "food panda bicycle driver psoc",
+      "vulcanizer psoc", "online seller psoc",
+      "data scientist psoc", "esports player psoc")
+  )
+  # Each item carries its own systems; the turn's are the union.
+  for (it in r$items) expect_identical(it$requested_systems, "psoc")
+  expect_identical(r$requested_systems, "psoc")
+})
+
+test_that("the batch route is part of the declared taxonomy", {
+  expect_true("batch_contextual_coding" %in% ASSISTANT_ROUTES)
+  expect_true(assistant_route_request(.router_batch_six)$route %in% ASSISTANT_ROUTES)
+})
+
+test_that("the batch route is a coding route and is never wider than coding", {
+  expect_true(assistant_route_is_coding("batch_contextual_coding"))
+  expect_true(assistant_route_is_coding("contextual_coding"))
+  expect_false(assistant_route_is_coding("general_search"))
+  expect_false(assistant_route_is_coding("exact_code_lookup"))
+  expect_false(assistant_route_is_coding(NULL))
+
+  # A batch must not unlock a single tool the coding route does not have.
+  batch_tools <- assistant_route_tool_names("batch_contextual_coding")
+  expect_setequal(batch_tools, assistant_route_tool_names("contextual_coding"))
+  expect_false("assistant_search_classification" %in% batch_tools)
+  expect_false("assistant_search_common_pairings" %in% batch_tools)
+  expect_false("assistant_get_classification_entry" %in% batch_tools)
+})
+
+test_that("single-request routing is unchanged field-for-field by batch support", {
+  # No `items` field, no batch bookkeeping, on any non-batch route.
+  for (q in c("carpenter psoc psic", "PSOC 833", "What is PSCCS?", "hello",
+              "teacher in a private high school psoc psic")) {
+    r <- assistant_route_request(q)
+    expect_identical(names(r),
+                     c("route", "requested_systems", "code_tokens",
+                       "is_clarification_reply", "text"), info = q)
+    expect_null(r$items, info = q)
+  }
+})
+
+test_that("a multi-line turn that is not N coding requests routes exactly as before", {
+  expect_identical(
+    assistant_route_request("teacher in a private\nhigh school psoc psic")$route,
+    "contextual_coding"
+  )
+  expect_identical(
+    assistant_route_request("vulcanizer psoc\nthanks so much for the help")$route,
+    "contextual_coding"
+  )
+})
+
+test_that("a clarification reply is NEVER treated as a batch", {
+  pending <- list(active = TRUE, missing_slot = "establishment_activity")
+  # Even a reply that itself looks like several coding lines stays a reply:
+  # the pending guard returns before batch detection is reached.
+  r <- assistant_route_request("residential construction psoc\nschool building psoc",
+                               pending = pending)
+  expect_identical(r$route, "contextual_coding")
+  expect_true(r$is_clarification_reply)
+  expect_null(r$items)
+
+  r2 <- assistant_route_request(.router_batch_six, pending = pending)
+  expect_identical(r2$route, "contextual_coding")
+  expect_true(r2$is_clarification_reply)
+  expect_null(r2$items)
+})
+
+test_that("batch routing is deterministic across repeated calls", {
+  routes <- vapply(1:20, function(i) assistant_route_request(.router_batch_six)$route,
+                   character(1))
+  expect_length(unique(routes), 1L)
+  counts <- vapply(1:20, function(i) length(assistant_route_request(.router_batch_six)$items),
+                   numeric(1))
+  expect_length(unique(counts), 1L)
+})

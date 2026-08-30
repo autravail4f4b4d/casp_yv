@@ -139,6 +139,48 @@ assistant_render_coding_result <- function(packet) {
   paste(trimws(paste(out, collapse = "\n")), collapse = "\n")
 }
 
+#' Render a BATCH of independently-resolved coding requests (spec 28).
+#'
+#' One block per request, each labelled with the user's own wording, so a
+#' six-line batch produces six independent answers instead of the single
+#' collapsed one the live build produced (measured: all six lines returned
+#' 3424 ESPORTS PLAYERS AND COACHES). Purely deterministic -- every code,
+#' label, level, edition and status comes from the per-item packet, never
+#' from generated prose.
+#'
+#' @param resolved list of `list(label, packet)` for items that resolved.
+#' @param unresolved list of `list(label, packet)` still needing an answer.
+#'
+#' @return character(1) markdown.
+assistant_render_batch_results <- function(resolved = list(), unresolved = list()) {
+  out <- character(0)
+
+  for (item in resolved) {
+    heading <- .assistant_scalar_chr(item$label)
+    if (!is.null(heading)) out <- c(out, sprintf("### %s", heading), "")
+    out <- c(out, assistant_render_coding_result(item$packet), "")
+  }
+
+  if (length(unresolved) > 0L) {
+    for (item in unresolved) {
+      heading <- .assistant_scalar_chr(item$label)
+      if (!is.null(heading)) out <- c(out, sprintf("### %s", heading), "")
+      cl <- item$packet$clarification
+      if (!is.null(cl) && !is.na(cl$missing_slot)) {
+        # Each unresolved item carries its OWN question. None of them is
+        # promoted into session pending state unless it is the only one
+        # (assistant_turn_finalize_batch), so answering one can never be
+        # misread as answering another.
+        out <- c(out, cl$question, "")
+      } else {
+        out <- c(out, assistant_render_coding_result(item$packet), "")
+      }
+    }
+  }
+
+  paste(trimws(paste(out, collapse = "\n")), collapse = "\n")
+}
+
 #' Apply the guard: return the model's text when it is safe, otherwise the
 #' deterministic rendering.
 #'

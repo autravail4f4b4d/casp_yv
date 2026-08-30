@@ -31,11 +31,26 @@
 ASSISTANT_ROUTES <- c(
   "exact_code_lookup",
   "contextual_coding",
+  "batch_contextual_coding",
   "system_information",
   "edition_comparison",
   "general_search",
   "non_classification"
 )
+
+# Routes that are coding requests. `batch_contextual_coding` is a coding
+# route in every respect -- it is contextual_coding applied N times -- and
+# MUST be treated as at least as restrictive as contextual_coding wherever
+# a route is checked. See `assistant_turn_set_route()`, which canonicalises
+# it so the existing tool-body interlock, the render suppression and the
+# validate-then-append output guard all stay engaged for a batch turn.
+ASSISTANT_CODING_ROUTES <- c("contextual_coding", "batch_contextual_coding")
+
+#' Is this route a coding route (single or batch)?
+assistant_route_is_coding <- function(route) {
+  r <- .assistant_scalar_chr(route)
+  !is.null(r) && r %in% ASSISTANT_CODING_ROUTES
+}
 
 # System tokens the user might name, mapped to registry ids. Derived from
 # the registry at call time so a newly registered system routes correctly
@@ -110,6 +125,11 @@ assistant_router_requested_systems <- function(text) {
 #'
 #' @return list(route, requested_systems, code_tokens, is_clarification_reply,
 #'   text). Never errors.
+#'
+#'   On the batch route the result additionally carries `items` (see
+#'   `assistant_batch_parse()`), `batch_truncated` and `batch_dropped`.
+#'   Those fields are ABSENT -- not NULL-valued -- for every other route, so
+#'   single-request results are unchanged field-for-field.
 assistant_route_request <- function(text, pending = NULL) {
   raw <- .assistant_scalar_chr(text)
   out <- list(
@@ -141,6 +161,31 @@ assistant_route_request <- function(text, pending = NULL) {
       out$is_clarification_reply <- TRUE
       return(out)
     }
+  }
+
+  # MULTI-INPUT (W3, spec 25/26). Checked AFTER the pending-clarification
+  # guard above, so a clarification reply can never be read as a batch even
+  # if the user answers on several lines -- the guard has already returned.
+  # Checked BEFORE every single-request branch, because those branches
+  # operate on `q`, in which the line breaks have already been collapsed to
+  # spaces; that collapse is what made six requests look like one.
+  #
+  # `assistant_batch_parse()` short-circuits on any turn without a line
+  # break, so nothing below this point changes for a one-line request.
+  batch <- assistant_batch_parse(raw)
+  if (isTRUE(batch$is_batch)) {
+    out$route <- "batch_contextual_coding"
+    out$items <- batch$items
+    out$batch_truncated <- batch$truncated
+    out$batch_dropped <- batch$dropped
+    # The turn-level requested systems are the union of the items', so the
+    # session's system authorisation (H3) is wide enough for every item and
+    # no wider.
+    out$requested_systems <- unique(unlist(
+      lapply(batch$items, function(it) it$requested_systems)
+    ))
+    if (is.null(out$requested_systems)) out$requested_systems <- character(0)
+    return(out)
   }
 
   if (grepl(.ASSISTANT_NON_CLASSIFICATION, q)) {
@@ -183,6 +228,16 @@ assistant_route_request <- function(text, pending = NULL) {
 # bypass that produced the live failures cannot be expressed.
 ASSISTANT_ROUTE_TOOLS <- list(
   contextual_coding = c(
+    "assistant_code_occupation_and_activity",
+    "assistant_get_psic_rule",
+    "assistant_coding_level"
+  ),
+  # A batch is N coding requests, so it gets EXACTLY the coding surface --
+  # never a wider one. Defined explicitly rather than by reference so a
+  # future widening of one cannot silently widen the other, and so
+  # app.R's `assistant_tools_for_route(routed$route, ...)` resolves the
+  # batch route to a real tool set instead of failing closed to none.
+  batch_contextual_coding = c(
     "assistant_code_occupation_and_activity",
     "assistant_get_psic_rule",
     "assistant_coding_level"

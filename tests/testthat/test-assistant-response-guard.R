@@ -123,3 +123,52 @@ test_that("the fallback rendering itself always passes the guard", {
                 info = paste(unlist(args), collapse = " / "))
   }
 })
+
+# --- batch rendering (spec 28) ---------------------------------------------
+
+.batch_fixture <- function() {
+  batch <- paste(c("grab taxi driver psoc", "food panda bicycle driver psoc",
+                   "vulcanizer psoc", "online seller psoc",
+                   "data scientist psoc", "esports player psoc"),
+                 collapse = "\n")
+  st <- assistant_new_turn_state()
+  routed <- assistant_route_request(batch)
+  assistant_turn_set_route(st, routed$route)
+  assistant_turn_set_requested_systems(st, routed$requested_systems)
+  assistant_turn_begin_batch(st, length(routed$items))
+  packets <- list()
+  for (it in routed$items) {
+    args <- assistant_batch_item_args(it)
+    pkt <- do.call(assistant_coding_service, args)
+    packets[[length(packets) + 1L]] <- pkt
+    assistant_turn_record_batch_item(st, it, pkt,
+                                     occupation = args$occupation,
+                                     establishment_activity = args$establishment_activity,
+                                     wage_payer = args$wage_payer)
+  }
+  list(state = st, result = assistant_turn_finalize_batch(st), packets = packets)
+}
+
+test_that("a batch renders one independent block per request, not one collapsed answer", {
+  fx <- .batch_fixture()
+  txt <- assistant_render_batch_results(fx$result$resolved, fx$result$unresolved)
+
+  # Every expected code appears exactly where spec 49 says it should.
+  for (code in c("8325", "9335", "8141", "5247", "2124", "3424")) {
+    expect_true(grepl(code, txt, fixed = TRUE), info = code)
+  }
+  # Six separate headings, so nothing was collapsed.
+  headings <- gregexpr("(^|\n)### ", txt)[[1L]]
+  expect_equal(length(headings[headings > 0L]), 6L)
+})
+
+test_that("batch rendering never emits a code outside the merged allowed set", {
+  fx <- .batch_fixture()
+  merged <- assistant_batch_merge_packets(fx$packets)
+  txt <- assistant_render_batch_results(fx$result$resolved, fx$result$unresolved)
+  expect_true(assistant_guard_check(txt, merged)$ok)
+})
+
+test_that("an empty batch renders nothing rather than erroring", {
+  expect_identical(assistant_render_batch_results(list(), list()), "")
+})

@@ -112,6 +112,91 @@ ASSISTANT_QUERY_EXPANSIONS <- list(
   "guwardya"               = c("security guard")
 )
 
+# ESTABLISHMENT-ACTIVITY wording, kept in a SEPARATE table on purpose.
+#
+# The table above maps occupation wording to occupation wording. This one
+# maps establishment/activity wording to establishment/activity wording.
+# Keeping them apart is what makes "no expansion maps an occupation to an
+# industry activity" a structural property that a test can check, rather
+# than a convention a future edit could quietly break: an entry can only
+# violate the rule by being put in the wrong table, and each table is
+# tested for the kind of key it is allowed to hold.
+#
+# Both tables are consulted by `assistant_expand_query()`, which is called
+# per SLOT -- so an activity expansion only ever widens an activity search.
+# No entry here maps to a code; every target is official activity wording
+# that still goes through ordinary retrieval, the context gate, the
+# compatibility gate and canonical verification.
+ASSISTANT_ACTIVITY_EXPANSIONS <- list(
+  # --- Agriculture activity wording (spec 23) ---------------------------
+  #
+  # PSA titles are gerunds of the ACT ("Growing of corn", "Growing of
+  # rice"); users name the crop and the practice ("corn farming", "palay
+  # farming"). Measured: "corn farming", "rice farming" and "corn farming
+  # in their own farm" all retrieved NOTHING for PSIC, because no lexical
+  # tier bridges "farming" to "growing".
+  #
+  # A bare `"farming" = "growing"` was tried and REMOVED: "growing" alone
+  # matches every "Growing of ..." row in PSIC, and the noise displaced
+  # the 0112 PARENT out of the bounded candidate list -- which silently
+  # turned "palay farming" from "rice-growing aggregate + irrigation
+  # question" into a confident 01121 irrigated lowland. Crop-specific
+  # phrases are distinctive enough to bridge on their own; an unlisted
+  # crop is a recall gap for the semantic tier to close, which is strictly
+  # safer than a wrong confident subclass.
+  "corn farming"           = c("growing of corn"),
+  "maize"                  = c("corn"),
+  "maize farming"          = c("growing of corn"),
+  "rice farming"           = c("growing of rice"),
+  "palay farming"          = c("growing of rice"),
+  "paddy rice"             = c("growing of rice"),
+  "paddy"                  = c("rice"),
+
+  # --- Government context wording (spec 21/22) ---------------------------
+  #
+  # Canonical PSIC titles are "Public administration, local government"
+  # (84113) and "Public administration, regional government" (84112).
+  # Users say "city government", "LGU", "national government agency".
+  # Measured: none of those retrieved any PSIC row at all. Normalizing the
+  # wording lets ordinary retrieval + canonical verification do the rest,
+  # so the user is never asked to describe a city hall as if it were a
+  # private business.
+  #
+  # The national entries expand to the bare distinctive phrase "public
+  # administration" rather than to the full canonical title "General
+  # public administration activities": the words "general" and
+  # "activities" are so common across PSIC that including them retrieved
+  # 86111 PUBLIC GENERAL hospital ACTIVITIES for "national government
+  # agency" -- measured, and exactly the kind of confident wrong answer
+  # this phase exists to remove.
+  "lgu"                    = c("public administration local government"),
+  "local government"       = c("public administration local government"),
+  "local government unit"  = c("public administration local government"),
+  "city government"        = c("public administration local government"),
+  "municipal government"   = c("public administration local government"),
+  "provincial government"  = c("public administration local government"),
+  "barangay government"    = c("public administration local government"),
+  "city hall"              = c("public administration local government"),
+  "municipal hall"         = c("public administration local government"),
+  "regional government"    = c("public administration regional government"),
+  "national government"    = c("public administration"),
+  "national government agency" = c("public administration"),
+  "government agency"      = c("public administration"),
+  "government office"      = c("public administration"),
+  "psa"                    = c("public administration"),
+  "philippine statistics authority" = c("public administration"),
+
+  # --- Trade wording that names a practice, not the industry -------------
+  #
+  # "carpentry" on its own retrieves 1622 Manufacture of builders'
+  # carpentry and joinery -- a MANUFACTURING class. When the user says
+  # residential carpentry they mean building work, so the residential
+  # qualifier is what disambiguates. Normalizes wording only.
+  "residential carpentry"  = c("construction of residential buildings"),
+  "house carpentry"        = c("construction of residential buildings"),
+  "building carpentry"     = c("construction of residential buildings")
+)
+
 # Words that describe an EMPLOYER/WORKPLACE rather than the work performed.
 # Used only to notice that an occupation phrase carries embedded
 # establishment context (so it can be reported to the caller), never to
@@ -125,9 +210,21 @@ ASSISTANT_ESTABLISHMENT_HINTS <- c(
 
 #' Expand one slot phrase into additional official-vocabulary search texts.
 #'
-#' Matching is on the WHOLE normalized phrase first, then on individual
-#' normalized tokens, so both "palay farmer" and a bare "palay" expand.
+#' Matching is on the WHOLE normalized phrase first, then on any MULTI-WORD
+#' key contained in it as whole words, then on individual normalized
+#' tokens. So "palay farmer", a bare "palay", and "private high school"
+#' (which contains the two-word key "high school") all expand.
 #' The original phrase is always first in the result and is never dropped.
+#'
+#' The multi-word containment pass closes a measured recall hole: the table
+#' has carried `"high school" = "secondary education"` since the PSOC
+#' milestone, but it only ever fired when the user typed exactly "high
+#' school". A real query says "teacher in a private high school", whose
+#' TOKENS are {teacher, in, a, private, high, school} -- none of which is
+#' the two-word key -- so the expansion never applied and the PSIC slot
+#' "private high school" could not reach 85312 Private general secondary
+#' education at all. It matched 85102 Private PRE-PRIMARY education
+#' instead, on the shared token "private".
 #'
 #' @param phrase character(1) user wording.
 #' @return character vector of search texts, original first, de-duplicated.
@@ -137,18 +234,58 @@ assistant_expand_query <- function(phrase) {
 
   norm <- tolower(trimws(gsub("\\s+", " ", p)))
   out <- p
+  table <- .assistant_expansion_table()
 
-  whole <- ASSISTANT_QUERY_EXPANSIONS[[norm]]
+  whole <- table[[norm]]
   if (!is.null(whole)) out <- c(out, whole)
 
   toks <- strsplit(norm, "[^a-z]+")[[1L]]
   toks <- toks[nzchar(toks)]
+
+  # Multi-word keys, matched as whole words anywhere in the phrase. Skipped
+  # when the phrase IS the key (already handled above) so nothing is added
+  # twice. Longest keys first, so "senior high school" wins over
+  # "high school" when both are present.
+  for (key in .assistant_expansion_multiword_keys()) {
+    if (identical(key, norm)) next
+    if (grepl(paste0("\\b", gsub("\\s+", "\\\\s+", key), "\\b"), norm)) {
+      out <- c(out, table[[key]])
+    }
+  }
+
   for (tk in toks) {
-    hit <- ASSISTANT_QUERY_EXPANSIONS[[tk]]
+    hit <- table[[tk]]
     if (!is.null(hit)) out <- c(out, hit)
   }
 
   unique(out[nzchar(out)])
+}
+
+# The two tables are consulted as one lookup. They stay SEPARATE at
+# definition so each can be tested for the kind of key it may hold (see
+# ASSISTANT_ACTIVITY_EXPANSIONS); merging happens only here, at use.
+.assistant_expansion_cache <- new.env(parent = emptyenv())
+
+.assistant_expansion_table <- function() {
+  if (!is.null(.assistant_expansion_cache$table)) {
+    return(.assistant_expansion_cache$table)
+  }
+  merged <- c(ASSISTANT_QUERY_EXPANSIONS, ASSISTANT_ACTIVITY_EXPANSIONS)
+  .assistant_expansion_cache$table <- merged
+  merged
+}
+
+# Multi-word expansion keys, longest first. Computed once per process --
+# both tables are file-scope constants, so this can never go stale.
+.assistant_expansion_multiword_keys <- function() {
+  if (!is.null(.assistant_expansion_cache$multi)) {
+    return(.assistant_expansion_cache$multi)
+  }
+  keys <- names(.assistant_expansion_table())
+  keys <- keys[grepl(" ", keys, fixed = TRUE)]
+  keys <- keys[order(-nchar(keys))]
+  .assistant_expansion_cache$multi <- keys
+  keys
 }
 
 #' Does this phrase already name an establishment/workplace context?

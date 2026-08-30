@@ -118,6 +118,24 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
   keep_ctx <- as.character(acc$code) %in% as.character(filtered$code)
   keep <- keep_ctx | keep_ex | is_guidance
 
+  # W2 -- controlled-facet compatibility veto (R/assistant/assistant_compat.R).
+  #
+  # The gate above asks "is this candidate RELATED to the wording?" and
+  # cannot reject a candidate that is related but contradictory: "palay
+  # farming" -> Rice MILLING, "private high school" -> Private PRE-PRIMARY
+  # education, "teacher" -> TEACHERS' AIDES all pass it honestly. This
+  # second, narrower gate rejects only a direct contradiction along a
+  # closed facet vocabulary (activity action, education level, occupation
+  # role), and only when BOTH sides state a value.
+  #
+  # Survey-manual codes are exempt: PSA's own published decision for an
+  # exact phrase outranks this heuristic, exactly as it already outranks
+  # the context gate above. Applied HERE rather than inside any one
+  # retrieval tier so it covers lexical, fuzzy, n-gram and (when enabled)
+  # semantic candidates uniformly -- spec 19 requires that cosine
+  # similarity cannot buy its way past a contradiction.
+  keep <- keep & assistant_compat_keep(acc, expansions, exempt = is_guidance)
+
   ex_score <- ex_score[keep]
   is_guidance <- is_guidance[keep]
   acc <- acc[keep, , drop = FALSE]
@@ -169,12 +187,30 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
     assistant_is_residual_match(expansions, acc$label[[i]])
   }, logical(1))
 
+  # W2 -- the mirror image of a residual marker: a NARROWER sibling
+  # carrying a qualifier the user never asked for ("... TECHNICAL AND
+  # VOCATIONAL secondary education", "... for children WITH special
+  # needs"). Ranked below the plain reading for the same reason, and by
+  # the same mechanism, as the residual markers above.
+  acc$unasked_specialization <- vapply(seq_len(nrow(acc)), function(i) {
+    assistant_compat_specialization_penalty(expansions, acc$label[[i]])
+  }, integer(1))
+
+  # How much of the user's own wording each candidate actually answers.
+  # Used to rank, and below to decide whether a set of siblings is a REAL
+  # ambiguity or one the user already resolved by their choice of words.
+  acc$query_coverage <- vapply(seq_len(nrow(acc)), function(i) {
+    assistant_compat_coverage(expansions, acc$label[[i]])
+  }, integer(1))
+
   is_detailed <- !is.na(acc$coding_role) & acc$coding_role == "detailed"
   ord <- if (isTRUE(prefer_detailed)) {
     order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
+          acc$unasked_specialization, -acc$query_coverage,
           !is_detailed, seq_len(nrow(acc)))
   } else {
     order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
+          acc$unasked_specialization, -acc$query_coverage,
           seq_len(nrow(acc)))
   }
   acc <- acc[ord, , drop = FALSE]
@@ -191,7 +227,34 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
   # siblings match the wording directly and others only match as a
   # residual/negated category, the user has already distinguished them and
   # there is nothing left to ask.
-  amb_pool <- if (any(!acc$residual_match)) acc[!acc$residual_match, , drop = FALSE] else acc
+  # An unasked-for specialization is excluded from the ambiguity pool for
+  # exactly the reason a residual category is: the user's wording already
+  # distinguishes it, so it is not a real alternative to ask about.
+  affirmative <- !acc$residual_match & acc$unasked_specialization == 0L
+  amb_pool <- if (any(affirmative)) {
+    acc[affirmative, , drop = FALSE]
+  } else if (any(!acc$residual_match)) {
+    acc[!acc$residual_match, , drop = FALSE]
+  } else {
+    acc
+  }
+
+  # A sibling that answers STRICTLY LESS of the user's wording than
+  # another is not a real alternative to ask about. "private general
+  # hospital" covers three tokens in 86121 Private GENERAL hospital and
+  # only two in 86122 Private MENTAL hospital, so there is nothing to ask.
+  # Where the user's wording genuinely does not discriminate -- "growing
+  # paddy rice" against irrigated / rainfed / upland -- every sibling
+  # scores the same, the pool is untouched, and the question is still
+  # asked. Aggregates are exempt: the supported parent must stay in the
+  # pool for `.assistant_supported_aggregate()` to find it.
+  if (nrow(amb_pool) > 1L && !is.null(amb_pool$query_coverage)) {
+    is_agg <- !is.na(amb_pool$coding_role) & amb_pool$coding_role != "detailed"
+    best <- max(amb_pool$query_coverage[!is_agg], -Inf)
+    if (is.finite(best)) {
+      amb_pool <- amb_pool[is_agg | amb_pool$query_coverage >= best, , drop = FALSE]
+    }
+  }
   amb <- assistant_ambiguity_check(amb_pool)
   supported_aggregate <- .assistant_supported_aggregate(amb_pool, amb)
 

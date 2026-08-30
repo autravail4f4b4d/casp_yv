@@ -723,6 +723,46 @@ server <- function(input, output, session) {
         # leaves the PREVIOUS, possibly-unrestricted route/tool set active.
         assistant_turn_set_route(rm_turn_state, routed$route)
         assistant_turn_set_requested_systems(rm_turn_state, routed$requested_systems)
+
+        # MULTI-INPUT (spec 25-28). A turn carrying several independent
+        # coding requests is resolved HERE, deterministically, one item at
+        # a time -- not left to the model to call the coding tool N times
+        # and not collapsed into one request. The live build collapsed a
+        # six-line batch into a single answer (3424 for all six) and then
+        # leaked that answer into the next unrelated turn.
+        #
+        # Each item gets its own slot extraction, its own coding-service
+        # call and its own allowed_codes; nothing from item i is visible
+        # to item j. The merged packet exists only so the output guard has
+        # the union of legitimately-retrieved codes to validate against.
+        if (identical(routed$route, "batch_contextual_coding") &&
+            length(routed$items) > 0L) {
+          tryCatch({
+            assistant_turn_begin_batch(rm_turn_state, length(routed$items))
+            packets <- list()
+            for (it in routed$items) {
+              args <- assistant_batch_item_args(it)
+              pkt <- do.call(assistant_coding_service, args)
+              packets[[length(packets) + 1L]] <- pkt
+              assistant_turn_record_batch_item(
+                rm_turn_state, it, pkt,
+                occupation = args$occupation,
+                establishment_activity = args$establishment_activity,
+                wage_payer = args$wage_payer
+              )
+            }
+            assistant_turn_finalize_batch(rm_turn_state)
+            assistant_turn_set_latest_packet(
+              rm_turn_state, assistant_batch_merge_packets(packets)
+            )
+          }, error = function(e) {
+            # Fail closed: no batch results recorded means the guard has no
+            # allowed_codes, so no code can be presented for this turn.
+            message(sprintf("[rm-assistant] batch resolution failed: %s",
+                            conditionMessage(e)))
+            assistant_turn_set_latest_packet(rm_turn_state, NULL)
+          })
+        }
         tryCatch(
           rm_client$set_tools(assistant_tools_for_route(routed$route, rm_all_tools)),
           error = function(e) {
@@ -779,6 +819,23 @@ server <- function(input, output, session) {
       if (!identical(assistant_turn_current_route(rm_turn_state), "contextual_coding")) {
         return(invisible(NULL))
       }
+      # A batch turn is rendered ENTIRELY deterministically (spec 28):
+      # every item's code, label, level, edition and status comes from its
+      # own packet. The model's prose is discarded rather than guarded,
+      # because for a batch there is no single answer for it to have got
+      # right -- and letting it summarise six results is exactly how the
+      # live build collapsed them into one.
+      if (assistant_turn_is_batch(rm_turn_state)) {
+        last <- assistant_turn_last_batch(rm_turn_state)
+        if (!is.null(last)) {
+          rm_chat$append(
+            assistant_render_batch_results(last$resolved, last$unresolved),
+            role = "assistant"
+          )
+          return(invisible(NULL))
+        }
+      }
+
       text <- tryCatch(ellmer::contents_text(turn), error = function(e) NULL)
       if (is.null(text) || !nzchar(trimws(text))) return(invisible(NULL))
       packet <- assistant_turn_latest_packet(rm_turn_state)

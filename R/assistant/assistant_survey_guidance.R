@@ -167,10 +167,41 @@ ASSISTANT_GUIDANCE_OUTSOURCING_PROBE <- paste(
   "coded to whichever one pays them."
 )
 
+# Wording that is outsourcing evidence ON ITS OWN. Each of these names the
+# arrangement itself, not merely an organisation that happens to be called
+# an agency.
 ASSISTANT_GUIDANCE_OUTSOURCING_HINTS <- c(
-  "agency", "manpower", "outsourc", "contractual", "job order",
-  "deployed", "assigned", "recruitment", "third party", "3rd party"
+  "manpower", "outsourc", "contractual", "job order",
+  "recruitment agency", "employment agency", "placement agency",
+  "staffing agency", "security agency", "third party", "3rd party",
+  "labor contractor", "labour contractor"
 )
+
+# "agency" and "deployed"/"assigned" are NOT outsourcing evidence on their
+# own -- this was a live false positive, measured:
+#
+#   statistician + "national government agency"
+#       -> missing_slot = wage_payer
+#
+# The wage-payer rule fired because the bare substring "agency" appears in
+# "national government AGENCY". A national government agency is an
+# employer, not a manpower arrangement, and spec 47 is explicit: "Do not
+# invoke outsourcing wage-payer logic unless outsourcing evidence exists."
+#
+# These weaker signals therefore count only when the surrounding wording
+# actually describes placement AT a different workplace -- "deployed
+# through an agency", "assigned to a hospital by an agency" -- and never
+# when the agency IS the employer being described.
+.ASSISTANT_OUTSOURCING_WEAK <- c("agency", "agencies", "deployed", "assigned")
+
+# Qualifiers that turn a weak signal into real outsourcing evidence.
+.ASSISTANT_OUTSOURCING_QUALIFIER <-
+  "\\b(through|thru|via|by)\\s+(a|an|the)?\\s*\\w*\\s*(agency|agencies|contractor)\\b|\\bdeployed\\s+(at|to|in)\\b|\\bassigned\\s+(at|to|in)\\b"
+
+# Wording that positively identifies the organisation as a government
+# employer rather than a labour-supply intermediary. Checked first.
+.ASSISTANT_OUTSOURCING_GOVT_EMPLOYER <-
+  "\\b(national|regional|provincial|city|municipal|barangay|local)\\s+government\\b|\\bgovernment\\s+(agency|agencies|office|department|bureau|instrumentality)\\b|\\blgu\\b|\\bstatistics authority\\b"
 
 .assistant_guidance_norm <- function(x) .assistant_norm_text(x)
 
@@ -283,12 +314,32 @@ assistant_activity_is_vague <- function(activity) {
 }
 
 #' Does the description mention an outsourcing/agency arrangement?
+#'
+#' Strong hints fire on their own. The weak ones ("agency", "deployed",
+#' "assigned") require a placement qualifier, and are suppressed entirely
+#' when the wording identifies a GOVERNMENT EMPLOYER -- "national
+#' government agency" is an employer, not a manpower arrangement (spec 47).
 assistant_activity_mentions_outsourcing <- function(activity) {
   a <- .assistant_scalar_chr(activity)
   if (is.null(a)) return(FALSE)
   q <- tolower(a)
-  any(vapply(ASSISTANT_GUIDANCE_OUTSOURCING_HINTS,
-             function(h) grepl(h, q, fixed = TRUE), logical(1)))
+
+  strong <- any(vapply(ASSISTANT_GUIDANCE_OUTSOURCING_HINTS,
+                       function(h) grepl(h, q, fixed = TRUE), logical(1)))
+  if (strong) return(TRUE)
+
+  # A government employer never triggers the wage-payer rule on the
+  # strength of the word "agency" alone. A genuine manpower arrangement
+  # inside a government workplace still matches a STRONG hint above
+  # ("deployed at a city hall through a manpower agency"), so this
+  # suppression cannot hide a real outsourcing case.
+  if (grepl(.ASSISTANT_OUTSOURCING_GOVT_EMPLOYER, q)) return(FALSE)
+
+  weak_tokens <- strsplit(.assistant_norm_text(q), " ", fixed = TRUE)[[1L]]
+  has_weak <- any(weak_tokens %in% .ASSISTANT_OUTSOURCING_WEAK)
+  if (!has_weak) return(FALSE)
+
+  grepl(.ASSISTANT_OUTSOURCING_QUALIFIER, q)
 }
 
 #' Does the description mention a government / public-sector context?

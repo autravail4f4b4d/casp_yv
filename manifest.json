@@ -2742,13 +2742,13 @@
   },
   "files": {
     ".Rprofile": {
-      "checksum": "69c47e1a5ccddd694573e2536093a241"
+      "checksum": "404df676684650d92b96dd4cc7488d75"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "773c03724232f7edf2587d0174bd3fcc"
     },
     "app.R": {
-      "checksum": "5344df9e00778a08dc479f0345e6c13e"
+      "checksum": "88b64730454038b0fbc9052350c7ba12"
     },
     "CLAUDE.md": {
       "checksum": "ccb20af466e6ae7c5cfc7e3eb39d22f7"
@@ -2797,6 +2797,9 @@
     },
     "data-raw/retrieval_eval_holdout2_cases.csv": {
       "checksum": "b15e17ad6f71316d6a529e3b6b1cda98"
+    },
+    "data-raw/retrieval_semantic_eval_cases.csv": {
+      "checksum": "98a4e1021404339b7e7d2ee4f02734bc"
     },
     "data-raw/rm_contextual_coding_eval_cases.csv": {
       "checksum": "0aeee4295e6db33a28185982e481dde2"
@@ -2948,6 +2951,9 @@
     "R/assistant/assistant_ambiguity.R": {
       "checksum": "232abe69af1ac49fb5a19fcb04ba9c57"
     },
+    "R/assistant/assistant_batch.R": {
+      "checksum": "76a45351a489b58e641d75dedd321faa"
+    },
     "R/assistant/assistant_client.R": {
       "checksum": "4c509bb45e84cba57148ec24a4cf790c"
     },
@@ -2957,11 +2963,14 @@
     "R/assistant/assistant_coding_service.R": {
       "checksum": "96a9a11ee874e6e99e592530e1a092c8"
     },
+    "R/assistant/assistant_compat.R": {
+      "checksum": "91ad4e46137380dc8114f4ea3eda54ce"
+    },
     "R/assistant/assistant_context.R": {
       "checksum": "77366bf53529662dfc60cda1840f9b3b"
     },
     "R/assistant/assistant_contextual_coding.R": {
-      "checksum": "e31da055dcc1a656b96515dc52f480da"
+      "checksum": "fc9d63dd4baba96deb3e5974171e3797"
     },
     "R/assistant/assistant_data.R": {
       "checksum": "16144075bba4676f42270ea4843219fb"
@@ -2979,19 +2988,19 @@
       "checksum": "ce1a6ab7f670169eca2a3bb22a8ea47b"
     },
     "R/assistant/assistant_response_guard.R": {
-      "checksum": "a9661f91bd60fea0ff30847759ce4ee9"
+      "checksum": "796c3208dd7adcb0007af1c2814922c8"
     },
     "R/assistant/assistant_router.R": {
-      "checksum": "0cb230b4967c65d1cedda9afebb87bbc"
+      "checksum": "9e0c5c5b46eb5712d8ee344ad9a968bd"
     },
     "R/assistant/assistant_session_registry.R": {
       "checksum": "37f6b46f79061d3c2b31eea9b5bb9cd2"
     },
     "R/assistant/assistant_slots.R": {
-      "checksum": "48943d4e79683665e1ba1591b597f734"
+      "checksum": "bb749b854447cda9148b67fb56614ac6"
     },
     "R/assistant/assistant_survey_guidance.R": {
-      "checksum": "6dc5c81c3f45dfc7cb84f48ce49fb27a"
+      "checksum": "a2d783e43d95175aa32ee8746bb15475"
     },
     "R/assistant/assistant_system_info.R": {
       "checksum": "cc2caffd717b41e71de8c0bd7c84774e"
@@ -3000,7 +3009,7 @@
       "checksum": "3c38abf110faa7a305e5c1a932438e44"
     },
     "R/assistant/assistant_turn_state.R": {
-      "checksum": "82d489d7b254340d3a6838c148ae426a"
+      "checksum": "4dba0f77bcf30458b4c055fd66a2154f"
     },
     "R/composite_levels.R": {
       "checksum": "6caefb449fa6e13af9a70ac3a9e42ea9"
@@ -3036,19 +3045,19 @@
       "checksum": "2fed046341ff2cc2dfe1e55d1b2dbd4c"
     },
     "R/retrieval/retrieval_embedding_provider.R": {
-      "checksum": "6ad5b8339b400658e83b87f76de768bd"
+      "checksum": "3a8322216d32afea5aab7cd1d142dea9"
     },
     "R/retrieval/retrieval_embeddings.R": {
-      "checksum": "6cb76f2f7e0f66ad080ca0f6a988aa72"
+      "checksum": "55354f5c359d204e3edb283be34f63c3"
     },
     "R/retrieval/retrieval_engine.R": {
-      "checksum": "0968897c70ef504bea59096fa4b88054"
+      "checksum": "cdbd6f9a88880c0204ac4d8e53fbaa4a"
     },
     "R/retrieval/retrieval_eval.R": {
       "checksum": "d0f4f94568a1f6e480b4e44a5b1b0ad3"
     },
     "R/retrieval/retrieval_evidence.R": {
-      "checksum": "bbdf808047c0a77af7833ad4de6569fb"
+      "checksum": "d29487a350baf2c010816e3a06a24583"
     },
     "R/retrieval/retrieval_fuzzy.R": {
       "checksum": "b29f3f0685e5eda2aba2758272aba5f3"
@@ -3129,16 +3138,19 @@
       "checksum": "06c587f11ddd209abd57336e8072e4a1"
     },
     "scripts/build_retrieval_embeddings.R": {
-      "checksum": "c565aceb4030e8a07a0a260d4ade8058"
+      "checksum": "6ee5d60bc994db39c194364f6ded8b1a"
     },
     "scripts/build_retrieval_ngram_index.R": {
       "checksum": "79677f1fdb7012039319d48a05a3c954"
     },
     "scripts/evaluate_retrieval.R": {
-      "checksum": "14ab4fedb020c02dc79a24ffcdb77ae6"
+      "checksum": "d113d128036ac5a9f83c33eda0ad67d1"
     },
     "scripts/run_tests.R": {
       "checksum": "a1d0ad84c07b593b11127b23371ecf47"
+    },
+    "SEMANTIC_RETRIEVAL_AND_CONTEXT_CONSISTENCY_HARDENING.md": {
+      "checksum": "15ceef3ce7bf7c648686a493fd901472"
     },
     "tests/evals/rm_assistant_cases.yml": {
       "checksum": "f7249c90e62a9aff1d308ae76846a4db"
@@ -3152,11 +3164,17 @@
     "tests/testthat/test-assistant-ambiguity.R": {
       "checksum": "abd62e8f17533d0343f50ce49f32575c"
     },
+    "tests/testthat/test-assistant-batch.R": {
+      "checksum": "1c0763e94af8f7499416bc0f04aafaa7"
+    },
     "tests/testthat/test-assistant-coding-level.R": {
       "checksum": "25529ddf2855d08ca0bcf4c048b8c4af"
     },
     "tests/testthat/test-assistant-coding-service.R": {
       "checksum": "bb7f9ffa8d0a8e396c3721736aba2fe9"
+    },
+    "tests/testthat/test-assistant-compat.R": {
+      "checksum": "9dcdc333af86218741f232998766729f"
     },
     "tests/testthat/test-assistant-context.R": {
       "checksum": "f4187cc73d909c770b6e5aac62bad112"
@@ -3186,22 +3204,22 @@
       "checksum": "45dcfbf081ba7ed438d5b46bd35afbce"
     },
     "tests/testthat/test-assistant-render.R": {
-      "checksum": "323c331d2cdd9ddba6f4de1b8d997986"
+      "checksum": "a58c14a6d5e83f047736408911dc337f"
     },
     "tests/testthat/test-assistant-response-guard.R": {
-      "checksum": "ad35683c2d2fce4c245580904f3124b4"
+      "checksum": "ef49b890e121abc622c92006d93756ba"
     },
     "tests/testthat/test-assistant-router.R": {
-      "checksum": "0e91899dd4f865b733f373126f2853b9"
+      "checksum": "da6496f9bac25f42c72613f122c30382"
     },
     "tests/testthat/test-assistant-routing-repeatability.R": {
-      "checksum": "9e0b26c83732f414a024d82c00909b3c"
+      "checksum": "1e38739a408227726c47ee4a0eeab365"
     },
     "tests/testthat/test-assistant-slots.R": {
-      "checksum": "f9d34507237b68e14beb7602a9be01af"
+      "checksum": "e5f724a304e5ccebf9827da00325cf98"
     },
     "tests/testthat/test-assistant-survey-guidance.R": {
-      "checksum": "75ecfb36228952d592e946e192c9c697"
+      "checksum": "2a5d9ddf095bcbc86ab71dd89588ef5b"
     },
     "tests/testthat/test-assistant-system-info.R": {
       "checksum": "044bfce1b74e01c845ae4706dcc3f764"
@@ -3213,7 +3231,7 @@
       "checksum": "9d767c6c5fb2059d8a8fde905c598fc4"
     },
     "tests/testthat/test-assistant-turn-state.R": {
-      "checksum": "1760fc31ea1390520cbdc0ed6d23492f"
+      "checksum": "408a33b47b284dc0a335785a433d591c"
     },
     "tests/testthat/test-correspondence-build.R": {
       "checksum": "653323f701e18f9dc369a5f0daf98ece"
@@ -3276,7 +3294,7 @@
       "checksum": "1e11621aeda579c5375c09ffec2d5978"
     },
     "tests/testthat/test-retrieval-embeddings.R": {
-      "checksum": "d777300084fad95f57bfb59c45e9f640"
+      "checksum": "fd334fa7d52d20280953e25b87cc2617"
     },
     "tests/testthat/test-retrieval-eval.R": {
       "checksum": "f5c345237f66a8b169a6fd8c1d351c2f"
@@ -3301,6 +3319,18 @@
     },
     "tests/testthat/test-search.R": {
       "checksum": "94d6a245ce8b0823760205eae90b3850"
+    },
+    "tests/testthat/test-semantic-documents.R": {
+      "checksum": "2cfc734d07933f42ac5cf7139e2bd2b3"
+    },
+    "tests/testthat/test-semantic-eval-corpus.R": {
+      "checksum": "e8c1ab313a473ea76c01f3cc3d0c6d01"
+    },
+    "tests/testthat/test-semantic-evidence-exemption.R": {
+      "checksum": "4901d1072719418c6be42d665a48e081"
+    },
+    "tests/testthat/test-semantic-retrieval.R": {
+      "checksum": "2dc322f5840f1f64cb9a0c988a669a07"
     },
     "tests/testthat/test-ui-labels.R": {
       "checksum": "da9f4dd7a8af41b85fe904a89d0c0039"

@@ -117,6 +117,48 @@ retrieval_embedding_config <- function() {
   )
 }
 
+#' A non-secret provider identifier for an index artifact.
+#'
+#' Section 14 requires the semantic index to record which provider and
+#' model produced its vectors, so an artifact built against one encoder is
+#' never queried with another. The obvious identifier -- the endpoint URL
+#' -- can legitimately carry credentials in its userinfo
+#' (`https://user:token@host/v1/embeddings`), and this string is written
+#' into a committed-adjacent artifact and printed by the build script.
+#' Everything before an `@`, along with any query string, is therefore
+#' dropped: what remains is scheme, host, port and path.
+#'
+#' @param config Optional pre-read config; read from the environment when
+#'   NULL.
+#'
+#' @return character(1) of the form "<scheme://host/path> <model>", or ""
+#'   when nothing is configured. Never contains the API key.
+retrieval_embedding_provider_id <- function(config = NULL) {
+  cfg <- if (is.null(config)) retrieval_embedding_config() else config
+
+  url <- if (is.character(cfg$url) && length(cfg$url) == 1L && !is.na(cfg$url)) cfg$url else ""
+  model <- if (is.character(cfg$model) && length(cfg$model) == 1L && !is.na(cfg$model)) cfg$model else ""
+
+  if (nzchar(url)) {
+    scheme <- sub("^([A-Za-z][A-Za-z0-9+.-]*://).*$", "\\1", url)
+    if (identical(scheme, url)) scheme <- ""
+    rest <- substring(url, nchar(scheme) + 1L)
+    # Strip userinfo: anything up to and including the LAST "@" before the
+    # first "/" of the path.
+    authority_end <- regexpr("/", rest, fixed = TRUE)
+    authority <- if (authority_end > 0L) substr(rest, 1L, authority_end - 1L) else rest
+    tail_path <- if (authority_end > 0L) substring(rest, authority_end) else ""
+    at <- regexpr("@[^@]*$", authority)
+    if (at > 0L) authority <- substring(authority, at + 1L)
+    tail_path <- sub("[?#].*$", "", tail_path)
+    url <- paste0(scheme, authority, tail_path)
+  }
+
+  out <- trimws(paste(url, model))
+  # Belt and braces: the credential must never reach an artifact or a log.
+  .retrieval_embedding_scrub(out)
+}
+
 #' Is the semantic tier configured well enough to attempt a call?
 #'
 #' A pure configuration check -- it performs NO network I/O, so it is safe

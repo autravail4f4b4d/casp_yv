@@ -184,6 +184,48 @@ test_that("the API key never appears anywhere in the public config", {
   })
 })
 
+test_that("the provider identifier stamped on an index carries no credential", {
+  sentinel <- "SECRET-DO-NOT-LEAK"
+
+  # The nastiest realistic case: the credential is embedded in the URL's
+  # userinfo, so a naive "record the endpoint" would write it straight into
+  # a committed-adjacent artifact and print it from the build script.
+  with_env_vars(c(clear_embedding_env(), list(
+    RETRIEVAL_EMBEDDING_ENABLED = "true",
+    RETRIEVAL_EMBEDDING_URL = paste0("https://user:", sentinel,
+                                     "@embeddings.example.org:8443/v1/embeddings?key=",
+                                     sentinel),
+    RETRIEVAL_EMBEDDING_MODEL = "multilingual-e5-base",
+    RETRIEVAL_EMBEDDING_API_KEY = sentinel
+  )), {
+    id <- retrieval_embedding_provider_id()
+
+    expect_false(grepl(sentinel, id, fixed = TRUE))
+    expect_false(grepl("user:", id, fixed = TRUE))
+    expect_false(grepl("@", id, fixed = TRUE))
+    expect_false(grepl("?", id, fixed = TRUE))
+    # It is still a useful identifier: host, port, path and model survive,
+    # which is what makes "was this index built by a different encoder?"
+    # answerable.
+    expect_true(grepl("embeddings.example.org:8443/v1/embeddings", id, fixed = TRUE))
+    expect_true(grepl("multilingual-e5-base", id, fixed = TRUE))
+
+    # And it must survive the round trip onto an index artifact.
+    corpus <- sample_corpus()
+    index <- retrieval_embeddings_build(corpus, embed_fn = stub_embedder())
+    expect_false(grepl(sentinel, index$provider, fixed = TRUE))
+    expect_false(grepl(sentinel,
+                       paste(utils::capture.output(utils::str(index)), collapse = " "),
+                       fixed = TRUE))
+  })
+})
+
+test_that("the provider identifier is empty rather than misleading when unset", {
+  with_env_vars(clear_embedding_env(), {
+    expect_identical(retrieval_embedding_provider_id(), "")
+  })
+})
+
 test_that("the scrubber removes the credential from provider messages", {
   sentinel <- "SECRET-DO-NOT-LEAK"
   with_env_vars(c(clear_embedding_env(),
@@ -285,7 +327,13 @@ test_that("an index builds from a stubbed embedder and carries its metadata", {
   expect_identical(index$dim, 64L)
   expect_identical(index$model, "stub-model")
   expect_true(nzchar(index$built_at))
-  expect_true(nzchar(index$fingerprint))
+  # Two independent checksums: one over canonical row identity (what the
+  # runtime validator can recompute from a corpus) and one over the text
+  # that was actually embedded (build-time audit).
+  expect_true(nzchar(index$corpus_fingerprint))
+  expect_true(nzchar(index$doc_fingerprint))
+  expect_identical(index$index_version, RETRIEVAL_EMBEDDING_INDEX_VERSION)
+  expect_identical(index$doc_recipe_version, RETRIEVAL_EMBEDDING_DOC_RECIPE_VERSION)
 
   # Stored vectors are unit length, so cosine is one matrix-vector product.
   expect_equal(sqrt(rowSums(index$vectors^2)), rep(1, 5), tolerance = 1e-9)

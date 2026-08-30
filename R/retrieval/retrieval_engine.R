@@ -229,10 +229,44 @@ retrieval_hybrid_candidates <- function(query, corpus,
   # future semantic tier -- with no separate wiring per tier.
   if (.retrieval_has("retrieval_evidence_filter")) {
     query_tokens <- retrieval_tokens(q)[[1]]
-    fused <- retrieval_evidence_filter(fused, query_tokens, corpus)
+    fused <- retrieval_evidence_filter(
+      fused, query_tokens, corpus,
+      exempt = .retrieval_semantic_exempt(sets$semantic)
+    )
   }
 
   fused
+}
+
+# Minimum cosine a semantic candidate must reach before it is allowed past
+# the LEXICAL evidence gate (spec 41: "Do not authorize based only on
+# cosine similarity").
+#
+# Set high on purpose. The gate this exempts from is currently doing
+# double duty as the negative-safety mechanism -- the confusable corpus
+# ("carpenter ant", "electrician's tape", "moon rock trading") scores 100%
+# precisely BECAUSE the gate blocks everything lexically unsupported. A
+# permissive threshold here would trade that away, so this value must be
+# TUNED AGAINST A LIVE ENCODER with the negative corpus held at 100%
+# before semantic retrieval is enabled anywhere. Until then it is
+# unreachable in practice: no embedding index artifact ships, and
+# RETRIEVAL_EMBEDDING_ENABLED defaults to false.
+RETRIEVAL_MIN_SEMANTIC_EXEMPT <- 0.90
+
+# Which semantic candidates have earned a bypass of the lexical gate.
+#
+# Returns integer(0) whenever the semantic tier did not run, produced
+# nothing, or carries no usable score -- so with semantic retrieval
+# disabled (the default) this is always integer(0) and the gate behaves
+# exactly as it did before.
+.retrieval_semantic_exempt <- function(semantic) {
+  if (is.null(semantic) || !is.data.frame(semantic) || nrow(semantic) == 0L) {
+    return(integer(0))
+  }
+  if (!all(c("idx", "score") %in% names(semantic))) return(integer(0))
+  ok <- !is.na(semantic$score) & semantic$score >= RETRIEVAL_MIN_SEMANTIC_EXEMPT
+  if (!any(ok)) return(integer(0))
+  as.integer(semantic$idx[ok])
 }
 
 # ---------------------------------------------------------------------

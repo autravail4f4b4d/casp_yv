@@ -215,17 +215,41 @@ retrieval_evidence_sufficient <- function(query_tokens, candidate_tokens,
 #'   tokens (pre-filtering is not required; `retrieval_evidence_sufficient()`
 #'   does its own filtering).
 #' @param corpus a `retrieval_corpus()` list, supplying `tokens` by index.
+#' @param exempt integer vector of `idx` values that bypass the gate.
+#'
+#'   THIS GATE IS LEXICAL BY CONSTRUCTION: it asks whether the candidate's
+#'   own label contains most of the query's words. A SEMANTIC candidate is
+#'   lexically disjoint by definition -- that is the entire reason it was
+#'   retrieved -- so it can never satisfy this test. Measured, with a
+#'   PERFECT (oracle) encoder:
+#'
+#'     "maize farmer"        -> 6112 CORN FARMERS            cosine 1.000, dropped (1 of 2 tokens supported)
+#'     "high school teacher" -> 2330 SECONDARY EDUCATION ... cosine 1.000, dropped (1 of 3)
+#'     "vulcanizer"          -> 8141 RUBBER PRODUCTS ...     cosine 1.000, dropped (0 of 1)
+#'
+#'   so Recall@10 was IDENTICAL with semantic retrieval off, mocked, and
+#'   oracle-perfect: the tier was structurally inert, not merely weak.
+#'
+#'   `exempt` is how a caller admits a candidate that earned its place on
+#'   non-lexical evidence. It is deliberately a caller decision: this
+#'   function must not know what a "semantic tier" is, and the gate keeps
+#'   its full strength for every candidate not named here. Nothing is
+#'   exempt by default, so existing behaviour -- including the negative
+#'   safety this gate provides -- is byte-identical unless a caller opts in.
 #'
 #' @return A candidate data.frame in the same shape, re-ranked densely from
 #'   1 after dropping insufficient rows. Never NULL, never an error. An
 #'   empty or NULL input returns `retrieval_no_candidates()`.
-retrieval_evidence_filter <- function(candidates, query_tokens, corpus) {
+retrieval_evidence_filter <- function(candidates, query_tokens, corpus,
+                                      exempt = integer(0)) {
   if (is.null(candidates) || nrow(candidates) == 0L) return(retrieval_no_candidates())
   if (length(query_tokens) == 0L) return(candidates)
 
   tiers_attr <- attr(candidates, "tiers")
+  exempt <- if (length(exempt) == 0L) integer(0) else as.integer(exempt)
 
   keep <- vapply(candidates$idx, function(idx) {
+    if (length(exempt) > 0L && idx %in% exempt) return(TRUE)
     cand_tokens <- corpus$tokens[[idx]]
     retrieval_evidence_sufficient(query_tokens, cand_tokens)
   }, logical(1))
