@@ -662,6 +662,35 @@ RM_ASSISTANT_TOOL_NAMES <- c(
   "assistant_coding_level"
 )
 
+# H1 -- hard interlock for the two low-level tools that must never be an
+# ALTERNATIVE authoritative route for a coding request (spec 21 of the
+# routing-enforcement phase). This is a function-body check, not a
+# tool-list membership check: even in the worst case where these tools are
+# STILL technically registered on the client for a `contextual_coding`
+# turn (a race, a future shinychat change, an error in the tool-list
+# swap), calling them returns this refusal instead of real candidate data.
+# The check is a plain synchronous R function call happening the instant
+# ellmer's tool loop invokes the wrapper -- it does not depend on Shiny
+# reactive scheduling, priority, or observer ordering at all.
+ASSISTANT_ROUTE_INTERLOCK_REASON <- paste(
+  "Direct classification search is not available for a coding request on",
+  "this turn. Use assistant_code_occupation_and_activity() to resolve",
+  "occupation/establishment classification, or",
+  "assistant_get_classification_system_info() for system-level questions."
+)
+
+#' TRUE when a low-level tool must refuse because the session is currently
+#' on the contextual_coding route.
+#'
+#' `turn_state` NULL (e.g. a non-Shiny test call, or an older caller that
+#' has not been updated) is treated as "no interlock is possible to check"
+#' and returns FALSE -- the interlock is additive safety for the live app;
+#' it must never make the tool unusable in contexts with no session state.
+.assistant_route_interlocked <- function(turn_state) {
+  if (is.null(turn_state)) return(FALSE)
+  identical(assistant_turn_current_route(turn_state), "contextual_coding")
+}
+
 .assistant_read_only_annotations <- function() {
   ellmer::tool_annotations(
     read_only_hint = TRUE,
@@ -677,8 +706,15 @@ RM_ASSISTANT_TOOL_NAMES <- c(
 #' schema exactly — the `.pairings` / `.rules` injection seams are NOT part
 #' of any schema, so the model can neither see nor set them.
 #'
+#' @param turn_state an `assistant_new_turn_state()` environment, or NULL.
+#'   When supplied, the two low-level tools carry the H1 hard interlock and
+#'   the coding tool derives `requested_systems` deterministically from the
+#'   router's determination for this turn (H3) instead of from the model.
+#'   NULL (the default) preserves the tools' plain, unrestricted behaviour
+#'   for every existing non-Shiny caller and test.
+#'
 #' @return A list of `ellmer::ToolDef` objects for `client$set_tools()`.
-rm_assistant_tools <- function() {
+rm_assistant_tools <- function(turn_state = NULL) {
   if (!requireNamespace("ellmer", quietly = TRUE)) {
     stop("Package 'ellmer' is required to register RM assistant tools.", call. = FALSE)
   }
@@ -702,6 +738,9 @@ rm_assistant_tools <- function() {
   list(
     ellmer::tool(
       function(system, query, version = NULL, level = NULL, limit = 6L) {
+        if (.assistant_route_interlocked(turn_state)) {
+          return(list(available = FALSE, reason = ASSISTANT_ROUTE_INTERLOCK_REASON))
+        }
         assistant_search_classification(
           system = system, query = query, version = version,
           level = level, limit = limit
@@ -795,6 +834,9 @@ rm_assistant_tools <- function() {
     ellmer::tool(
       function(occupation = NULL, psoc_code = NULL, industry_context = NULL,
                original_psic = NULL, limit = 6L) {
+        if (.assistant_route_interlocked(turn_state)) {
+          return(list(available = FALSE, reason = ASSISTANT_ROUTE_INTERLOCK_REASON))
+        }
         assistant_search_common_pairings(
           occupation = occupation, psoc_code = psoc_code,
           industry_context = industry_context, original_psic = original_psic,
@@ -891,11 +933,30 @@ rm_assistant_tools <- function() {
     ),
 
     ellmer::tool(
-      function(occupation = NULL, establishment_activity = NULL) {
-        assistant_code_occupation_and_activity(
+      function(occupation = NULL, establishment_activity = NULL,
+               wage_payer = NULL) {
+        # Routes through the MANDATORY coding service, not the raw
+        # resolver: the service returns a DECISION (one selected code per
+        # system plus an allowed_codes whitelist) rather than a candidate
+        # pool, enforces the current edition, and runs the outsourcing
+        # precondition before any PSIC retrieval.
+        #
+        # H3: `requested_systems` is NOT a model-settable argument (it is
+        # not in this tool's schema below) -- it is read from the router's
+        # OWN determination for this turn, so which systems may appear in
+        # the final answer is a server-side authority decision, not
+        # something the model can widen by simply asking for both anyway.
+        packet <- assistant_coding_service(
           occupation = occupation,
-          establishment_activity = establishment_activity
+          establishment_activity = establishment_activity,
+          requested_systems = assistant_turn_requested_systems(turn_state),
+          wage_payer = wage_payer
         )
+        # H2: recorded so the output guard can validate the model's
+        # eventual generated prose against THIS turn's allowed_codes once
+        # the full response text is assembled.
+        assistant_turn_set_latest_packet(turn_state, packet)
+        packet
       },
       paste(
         "THE tool for coding a person's occupation and/or their",
@@ -911,9 +972,14 @@ rm_assistant_tools <- function() {
         "OMIT establishment_activity entirely when the user has not said",
         "what the establishment does; the tool will return a real-world",
         "clarification question to ask instead of guessing a PSIC.",
-        "Results are already canonically verified, hierarchy-annotated and",
-        "level-labelled: prefer the candidate whose coding_role is",
-        "'detailed', and report PSOC and PSIC as two separate answers."
+        "The result is a DECISION, not a list of options: `occupation` and",
+        "`industry` each carry one already-selected, canonically verified",
+        "code. State those exactly. `allowed_codes` is the complete set of",
+        "codes you may mention - naming any other code is an error.",
+        "If `clarification.question` is present, ask it verbatim and give NO",
+        "code for that system yet.",
+        "If the user is asked who pays an outsourced worker's wage, pass",
+        "their answer back as `wage_payer`."
       ),
       arguments = list(
         occupation = ellmer::type_string(
@@ -931,6 +997,14 @@ rm_assistant_tools <- function() {
             "activity, product or service, including public/private where",
             "the user said it. OMIT this argument entirely if the user did",
             "not say; do not guess it from the occupation."
+          ),
+          required = FALSE
+        ),
+        wage_payer = ellmer::type_string(
+          paste(
+            "Only when the worker is deployed through an agency AND the",
+            "user has said who pays them: 'establishment' or 'agency'.",
+            "Omit otherwise."
           ),
           required = FALSE
         )

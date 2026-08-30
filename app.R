@@ -661,19 +661,142 @@ server <- function(input, output, session) {
   # assistant is disabled or misconfigured, so the whole block is a no-op in
   # a deployment without a provider -- the deterministic tabs above are
   # entirely unaffected.
-  rm_client <- create_rm_chat_client(tools = rm_assistant_tools())
+  # DETERMINISTIC TOOL ROUTING (RM_DETERMINISTIC_TOOL_ROUTING_ENFORCEMENT),
+  # HARDENED (RM_DETERMINISTIC_TOOL_ROUTING_ENFORCEMENT micro-gate H1/H2).
+  #
+  # Per-session clarification/route state, created inside `server` for the
+  # same reason the chat client is: two browser sessions must never observe
+  # each other's pending question or route.
+  rm_turn_state <- assistant_new_turn_state()
+
+  # The tool closures read `rm_turn_state` directly (H1's hard interlock,
+  # see assistant_tools.R) -- passing it at CLIENT-CREATION time, not
+  # relying only on later `set_tools()` narrowing, is what makes the
+  # interlock work even if the tool-swap observer below never runs (e.g.
+  # its very first invocation, before `ignoreInit` would otherwise have let
+  # anything through) or fails.
+  rm_client <- create_rm_chat_client(tools = rm_assistant_tools(turn_state = rm_turn_state))
+
+  # H2: let the process-global content-rendering override (assistant_render.R)
+  # find THIS session's turn-state. Harmless no-op if `rm_client` ends up
+  # NULL below (RM disabled/misconfigured) -- the registry entry is simply
+  # never consulted because `contents_shinychat()` is never invoked for a
+  # session that never streams anything.
+  assistant_register_session_turn_state(session, rm_turn_state)
 
   if (!is.null(rm_client)) {
+    # ROUTE-SPECIFIC TOOL SURFACE + HARD INTERLOCK (H1).
+    #
+    # The original defect: all eight tools were registered at once, so the
+    # MODEL chose the authoritative route. The fix layers TWO independent
+    # mechanisms rather than relying on either alone:
+    #
+    #   1. `set_tools()` below narrows what tools are even OFFERED to the
+    #      provider for a coding turn -- an optimisation/UX layer, evaluated
+    #      synchronously before the provider round-trip.
+    #   2. The tool closures themselves (assistant_tools.R) check
+    #      `assistant_turn_current_route(rm_turn_state)` at the instant
+    #      ellmer's tool loop actually invokes them -- a plain synchronous R
+    #      check inside the tool body, independent of Shiny observer
+    #      ordering, `set_tools()` having run, or this observer having
+    #      fired at all. This is the actual authority boundary: (1) is a
+    #      convenience that keeps the model from being OFFERED the wrong
+    #      tool; (2) is what makes it structurally impossible for a call to
+    #      the low-level tools to ever SUCCEED on a coding turn, regardless
+    #      of why or how the model still attempted it.
+    #
+    # Both `rm_turn_state$current_route` and `...$current_requested_systems`
+    # are set HERE, synchronously, before any asynchronous provider
+    # round-trip begins -- this is what interlock (2) actually reads.
+    rm_all_tools <- rm_assistant_tools(turn_state = rm_turn_state)
+    observeEvent(input[["rm_assistant-chat_user_input"]],
+      {
+        msg <- input[["rm_assistant-chat_user_input"]]
+        routed <- assistant_route_request(
+          msg, pending = assistant_turn_pending(rm_turn_state)
+        )
+        # FAIL CLOSED: the route/requested-systems are recorded FIRST,
+        # unconditionally -- so even if the `set_tools()` narrowing below
+        # throws, the interlock inside the tool bodies is already primed
+        # with the correct (or, on routing failure, the restrictive
+        # default) route. There is no code path left where a thrown error
+        # leaves the PREVIOUS, possibly-unrestricted route/tool set active.
+        assistant_turn_set_route(rm_turn_state, routed$route)
+        assistant_turn_set_requested_systems(rm_turn_state, routed$requested_systems)
+        tryCatch(
+          rm_client$set_tools(assistant_tools_for_route(routed$route, rm_all_tools)),
+          error = function(e) {
+            # `set_tools()` itself failed. The tool OFFERING may now be
+            # stale, but that is no longer the authority boundary: the
+            # interlock above already has the correct route recorded, so
+            # even an offered low-level tool would refuse at call time.
+            # Belt-and-braces, re-assert the MOST RESTRICTIVE surface
+            # rather than leaving whatever was previously installed.
+            message(sprintf("[rm-assistant] route tool swap failed: %s",
+                            conditionMessage(e)))
+            assistant_turn_set_route(rm_turn_state, "contextual_coding")
+            tryCatch(
+              rm_client$set_tools(assistant_tools_for_route("contextual_coding", rm_all_tools)),
+              error = function(e2) {
+                message(sprintf(
+                  "[rm-assistant] restrictive fallback tool swap also failed: %s",
+                  conditionMessage(e2)
+                ))
+              }
+            )
+          }
+        )
+      },
+      priority = 1000L,
+      ignoreInit = TRUE
+    )
+
     # No `greeting =` argument: the static greeting is already baked into
     # the initial HTML by rm_assistant_ui(), costing zero model tokens and
     # zero server round-trips (spec 9). Passing it again would set it twice.
     rm_chat <- shinychat::chat_mod_server("rm_assistant", client = rm_client)
+
+    # H2: VALIDATE-THEN-APPEND for coding turns.
+    #
+    # assistant_render.R suppresses LIVE per-chunk rendering of
+    # `ellmer::ContentText` for any session on the `contextual_coding`
+    # route, so nothing the model generates for a coding turn reaches the
+    # DOM unvalidated. This observer is the other half: once a turn is
+    # fully complete, it reads the ASSEMBLED text back from ellmer's own
+    # Turn object (`contents_text()`, not a parallel buffer this code
+    # maintains), runs it through the SAME response guard used previously
+    # only post-hoc, and appends either the validated text or the
+    # deterministic fallback via the module's own `$append()`.
+    #
+    # For every other route, live streaming already rendered the text
+    # (assistant_render.R falls through to shinychat's default method for
+    # non-coding routes), so appending it again here would duplicate it --
+    # this observer only acts when the route recorded for THIS turn was
+    # `contextual_coding`.
+    observeEvent(rm_chat$last_turn(), {
+      turn <- rm_chat$last_turn()
+      if (is.null(turn)) return(invisible(NULL))
+      if (!identical(assistant_turn_current_route(rm_turn_state), "contextual_coding")) {
+        return(invisible(NULL))
+      }
+      text <- tryCatch(ellmer::contents_text(turn), error = function(e) NULL)
+      if (is.null(text) || !nzchar(trimws(text))) return(invisible(NULL))
+      packet <- assistant_turn_latest_packet(rm_turn_state)
+      guarded <- assistant_guard_response(text, packet)
+      rm_chat$append(guarded$text, role = "assistant")
+    })
 
     # New chat. The module's own clear() resets BOTH the visible transcript
     # and the ellmer client's turn history, so the model forgets the
     # conversation too rather than silently retaining it behind a cleared UI.
     observeEvent(input[["rm_assistant-new_chat"]], {
       rm_chat$clear()
+      # A fresh chat must not inherit a pending clarification, route, or
+      # coding packet from the conversation the user just discarded.
+      assistant_turn_clear(rm_turn_state)
+      assistant_turn_set_route(rm_turn_state, "contextual_coding")
+      assistant_turn_set_requested_systems(rm_turn_state, c("psoc", "psic"))
+      assistant_turn_set_latest_packet(rm_turn_state, NULL)
     })
 
     # KNOWN LIMITATION -- mid-stream provider failure is silent client-side.

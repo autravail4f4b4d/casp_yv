@@ -133,18 +133,35 @@ test_that("the RM system prompt routes system-metadata questions away from entry
   expect_contains_ci(txt, "never with the classification-search tool")
 })
 
-test_that("the RM system prompt states the hierarchy contract by name", {
+test_that("the prompt cedes code selection to the application", {
+  # Deterministic tool routing moved hierarchy, level and ambiguity
+  # decisions OUT of the prompt and into the coding service, which returns
+  # one already-selected code per system. The prompt's job is now to state
+  # the verified result, not to choose among candidates -- so these pin the
+  # authority language rather than the old candidate-selection rules.
   txt <- prompt_txt()
-  expect_contains_ci(txt, "hierarchy_role")
-  expect_contains_ci(txt, "most_specific")
-  expect_contains_ci(txt, "never as an equally valid answer")
+  expect_contains_ci(txt, "the application selects codes")
+  expect_contains_ci(txt, "returns a decision, not options")
+  expect_contains_ci(txt, "state those codes exactly as given")
 })
 
-test_that("the RM system prompt states the ambiguity/clarification contract by name", {
+test_that("the prompt states the allowed_codes whitelist rule", {
   txt <- prompt_txt()
-  expect_contains_ci(txt, "clarifying_question")
-  expect_contains_ci(txt, "clarification_options")
-  expect_contains_ci(txt, "never invent options and never silently pick one")
+  expect_contains_ci(txt, "allowed_codes")
+  expect_contains_ci(txt, "naming any other code")
+  expect_contains_ci(txt, "discard your reply")
+})
+
+test_that("the prompt forbids offering codes while clarification is pending", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "give no code for that system yet")
+  expect_contains_ci(txt, "do not list candidate codes")
+})
+
+test_that("the prompt states the wage-payer precondition", {
+  txt <- prompt_txt()
+  expect_contains_ci(txt, "who pays their wage")
+  expect_contains_ci(txt, "wage_payer")
 })
 
 test_that("the RM system prompt forbids naming internal tools by their function names", {
@@ -166,7 +183,7 @@ test_that("the RM system prompt states the PSOC level ladder and detailed target
   expect_contains_ci(txt, "1 digit = Major Group")
   expect_contains_ci(txt, "4 = Unit Group")
   expect_contains_ci(txt, "coding_role")
-  expect_contains_ci(txt, "aggregate hierarchy codes")
+  expect_contains_ci(txt, "the Unit Group is the detailed coding target")
 })
 
 test_that("the RM system prompt forbids surfacing contextually implausible candidates", {

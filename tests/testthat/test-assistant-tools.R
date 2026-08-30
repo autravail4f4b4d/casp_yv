@@ -595,6 +595,177 @@ test_that("the injection seams are not visible in any registered tool schema", {
 })
 
 # ---------------------------------------------------------------------------
+# H1 -- hard interlock: the low-level tools must refuse on contextual_coding,
+# regardless of whether they are still technically reachable on the client.
+# ---------------------------------------------------------------------------
+
+# Fetches one tool's underlying R function out of the registered ToolDef, by
+# name, so a test can call it directly the same way ellmer's tool loop would.
+.get_tool_fn <- function(tools, name) {
+  hit <- Filter(function(t) identical(t@name, name), tools)
+  expect_length(hit, 1L)
+  # An ellmer::ToolDef is itself S7-callable -- it IS the function ellmer's
+  # tool loop invokes, not a wrapper carrying one under another name.
+  hit[[1L]]
+}
+
+test_that("with no turn_state (NULL), the low-level tools behave exactly as before -- unrestricted", {
+  skip_if_not_installed("ellmer")
+
+  tools <- rm_assistant_tools(turn_state = NULL)
+  search_fn <- .get_tool_fn(tools, "assistant_search_classification")
+  out <- search_fn(system = "psoc", query = "carpenter")
+  expect_false(isTRUE(out$available == FALSE))
+  expect_true("results" %in% names(out))
+})
+
+test_that("H1: a fresh (default) turn_state -- route never explicitly set -- ALREADY interlocks the low-level tools", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  tools <- rm_assistant_tools(turn_state = st)
+
+  search_fn <- .get_tool_fn(tools, "assistant_search_classification")
+  out <- search_fn(system = "psoc", query = "carpenter")
+  expect_identical(out$available, FALSE)
+  expect_identical(out$reason, ASSISTANT_ROUTE_INTERLOCK_REASON)
+
+  pairings_fn <- .get_tool_fn(tools, "assistant_search_common_pairings")
+  out2 <- pairings_fn(occupation = "carpenter")
+  expect_identical(out2$available, FALSE)
+  expect_identical(out2$reason, ASSISTANT_ROUTE_INTERLOCK_REASON)
+})
+
+test_that("H1: the interlock releases once the route is explicitly set away from contextual_coding", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  assistant_turn_set_route(st, "general_search")
+  tools <- rm_assistant_tools(turn_state = st)
+
+  search_fn <- .get_tool_fn(tools, "assistant_search_classification")
+  out <- search_fn(system = "psoc", query = "carpenter")
+  expect_false(isTRUE(out$available == FALSE))
+  expect_true("results" %in% names(out))
+})
+
+test_that("H1 failure injection: an unrecognised route value re-asserts the restrictive default, not a bypass", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  assistant_turn_set_route(st, "general_search")
+  # Simulate a corrupted/failed route assignment -- e.g. a router crash whose
+  # caller passed through a garbage value instead of a valid route.
+  assistant_turn_set_route(st, "this-is-not-a-route")
+  tools <- rm_assistant_tools(turn_state = st)
+
+  search_fn <- .get_tool_fn(tools, "assistant_search_classification")
+  out <- search_fn(system = "psoc", query = "carpenter")
+  expect_identical(out$available, FALSE)
+
+  pairings_fn <- .get_tool_fn(tools, "assistant_search_common_pairings")
+  out2 <- pairings_fn(occupation = "carpenter")
+  expect_identical(out2$available, FALSE)
+})
+
+test_that("H1: the coding tool itself is NEVER interlocked -- it is the authorised path", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state() # default route IS contextual_coding
+  tools <- rm_assistant_tools(turn_state = st)
+  coding_fn <- .get_tool_fn(tools, "assistant_code_occupation_and_activity")
+  out <- coding_fn(occupation = "carpenter", establishment_activity = "residential construction")
+  expect_identical(out$occupation$selected_code, "7115")
+  expect_identical(out$industry$selected_code, "41001")
+})
+
+# ---------------------------------------------------------------------------
+# H2 -- the coding tool records the packet it returns, so the response guard
+# can validate the model's eventual prose against it.
+# ---------------------------------------------------------------------------
+
+test_that("H2: calling the coding tool records its packet on the turn state", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  tools <- rm_assistant_tools(turn_state = st)
+  coding_fn <- .get_tool_fn(tools, "assistant_code_occupation_and_activity")
+  expect_null(assistant_turn_latest_packet(st))
+  out <- coding_fn(occupation = "carpenter", establishment_activity = "residential construction")
+  expect_identical(assistant_turn_latest_packet(st)$occupation$selected_code, out$occupation$selected_code)
+})
+
+# ---------------------------------------------------------------------------
+# H3 -- requested_systems is read from the turn state, not from the model.
+# ---------------------------------------------------------------------------
+
+test_that("H3: requesting PSIC only withholds the PSOC half from allowed_codes even though the occupation was parsed", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  assistant_turn_set_requested_systems(st, "psic")
+  tools <- rm_assistant_tools(turn_state = st)
+  coding_fn <- .get_tool_fn(tools, "assistant_code_occupation_and_activity")
+  out <- coding_fn(occupation = "nurse", establishment_activity = "private hospital")
+
+  expect_identical(out$requested_systems, "psic")
+  expect_true(length(out$allowed_codes$psoc) == 0L)
+  expect_true(length(out$allowed_codes$psic) > 0L)
+})
+
+test_that("H3: requesting PSOC only withholds the PSIC half from allowed_codes", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  assistant_turn_set_requested_systems(st, "psoc")
+  tools <- rm_assistant_tools(turn_state = st)
+  coding_fn <- .get_tool_fn(tools, "assistant_code_occupation_and_activity")
+  out <- coding_fn(occupation = "nurse", establishment_activity = "private hospital")
+
+  expect_identical(out$requested_systems, "psoc")
+  expect_true(length(out$allowed_codes$psic) == 0L)
+  expect_true(length(out$allowed_codes$psoc) > 0L)
+})
+
+test_that("H3: requesting both systems authorises both halves", {
+  skip_if_not_installed("ellmer")
+
+  st <- assistant_new_turn_state()
+  assistant_turn_set_requested_systems(st, c("psoc", "psic"))
+  tools <- rm_assistant_tools(turn_state = st)
+  coding_fn <- .get_tool_fn(tools, "assistant_code_occupation_and_activity")
+  out <- coding_fn(occupation = "nurse", establishment_activity = "private hospital")
+
+  expect_setequal(out$requested_systems, c("psoc", "psic"))
+  expect_true(length(out$allowed_codes$psoc) > 0L)
+  expect_true(length(out$allowed_codes$psic) > 0L)
+})
+
+test_that("H3: the output guard rejects a code from a system that was not requested/authorised", {
+  st <- assistant_new_turn_state()
+  assistant_turn_set_requested_systems(st, "psic")
+  packet <- assistant_coding_service(
+    occupation = "nurse", establishment_activity = "private hospital",
+    requested_systems = "psic"
+  )
+  assistant_turn_set_latest_packet(st, packet)
+
+  psoc_code <- (function() {
+    full <- assistant_coding_service("nurse", "private hospital",
+                                      requested_systems = c("psoc", "psic"))
+    full$occupation$selected_code
+  })()
+
+  fabricated <- sprintf(
+    "Your PSIC is %s. By the way your occupation code is PSOC %s.",
+    packet$industry$selected_code, psoc_code
+  )
+  guarded <- assistant_guard_response(fabricated, assistant_turn_latest_packet(st))
+  expect_true(guarded$used_fallback)
+  expect_false(grepl(psoc_code, guarded$text, fixed = TRUE))
+})
+
+# ---------------------------------------------------------------------------
 # Real Workstream A artifacts — skipped until they exist
 # ---------------------------------------------------------------------------
 

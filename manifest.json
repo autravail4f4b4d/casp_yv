@@ -2742,13 +2742,13 @@
   },
   "files": {
     ".Rprofile": {
-      "checksum": "d69d0d3c170046c9ae952a5888628692"
+      "checksum": "69c47e1a5ccddd694573e2536093a241"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "773c03724232f7edf2587d0174bd3fcc"
     },
     "app.R": {
-      "checksum": "e918b9ee42d5106a66755b3d8cb7ee2f"
+      "checksum": "5344df9e00778a08dc479f0345e6c13e"
     },
     "CLAUDE.md": {
       "checksum": "ccb20af466e6ae7c5cfc7e3eb39d22f7"
@@ -2773,6 +2773,9 @@
     },
     "data-raw/ISIC4-5_Correspondence_Table.xlsx": {
       "checksum": "16a028f973684f8a818df4b9dd854d00"
+    },
+    "data-raw/psa_survey_guidance_provenance.md": {
+      "checksum": "571b3888bb660126082a854195dea994"
     },
     "data-raw/pscc.xlsx": {
       "checksum": "0cfae7f9ac0b6aa82eb716099589136e"
@@ -2904,7 +2907,7 @@
       "checksum": "63ebd2fa82ab8c9dfb8ecf2138bb8095"
     },
     "prompts/RM_SYSTEM_PROMPT.md": {
-      "checksum": "38c259c028b5742aff00386dbc27fc6f"
+      "checksum": "c38c3860dd039ed855b6f290ce4296fd"
     },
     "PSA_CLASSIFICATION_PSOC2022_DUAL_SEARCH_PSIC_CORRESPONDENCE.md": {
       "checksum": "70c8eaced6586f007370522cb24401cd"
@@ -2951,11 +2954,14 @@
     "R/assistant/assistant_coding_level.R": {
       "checksum": "057d6aa34aabdc4a8f01e4b5db36b718"
     },
+    "R/assistant/assistant_coding_service.R": {
+      "checksum": "96a9a11ee874e6e99e592530e1a092c8"
+    },
     "R/assistant/assistant_context.R": {
-      "checksum": "7cccfc157da0e6fb05d99df3555fa8f7"
+      "checksum": "77366bf53529662dfc60cda1840f9b3b"
     },
     "R/assistant/assistant_contextual_coding.R": {
-      "checksum": "a5275af8fbd1845024b8f0db57d7522e"
+      "checksum": "e31da055dcc1a656b96515dc52f480da"
     },
     "R/assistant/assistant_data.R": {
       "checksum": "16144075bba4676f42270ea4843219fb"
@@ -2970,7 +2976,16 @@
       "checksum": "1f636ead9cf3ccfbf835ceec8098a9b7"
     },
     "R/assistant/assistant_render.R": {
-      "checksum": "68f6cda0f65ce8c40d99c24df02501c6"
+      "checksum": "ce1a6ab7f670169eca2a3bb22a8ea47b"
+    },
+    "R/assistant/assistant_response_guard.R": {
+      "checksum": "a9661f91bd60fea0ff30847759ce4ee9"
+    },
+    "R/assistant/assistant_router.R": {
+      "checksum": "0cb230b4967c65d1cedda9afebb87bbc"
+    },
+    "R/assistant/assistant_session_registry.R": {
+      "checksum": "37f6b46f79061d3c2b31eea9b5bb9cd2"
     },
     "R/assistant/assistant_slots.R": {
       "checksum": "48943d4e79683665e1ba1591b597f734"
@@ -2982,7 +2997,10 @@
       "checksum": "cc2caffd717b41e71de8c0bd7c84774e"
     },
     "R/assistant/assistant_tools.R": {
-      "checksum": "c1ad0411d346018dafe3492c73879828"
+      "checksum": "3c38abf110faa7a305e5c1a932438e44"
+    },
+    "R/assistant/assistant_turn_state.R": {
+      "checksum": "82d489d7b254340d3a6838c148ae426a"
     },
     "R/composite_levels.R": {
       "checksum": "6caefb449fa6e13af9a70ac3a9e42ea9"
@@ -3086,6 +3104,9 @@
     "RM_CONTEXTUAL_CODING_CONTRACT_RESTORATION.md": {
       "checksum": "35db8c399259f6f713a595d36a387e53"
     },
+    "RM_DETERMINISTIC_TOOL_ROUTING_ENFORCEMENT.md": {
+      "checksum": "54cf1f8a339a81e4190939edebe11afd"
+    },
     "scripts/build_assistant_assets.R": {
       "checksum": "4d669c3fddcfa4b9b3359f116c0c79e5"
     },
@@ -3134,6 +3155,9 @@
     "tests/testthat/test-assistant-coding-level.R": {
       "checksum": "25529ddf2855d08ca0bcf4c048b8c4af"
     },
+    "tests/testthat/test-assistant-coding-service.R": {
+      "checksum": "bb7f9ffa8d0a8e396c3721736aba2fe9"
+    },
     "tests/testthat/test-assistant-context.R": {
       "checksum": "f4187cc73d909c770b6e5aac62bad112"
     },
@@ -3146,6 +3170,9 @@
     "tests/testthat/test-assistant-evals.R": {
       "checksum": "8f52c2ab288f29ea32873e6689ce4017"
     },
+    "tests/testthat/test-assistant-failure-injection.R": {
+      "checksum": "4ed325148565f2b13b824592ab01bfd6"
+    },
     "tests/testthat/test-assistant-hierarchy.R": {
       "checksum": "2b0d2729bb20ce52917ece214949c564"
     },
@@ -3156,10 +3183,19 @@
       "checksum": "27d2ce0ec669b4b0f46baa0a2e2bbbd5"
     },
     "tests/testthat/test-assistant-prompt.R": {
-      "checksum": "385ed3b7a1591e5fec8e777ad5b806c0"
+      "checksum": "45dcfbf081ba7ed438d5b46bd35afbce"
     },
     "tests/testthat/test-assistant-render.R": {
-      "checksum": "0953d9f4bce86734c541e4933d95517a"
+      "checksum": "323c331d2cdd9ddba6f4de1b8d997986"
+    },
+    "tests/testthat/test-assistant-response-guard.R": {
+      "checksum": "ad35683c2d2fce4c245580904f3124b4"
+    },
+    "tests/testthat/test-assistant-router.R": {
+      "checksum": "0e91899dd4f865b733f373126f2853b9"
+    },
+    "tests/testthat/test-assistant-routing-repeatability.R": {
+      "checksum": "9e0b26c83732f414a024d82c00909b3c"
     },
     "tests/testthat/test-assistant-slots.R": {
       "checksum": "f9d34507237b68e14beb7602a9be01af"
@@ -3174,7 +3210,10 @@
       "checksum": "a8b40888d3e121174b0486d0cc66e317"
     },
     "tests/testthat/test-assistant-tools.R": {
-      "checksum": "76ea0e45292c040fbb0bee4d265ef130"
+      "checksum": "9d767c6c5fb2059d8a8fde905c598fc4"
+    },
+    "tests/testthat/test-assistant-turn-state.R": {
+      "checksum": "1760fc31ea1390520cbdc0ed6d23492f"
     },
     "tests/testthat/test-correspondence-build.R": {
       "checksum": "653323f701e18f9dc369a5f0daf98ece"

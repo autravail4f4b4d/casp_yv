@@ -162,11 +162,20 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
   #   2. detailed coding level ahead of aggregate hierarchy codes
   #   3. original retrieval rank
   # `order` is stable, so equally-scored rows keep retrieval order.
+  # Residual/negated categories ("NON-residential", "... n.e.c.", "Other
+  # ...") rank below the affirmative sibling that names the thing directly,
+  # unless the user asked for the residual wording themselves.
+  acc$residual_match <- vapply(seq_len(nrow(acc)), function(i) {
+    assistant_is_residual_match(expansions, acc$label[[i]])
+  }, logical(1))
+
   is_detailed <- !is.na(acc$coding_role) & acc$coding_role == "detailed"
   ord <- if (isTRUE(prefer_detailed)) {
-    order(!acc$survey_guidance, -acc$example_evidence, !is_detailed, seq_len(nrow(acc)))
+    order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
+          !is_detailed, seq_len(nrow(acc)))
   } else {
-    order(!acc$survey_guidance, -acc$example_evidence, seq_len(nrow(acc)))
+    order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
+          seq_len(nrow(acc)))
   }
   acc <- acc[ord, , drop = FALSE]
   acc <- utils::head(acc, limit_int)
@@ -178,8 +187,13 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
   # A parent with exactly ONE detailed child (PSIC 0113 -> 01130) produces
   # no siblings and therefore no clarification -- the contrast that proves
   # this reads the canonical hierarchy instead of always asking.
-  amb <- assistant_ambiguity_check(acc)
-  supported_aggregate <- .assistant_supported_aggregate(acc, amb)
+  # Ambiguity is judged on the AFFIRMATIVE candidates only. If some
+  # siblings match the wording directly and others only match as a
+  # residual/negated category, the user has already distinguished them and
+  # there is nothing left to ask.
+  amb_pool <- if (any(!acc$residual_match)) acc[!acc$residual_match, , drop = FALSE] else acc
+  amb <- assistant_ambiguity_check(amb_pool)
+  supported_aggregate <- .assistant_supported_aggregate(amb_pool, amb)
 
   # Only a genuine "one shared parent, several detailed children, and the
   # parent itself is verified" shape is worth asking about. Two further

@@ -174,6 +174,26 @@ ASSISTANT_GUIDANCE_OUTSOURCING_HINTS <- c(
 
 .assistant_guidance_norm <- function(x) .assistant_norm_text(x)
 
+#' Does a normalized guidance TERM match a normalized QUERY?
+#'
+#' A plain contiguous-substring check missed "food panda bicycle driver"
+#' against the manual's own "food panda driver" (code 9335): inserting the
+#' vehicle word between "panda" and "driver" broke the match, and the query
+#' fell through to an unrelated current-label hit (5165 DRIVING
+#' INSTRUCTORS) instead -- confirmed live. The fix tolerates EXTRA words
+#' between the term's own words while still requiring every one of the
+#' term's words to appear, in the term's own order, as whole words -- it
+#' does not turn this into a bag-of-words or fuzzy matcher, and a term
+#' whose words are simply absent still never matches.
+.assistant_guidance_term_matches <- function(term_norm, query_norm) {
+  if (identical(query_norm, term_norm)) return(TRUE)
+  words <- strsplit(term_norm, " ", fixed = TRUE)[[1L]]
+  words <- words[nzchar(words)]
+  if (length(words) == 0L) return(FALSE)
+  pattern <- paste0("\\b", words, "\\b", collapse = ".*")
+  grepl(pattern, query_norm)
+}
+
 #' Verified current PSOC codes suggested by the survey manual for a phrase.
 #'
 #' Matching is on the whole normalized phrase, or on a manual term being
@@ -191,7 +211,7 @@ assistant_survey_psoc_evidence <- function(phrase, version = NULL) {
   hits <- character(0)
   for (row in ASSISTANT_GUIDANCE_PSOC_EXAMPLES) {
     t <- .assistant_guidance_norm(row$term)
-    if (identical(q, t) || grepl(paste0("\\b", t, "\\b"), q)) {
+    if (.assistant_guidance_term_matches(t, q)) {
       hits <- c(hits, row$code)
     }
   }
@@ -219,7 +239,7 @@ assistant_survey_activity_hint <- function(phrase) {
 
   for (row in ASSISTANT_GUIDANCE_PSIC_ACTIVITY_HINTS) {
     t <- .assistant_guidance_norm(row$term)
-    if (identical(q, t) || grepl(paste0("\\b", t, "\\b"), q)) {
+    if (.assistant_guidance_term_matches(t, q)) {
       return(list(
         activity_text = row$activity,
         historical_code = row$historical_code,

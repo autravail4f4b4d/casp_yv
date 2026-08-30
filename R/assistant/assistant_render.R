@@ -122,6 +122,82 @@ assistant_render_tool_content <- function(content) {
   })
 }
 
+# --- H2: do not stream unvalidated coding prose ----------------------------
+#
+# THE DEFECT THIS CLOSES: the response guard (assistant_response_guard.R)
+# validates COMPLETE generated text against the coding service's
+# allowed_codes. Validating only after the browser has already displayed
+# the text is too late -- a fabricated "PSOC 1112" is indistinguishable
+# from the correct "PSOC 1111" until the stream reaches the last digit, by
+# which point it has already rendered token-by-token in front of the user.
+#
+# THE MECHANISM: exactly the same S7 override technique as the tool-trace
+# suppression above, applied to `ellmer::ContentText` instead. For a
+# session on the `contextual_coding` route this SUPPRESSES the live,
+# per-chunk rendering of the assistant's generated prose (returns NULL, so
+# nothing streams to the DOM). Nothing is lost: ellmer's own Turn object
+# retains the complete assembled text regardless of whether shinychat
+# rendered each chunk (`ellmer::contents_text(turn)`, confirmed directly).
+# app.R observes `rm_chat$last_turn()` -- exposed by shinychat's own
+# `chat_mod_server()` return handle -- reads the complete text back once
+# the turn is fully done, runs it through `assistant_guard_response()`,
+# and appends EITHER the validated text or the deterministic fallback via
+# the module's own exposed `$append()` method. No unsupported API is used:
+# `last_turn`, `status` and `append` are documented fields of the object
+# `chat_mod_server()` returns (verified directly against the installed
+# shinychat 0.4.0 source).
+#
+# Every route OTHER than `contextual_coding` is unaffected: the original,
+# currently-installed method is captured BELOW before being replaced, and
+# the new method falls through to it for every other route (or when no
+# session context is resolvable at all -- see assistant_session_registry.R
+# for why that case cannot occur in real usage but is still handled
+# rather than assumed away).
+.assistant_default_content_text_method <- NULL
+
+#' Decide what a ContentText chunk renders to, given an EXPLICIT route.
+#'
+#' Pure function, no ambient session lookup -- this is what a test drives
+#' directly to exercise every route without a live Shiny session. The
+#' actual S7 method (registered below) is a thin wrapper that supplies the
+#' route from `assistant_current_session_turn_state()`.
+#'
+#' @param content an `ellmer::ContentText`.
+#' @param route character(1) or NA. NA is treated the same as
+#'   `"contextual_coding"` -- an unresolvable route defaults to the
+#'   restrictive treatment, the same fail-closed philosophy as the tool
+#'   interlock (H1), not to "render normally".
+#'
+#' @return whatever the captured original method returns, or NULL when
+#'   suppressed.
+assistant_render_text_content_for_route <- function(content, route) {
+  restrict <- is.na(route) || identical(route, "contextual_coding")
+  if (restrict) return(NULL)
+  if (!is.function(.assistant_default_content_text_method)) return(NULL)
+  .assistant_default_content_text_method(content)
+}
+
+.assistant_register_content_guard <- function(gen) {
+  original <- tryCatch(S7::method(gen, ellmer::ContentText), error = function(e) NULL)
+  if (is.function(original)) {
+    .assistant_default_content_text_method <<- original
+  }
+  tryCatch({
+    S7::method(gen, ellmer::ContentText) <- function(content) {
+      state <- assistant_current_session_turn_state()
+      route <- if (is.null(state)) NA_character_ else assistant_turn_current_route(state)
+      assistant_render_text_content_for_route(content, route)
+    }
+    invisible(TRUE)
+  }, error = function(e) {
+    message(sprintf(
+      "[rm-assistant] coding-route text guard could not be registered: %s",
+      conditionMessage(e)
+    ))
+    invisible(FALSE)
+  })
+}
+
 # Registered once per R process, unconditionally, at source time -- this
 # file is sourced exactly once by app.R's `lapply(sort(r_files), source)`
 # (and once per testthat run via the shared helper). Harmless when RM is
@@ -130,4 +206,10 @@ assistant_render_tool_content <- function(content) {
 # than inside `create_rm_chat_client()` means it also protects any future
 # code path that streams ellmer content through shinychat, not just the one
 # call site that exists today.
-invisible(.assistant_register_tool_trace_suppression())
+local({
+  gen <- .assistant_shinychat_content_generic()
+  invisible(.assistant_register_tool_trace_suppression())
+  if (!is.null(gen) && inherits(gen, "S7_generic")) {
+    invisible(.assistant_register_content_guard(gen))
+  }
+})

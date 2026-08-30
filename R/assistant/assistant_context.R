@@ -76,6 +76,63 @@ assistant_context_plausible <- function(query_texts, label, description = NA_cha
   supported_in(as.character(description))
 }
 
+# Residual / negated category markers.
+#
+# Classifications end many families with a catch-all ("... n.e.c.",
+# "Other ...") or with an explicit negation ("NON-residential",
+# "except rice and corn"). Those categories are defined by what they are
+# NOT, so when the user's own wording does not contain the marker they
+# should rank BELOW the affirmative sibling that names the thing directly.
+#
+# Measured need: "residential construction" matched BOTH
+# 41001 Construction of residential buildings AND
+# 41002 Construction of NON-residential buildings equally, because
+# "non-residential" tokenizes to {non, residential} and so contains the
+# query token. The pair then looked like a genuine sibling ambiguity and
+# the service asked a question the user had already answered.
+# Markers valid ANYWHERE in a label: these always designate a residual or
+# negated category ("... n.e.c.", "NON-residential", "except rice").
+ASSISTANT_RESIDUAL_MARKERS <- c(
+  "non", "nec", "elsewhere", "except", "unspecified", "miscellaneous"
+)
+
+# "other" only counts when the label STARTS with it. Measured reason:
+# 78200 "Temporary employment agency activities and OTHER human resource
+# provisions" is a compound title, not a catch-all, and penalising it
+# pushed the correct detailed sub-class below its own aggregate. By
+# contrast "Other amusement and recreation activities" genuinely is the
+# residual sibling of its family.
+.ASSISTANT_RESIDUAL_LEADING <- "other"
+
+#' Does a candidate label carry a residual/negated marker the query lacks?
+#'
+#' @return logical(1). TRUE means the candidate is a catch-all or negated
+#'   category that the user did not ask for.
+assistant_is_residual_match <- function(query_texts, label) {
+  raw_lbl <- tolower(as.character(label))
+  if (length(raw_lbl) != 1L || is.na(raw_lbl) || !nzchar(raw_lbl)) return(FALSE)
+  # Collapse the dotted abbreviation FIRST: normalization splits "n.e.c."
+  # into the three single letters n / e / c, which no marker can match.
+  raw_lbl <- gsub("n\\.?\\s?e\\.?\\s?c\\.?", " nec ", raw_lbl)
+  lbl <- .assistant_norm_text(raw_lbl)
+  if (!nzchar(lbl)) return(FALSE)
+  lbl_tokens <- strsplit(lbl, " ", fixed = TRUE)[[1L]]
+  lbl_markers <- intersect(lbl_tokens, ASSISTANT_RESIDUAL_MARKERS)
+  if (length(lbl_tokens) > 0L &&
+      identical(lbl_tokens[[1L]], .ASSISTANT_RESIDUAL_LEADING)) {
+    lbl_markers <- c(lbl_markers, .ASSISTANT_RESIDUAL_LEADING)
+  }
+  if (length(lbl_markers) == 0L) return(FALSE)
+
+  raw_q <- tolower(paste(as.character(query_texts), collapse = " "))
+  raw_q <- gsub("n\\.?\\s?e\\.?\\s?c\\.?", " nec ", raw_q)
+  q <- .assistant_norm_text(raw_q)
+  q_tokens <- strsplit(q, " ", fixed = TRUE)[[1L]]
+  # Only penalise markers the user did NOT use: someone asking for
+  # "other retail" genuinely wants the residual category.
+  length(setdiff(lbl_markers, q_tokens)) > 0L
+}
+
 #' Drop contextually implausible rows from a candidate set.
 #'
 #' @param rows data.frame with `label` (and optionally `description`).

@@ -53,6 +53,45 @@ test_that("survey guidance supplies codes lexical retrieval cannot reach", {
   expect_identical(assistant_survey_psoc_evidence("vulcanizer"), "8141")
 })
 
+test_that("an inserted vehicle-type word does not break the manual-term match (regression)", {
+  # Confirmed live defect: "food panda bicycle driver" (the vehicle word
+  # inserted between "panda" and "driver") missed the manual's own "food
+  # panda driver" entry under a plain contiguous-substring check and fell
+  # through to an unrelated current-label match (5165 DRIVING INSTRUCTORS).
+  # The term match must tolerate extra words between the term's own words
+  # while still requiring every one of them, in order.
+  expect_identical(assistant_survey_psoc_evidence("food panda bicycle driver"), "9335")
+  expect_identical(assistant_survey_psoc_evidence("food panda motorcycle driver"), "9335")
+
+  p <- assistant_coding_service("food panda bicycle driver", requested_systems = "psoc")
+  expect_identical(p$occupation$selected_code, "9335")
+  expect_false(identical(p$occupation$selected_code, "5165"))
+  expect_identical(p$occupation$evidence_source, "survey_guidance")
+})
+
+test_that("the looser term match does not blur genuinely different TNVS vehicle terms", {
+  expect_identical(assistant_survey_psoc_evidence("grab driver using car"), "8324")
+  expect_identical(assistant_survey_psoc_evidence("grab taxi driver"), "8325")
+  expect_identical(assistant_survey_psoc_evidence("tnvs motorcycle driver"), "8323")
+  expect_identical(assistant_survey_psoc_evidence("tnvs van driver"), "8326")
+  expect_identical(assistant_survey_psoc_evidence("angkas driver"), "8323")
+})
+
+test_that("every manual PSOC example term still self-matches after the looser term check", {
+  for (row in ASSISTANT_GUIDANCE_PSOC_EXAMPLES) {
+    hits <- assistant_survey_psoc_evidence(row$term)
+    expect_true(row$code %in% hits, info = row$term)
+  }
+})
+
+test_that("every manual PSIC activity-hint term still self-matches after the looser term check", {
+  for (row in ASSISTANT_GUIDANCE_PSIC_ACTIVITY_HINTS) {
+    hint <- assistant_survey_activity_hint(row$term)
+    expect_false(is.null(hint), info = row$term)
+    expect_identical(hint$historical_code, row$historical_code, info = row$term)
+  }
+})
+
 test_that("guidance evidence is re-verified, never returned blindly", {
   # A term whose code no longer verified must yield nothing rather than a
   # dangling code; proven by asking for a system/version where it cannot
