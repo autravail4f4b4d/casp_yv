@@ -110,7 +110,10 @@ assistant_render_tool_content <- function(content) {
       htmltools::tags$span(class = "rm-tool-status", ASSISTANT_TOOL_STATUS_TEXT)
     }
     S7::method(gen, ellmer::ContentToolResult) <- function(content) {
-      NULL
+      # "" and not NULL, deliberately -- see
+      # `assistant_render_text_content_for_route()` for the measured
+      # difference between the two inside shinychat.
+      ""
     }
     invisible(TRUE)
   }, error = function(e) {
@@ -155,26 +158,66 @@ assistant_render_tool_content <- function(content) {
 # rather than assumed away).
 .assistant_default_content_text_method <- NULL
 
+# --- W4: why suppression returns "" and never NULL -------------------------
+#
+# TRACED, not inferred. `shinychat:::chat_append_stream_impl()` calls
+#
+#     msg <- contents_shinychat(msg); chat_append_(msg)
+#
+# and `chat_append_message()` then branches on the VALUE:
+#
+#     is.character(content) && !is_html   ->  ui <- list(html = content)
+#     otherwise                           ->  ui <- process_ui(pre_process_ui(content))
+#
+# Returning NULL took the second branch. `pre_process_ui(NULL)` wraps its
+# argument in shinychat's own custom element, so every suppressed chunk
+# appended the LITERAL MARKUP
+#
+#     <shinychat-raw-html></shinychat-raw-html>
+#
+# into the streaming message's markdown buffer -- once per chunk, as
+# transcript content, for every coding turn. (Verified by executing the
+# real shinychat internals against a real ellmer content object, not by
+# reading the source.) Returning a character scalar takes the first branch
+# and appends nothing at all.
+#
+# That leaves the second half of the same defect: shinychat opens a
+# streaming assistant message for every turn and its `chunk_end` reducer
+# commits that message to the transcript unconditionally, empty or not.
+# An assistant message whose content is empty is rendered with shinychat's
+# placeholder icon -- a raw `<svg>` string injected into the DOM -- so a
+# fully suppressed turn left a contentless bubble sitting next to the real
+# answer. The carrier below removes it by putting the authoritative
+# rendering INTO that message instead of leaving it empty.
+
 #' Decide what a ContentText chunk renders to, given an EXPLICIT route.
 #'
 #' Pure function, no ambient session lookup -- this is what a test drives
 #' directly to exercise every route without a live Shiny session. The
 #' actual S7 method (registered below) is a thin wrapper that supplies the
-#' route from `assistant_current_session_turn_state()`.
+#' route and state from `assistant_current_session_turn_state()`.
 #'
 #' @param content an `ellmer::ContentText`.
 #' @param route character(1) or NA. NA is treated the same as
 #'   `"contextual_coding"` -- an unresolvable route defaults to the
 #'   restrictive treatment, the same fail-closed philosophy as the tool
 #'   interlock (H1), not to "render normally".
+#' @param state the session turn-state, or NULL. Supplies this turn's
+#'   authoritative rendering, which the FIRST suppressed chunk emits in
+#'   place of the model's text.
 #'
-#' @return whatever the captured original method returns, or NULL when
-#'   suppressed.
-assistant_render_text_content_for_route <- function(content, route) {
+#' @return whatever the captured original method returns on an unrestricted
+#'   route; on a coding route either the deterministic rendering (once) or
+#'   `""`. Never NULL.
+assistant_render_text_content_for_route <- function(content, route, state = NULL) {
   restrict <- is.na(route) || identical(route, "contextual_coding")
-  if (restrict) return(NULL)
-  if (!is.function(.assistant_default_content_text_method)) return(NULL)
-  .assistant_default_content_text_method(content)
+  if (!restrict) {
+    if (!is.function(.assistant_default_content_text_method)) return("")
+    return(.assistant_default_content_text_method(content))
+  }
+  carrier <- assistant_turn_take_render(state)
+  if (!is.null(carrier)) return(carrier)
+  ""
 }
 
 .assistant_register_content_guard <- function(gen) {
@@ -186,7 +229,7 @@ assistant_render_text_content_for_route <- function(content, route) {
     S7::method(gen, ellmer::ContentText) <- function(content) {
       state <- assistant_current_session_turn_state()
       route <- if (is.null(state)) NA_character_ else assistant_turn_current_route(state)
-      assistant_render_text_content_for_route(content, route)
+      assistant_render_text_content_for_route(content, route, state)
     }
     invisible(TRUE)
   }, error = function(e) {

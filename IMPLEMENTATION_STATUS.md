@@ -1154,3 +1154,168 @@ marker with no following space; both are preserved verbatim and recorded in
 - **No human has visually reviewed the rendered UI.** Verification was
   structural (DOM geometry, computed style, hit-testing, accessibility
   tree), not visual.
+
+---
+
+# RM clarification lifecycle and deterministic rendering hardening
+
+Governing specification:
+`RM_CLARIFICATION_LIFECYCLE_AND_DETERMINISTIC_RENDERING_HARDENING.md`
+
+## Starting gate
+
+```text
+worktree D:/dev/historical_phclassif-rm-v10
+branch   feature/rm-v10-clarification-rendering (created from
+         feature/rm-v10-execution-semantic-shadow)
+HEAD     1f1eae4529db10e009291ec0307eb26abe3cc25a
+tracked tree clean at start
+baseline FAIL 0 | WARN 0 | SKIP 0 | PASS 6009
+```
+
+Semantic authority remained OFF throughout. No provider, model, retrieval,
+canonical-data, edition or correspondence behaviour was changed. The UI
+branch `feature/ui-refinement-ui01-ui05` was not merged or read.
+
+## Root causes
+
+All seven were reproduced through `assistant_handle_turn()` — the same
+server entry point `app.R` calls — before any code was edited.
+
+1. **`latter` reached global retrieval.** `assistant_turn_set_pending()`
+   stored only `missing_slot` and the question *string*. The two verified
+   options the coding service had already chosen between (85312 / 85314)
+   were discarded, so `assistant_turn_apply_reply()` had nothing to match
+   against and fell through to `args$establishment_activity <- "latter"`,
+   which retrieves 20224 Manufacture of prepared pigments.
+2. **Full-label replies lost context** through the same line: the label was
+   re-retrieved globally rather than selected from the bounded set. It
+   happened to land on 85314, so the result was luck, not a contract — and
+   once the ordinal turn above had wrongly *resolved* the packet, pending
+   state was gone and the label became a fresh occupation request.
+3. **Stale state contaminated `statistician at PSA psoc psic`.** The
+   router's supersession guard required a code token *and* a named system.
+   A new coding request names systems and no code — asking for the code is
+   the point — so it was read as an answer to the outstanding teacher
+   question: PSOC stayed 2330 and the sentence was retrieved as an activity
+   (74994).
+4. **`residential` authorised 87100.** A bare qualifier answering an open
+   activity question was passed straight into unrestricted PSIC retrieval.
+5. **Automatic post-result prose.** `app.R` appended the model's text after
+   every handled coding turn if it carried no unauthorised code. The model
+   had never been shown the deterministic answer (it is appended to the
+   transcript, not to the ellmer client), so it commented on a question it
+   thought was still open: a Tagalog request for the mayor's duties after
+   1111 / 84113, "please hold on while I look for the appropriate PSIC"
+   after 78200, and a second copy of a clarification it had just been given.
+6. **`svg` in the transcript — two mechanisms, both traced in R against the
+   installed shinychat 0.4.0.**
+   - The coding-route content suppression returned `NULL`.
+     `shinychat:::chat_append_message()` branches on the value: a character
+     scalar is appended verbatim, anything else goes through
+     `pre_process_ui()`, which wraps it in shinychat's own custom element.
+     Every suppressed chunk therefore appended the literal markup
+     `<shinychat-raw-html></shinychat-raw-html>` into the transcript's
+     markdown buffer. Verified by executing the real shinychat internals
+     against a real `ellmer::ContentText`.
+   - `shinychat`'s `chunk_end` reducer commits the streaming assistant
+     message to the transcript unconditionally, and its message component
+     renders an *empty* assistant message with a raw `<svg>` placeholder
+     icon string. A fully suppressed coding turn therefore left one
+     contentless assistant bubble beside every real answer — one per turn,
+     which is the before/after pattern the live transcript showed.
+7. **Language drift** followed from (5): the model's discarded prose stayed
+   in its own history and seeded the next turn.
+
+## What changed
+
+### Clarification lifecycle (W1/W2)
+
+- New `R/assistant/assistant_clarification.R`: the ordinal/positional
+  resolver, bounded option matching, the short-ambiguous-reply refusal,
+  explicit-new-request detection, explanation detection, and canonical
+  re-verification of a selected option.
+- `assistant_turn_set_pending()` now stores canonical option identity
+  (`index`, `code`, `label`), the `system`, the `parent_code` and the
+  packet that raised the question.
+- `.assistant_bounded_reply()` resolves a reply inside the pending option
+  set and nothing else. No fuzzy, n-gram, semantic or global retrieval is
+  reachable from that path.
+- `former`/`latter` resolve only for a two-choice question; an index beyond
+  the option count is refused, never clamped.
+- A selected option is re-read from the canonical repository and must be
+  `current`, or the question is asked again.
+- An uninterpretable reply re-asks the *same* question unchanged.
+- A single bare qualifier answering an open activity slot narrows the
+  question instead of producing a code.
+- `assistant_explicit_new_coding_request()` supersedes stale pending state
+  when an explicit coding signal is accompanied by a substantive subject.
+
+### Deterministic rendering (W3/W4)
+
+- Coding turns are deterministic-only: `app.R` no longer appends model
+  prose after a handled coding turn.
+- Suppressed chunks return `""`, never `NULL`.
+- `assistant_turn_set_render()` / `assistant_turn_take_render()` hand the
+  authoritative rendering to the turn's first content chunk, so one
+  message per turn carries the answer and no contentless bubble is
+  committed. `app.R` appends the same text only if no chunk arrived.
+- `assistant_ground_turns()` replaces the model's discarded assistant turn
+  in the provider history with the text the user actually saw.
+- `assistant_transcript_artifacts()` rejects generated prose carrying
+  `<svg`/`svg`, `shinychat-raw-html`, `shiny-tool-*`, tool names,
+  `assistant_*(` calls, tool request/result wording, or raw JSON.
+- Explanation policy: the model speaks only when explicitly asked, the
+  turn is neither coded nor consumed as a clarification reply, and the
+  reply still passes the response guard.
+
+## Files changed
+
+```text
+R/assistant/assistant_clarification.R          new
+R/assistant/assistant_turn_state.R             pending schema + render carrier
+R/assistant/assistant_router.R                 supersession precedence
+R/assistant/assistant_execution.R              bounded reply, explanation, grounding
+R/assistant/assistant_render.R                 "" suppression + carrier
+R/assistant/assistant_response_guard.R         transcript artefact guard
+app.R                                          deterministic-only append (single owner)
+docs/ASSISTANT_CONTRACT.md                     sections 14 and 15, new limitations
+docs/UI_CONTRACT.md                            RM assistant states
+IMPLEMENTATION_STATUS.md                       this section
+manifest.json                                  regenerated (runtime inventory changed)
+tests/testthat/test-assistant-clarification.R                new
+tests/testthat/test-assistant-clarification-lifecycle.R      new
+tests/testthat/test-assistant-render.R         "" instead of NULL
+tests/testthat/test-assistant-router.R         supersession precedence
+```
+
+No new dependencies. Base R only for reference and label matching.
+
+## Verification
+
+```text
+targeted   test-assistant-clarification.R            PASS 127
+targeted   test-assistant-clarification-lifecycle.R  PASS 190
+repeatability  20 fresh-state repetitions x 6 named scenarios, identical
+               route / status / codes / missing slot / allowed_codes /
+               pending state on every repetition
+full suite FAIL 0 | WARN 0 | SKIP 0 | PASS 6329  (baseline 6009)
+renv       No issues found -- the project is in a consistent state
+git diff --check  clean
+```
+
+## Known limitations
+
+- **The provider round-trip on a handled coding turn cannot be suppressed
+  from this application's layer.** `shinychat::chat_mod_server()`
+  hard-codes `client$stream_async(...)` in its own input observer, its
+  returned handle exposes no cancel, and `ellmer::Chat`'s methods are
+  locked bindings (verified: `cannot change value of locked binding for
+  'stream_async'`). The turn is still sent, with no tools offered and its
+  output never appended — the cost is tokens, not correctness.
+- **An explanation turn still leaves one contentless assistant bubble**,
+  because an explanation can only be validated once its stream is
+  complete. Coding turns are unaffected.
+- **The `svg` fix was not re-observed in a browser.** Both mechanisms are
+  proven in R, but this worktree has no provider credential, so no live
+  session could be driven. Browser UAT remains outstanding for this phase.

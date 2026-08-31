@@ -2742,13 +2742,13 @@
   },
   "files": {
     ".Rprofile": {
-      "checksum": "29d141a5f4b3ddd0d6a85de006717c7b"
+      "checksum": "0754e33e867f47314aea8f6519c6c92b"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "b969155a7d163ad41810594fab604107"
     },
     "app.R": {
-      "checksum": "c085dc0b6610c020074b7ab0af004eeb"
+      "checksum": "e8c53fd426ebba5383ad077547fea87f"
     },
     "CLAUDE.md": {
       "checksum": "61b18f3c01513f13cbe1d770ebfb3e95"
@@ -2877,7 +2877,7 @@
       "checksum": "95ee83b66460c5e2e08d6c55677c0e5c"
     },
     "docs/ASSISTANT_CONTRACT.md": {
-      "checksum": "792241fc38f7f057cb8f8cd4331a6c36"
+      "checksum": "3c06c5819a5b3591bfe293cb8fb88923"
     },
     "docs/CORRESPONDENCE_SOURCES.md": {
       "checksum": "2e313895ace365dafe131f21a35492a9"
@@ -2889,7 +2889,7 @@
       "checksum": "13add4bb00585f440a6b4747771b73b4"
     },
     "docs/UI_CONTRACT.md": {
-      "checksum": "7305b200936cfe55814a078b500da428"
+      "checksum": "636ba39b22588b163d12d8d13e08684f"
     },
     "HANDOFF-CLAUDE-CODE.md": {
       "checksum": "1ed8296dd28e58ac39f2f4aa23898d76"
@@ -2957,6 +2957,9 @@
     "R/assistant/assistant_batch.R": {
       "checksum": "e060b173ea79063d74ab96d54c215132"
     },
+    "R/assistant/assistant_clarification.R": {
+      "checksum": "6c5588a9529b187069cf7371cf86b1eb"
+    },
     "R/assistant/assistant_client.R": {
       "checksum": "0bb45778c4db142a5f040f7744bd9a16"
     },
@@ -2979,7 +2982,7 @@
       "checksum": "7013d840c70c11ad1e941e11dea037a7"
     },
     "R/assistant/assistant_execution.R": {
-      "checksum": "eb7e3082455bae6cf926a4df4c91a5dc"
+      "checksum": "0455f06685787497a25e2e900c907861"
     },
     "R/assistant/assistant_hierarchy.R": {
       "checksum": "ed4e5ae2aedf847dc8c4c9ecd6d812cb"
@@ -2991,13 +2994,13 @@
       "checksum": "14d963c816731c66e5a8af0ca3260b52"
     },
     "R/assistant/assistant_render.R": {
-      "checksum": "f4babfdb7bb93dd819376c23b47fb092"
+      "checksum": "1ae23289c2a57972e0200fd9839ee32a"
     },
     "R/assistant/assistant_response_guard.R": {
-      "checksum": "24933df73592d195c04fb7b6d5fbb79a"
+      "checksum": "d05a5763dab4b5db8dbcb9b4aa526f39"
     },
     "R/assistant/assistant_router.R": {
-      "checksum": "c38738520e2de70fdd4c6b8e99c0a42c"
+      "checksum": "ec0f0beee43448b68610d88768907ed3"
     },
     "R/assistant/assistant_session_registry.R": {
       "checksum": "67538fcc7f88832b56082e2750e6798f"
@@ -3015,7 +3018,7 @@
       "checksum": "7065f449211ed8d673a8654c578caf02"
     },
     "R/assistant/assistant_turn_state.R": {
-      "checksum": "f3242287d31c015ffa3b5371225df28c"
+      "checksum": "9163ed5b45db962f8cbfab4700e1b524"
     },
     "R/composite_levels.R": {
       "checksum": "677d03fa951af7cdc1ab6fa6134a7fd4"
@@ -3119,6 +3122,9 @@
     "RM_ASSISTANT_ORCHESTRATION_HARDENING.md": {
       "checksum": "e9e416340dabe107b2c37e5831d8522f"
     },
+    "RM_CLARIFICATION_LIFECYCLE_AND_DETERMINISTIC_RENDERING_HARDENING.md": {
+      "checksum": "08c4fcccb3ba8f058a45c5562fa2efbd"
+    },
     "RM_CONTEXTUAL_CODING_CONTRACT_RESTORATION.md": {
       "checksum": "7672ac1e44bc2b3dc70103e536b07edb"
     },
@@ -3176,6 +3182,12 @@
     "tests/testthat/test-assistant-batch.R": {
       "checksum": "65075c3fef1b11a6d0fdfccd3d429b69"
     },
+    "tests/testthat/test-assistant-clarification-lifecycle.R": {
+      "checksum": "dd9ae5414da870cd5e9e808c3aeac398"
+    },
+    "tests/testthat/test-assistant-clarification.R": {
+      "checksum": "14c54a21e37c836fc94965ed797b3061"
+    },
     "tests/testthat/test-assistant-coding-level.R": {
       "checksum": "37648916f1d85fb104b4b416e319335c"
     },
@@ -3219,13 +3231,13 @@
       "checksum": "74ee85b14106178ec761ddf52b2b486b"
     },
     "tests/testthat/test-assistant-render.R": {
-      "checksum": "f8ebb3e38bdbc5c5522e6ebbec65e027"
+      "checksum": "74018953ffabfccfd0f8a0fec6e944fe"
     },
     "tests/testthat/test-assistant-response-guard.R": {
       "checksum": "9072cabd862bee591efc430df5813e4c"
     },
     "tests/testthat/test-assistant-router.R": {
-      "checksum": "1ae719952cf4a0d9801645818737fbe4"
+      "checksum": "1991e71bc2fe3337810087bf7101fef2"
     },
     "tests/testthat/test-assistant-routing-repeatability.R": {
       "checksum": "dd75b825325b5212a8028d84cc36253f"

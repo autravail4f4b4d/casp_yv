@@ -226,6 +226,9 @@ per-case outcome in `IMPLEMENTATION_STATUS.md`.
 
 - **Mid-stream provider failure is silent client-side.** If the provider fails *after* successful configuration (revoked key, network fault, rate limit), shinychat rolls the transcript back and restores the user's text but shows nothing explaining why. The failure is logged server-side and no secret or stack trace reaches the browser, so this is a UX gap, not a safety one. A fix was attempted and deliberately reverted rather than left half-working: detection was proven to work (a failed stream leaves an *empty* assistant turn on the client, distinguishable from a real reply), but three separate surfacing approaches against shinychat 0.4.0 — the chat module's `append()`, top-level `shinychat::chat_append()`, and `showNotification()` — all failed to reach the DOM on the errored-stream path. Revisit when shinychat exposes an error hook on its chat module.
 - **No live multilingual or behavioural evaluation has been performed** (§11).
+- **The provider round-trip on a handled coding turn cannot be suppressed from this application's layer.** `shinychat::chat_mod_server()` hard-codes `client$stream_async(...)` inside its own `input$chat_user_input` observer, exposes no cancel or skip on its returned handle, and `ellmer::Chat`'s methods are locked bindings, so the call cannot be intercepted without forking shinychat or proxying the Chat object. The turn is therefore still sent, with **no tools offered** and its output never appended (§15.1); the cost is tokens, not correctness. Revisit if shinychat gains a "server already answered" path.
+- **An explanation turn still leaves one contentless assistant bubble.** The carrier in §15.2 removes it for coding turns by streaming the deterministic answer, but an explanation's text can only be validated once the stream is complete, so the streaming message stays empty and the guarded reply is appended after it. Coding turns — the whole named regression matrix — are unaffected.
+- **The `svg` transcript artefact is fixed at both mechanisms it was traced to, but final confirmation needs a live browser.** Both causes are proven in R against the installed shinychat 0.4.0: suppressed `NULL` chunks injecting `<shinychat-raw-html></shinychat-raw-html>` into the markdown buffer (executed directly), and `chunk_end` committing an empty assistant message that is then rendered with a raw `<svg>` placeholder icon (read from the shipped reducer). This worktree has no provider credential, so the DOM was not re-observed after the fix.
 - **Enter does not submit** in shinychat 0.4.0's composer; the send button is required. Upstream behaviour, not configured here.
 - **`assistant_get_psic_rule()` quality is bounded by the compaction.** The 12 rules are a hand-authored ~19% distillation of the source document, reviewable in `scripts/build_assistant_assets.R`. Rule text the compaction omits is not available to RM at runtime.
 - **The pairing workbook's `mapping_confidence` is PSA-source confidence**, not a calibrated probability, and is passed through unmodified.
@@ -242,3 +245,170 @@ enforcement points; the tool list, argument names and result field sets;
 the pairing caveat and no-fixed-PSIC handling; the no-model-memory
 instruction in the degraded rule result; the fail-closed default of
 `RM_ASSISTANT_ENABLED`; and per-session client construction.
+
+## 14. Clarification lifecycle
+
+### 14.1 Turn precedence
+
+Every turn is resolved in this fixed order, entirely in R, before any
+provider call:
+
+```text
+explicit new coding request   >  stale pending clarification
+valid bounded clarification reply  >  fresh global retrieval
+```
+
+`assistant_explicit_new_coding_request(text)` is TRUE only when the turn
+carries an explicit coding signal (`psoc`, `psic`, `code`,
+`classification`, `classify`, `coding`, or any other registered system id)
+**and** a substantive subject survives after the signal tokens and the
+ordinary request scaffolding are stripped. A bare `psic`, `what is the
+code` or `please give me the code` therefore remains an answer to the
+outstanding question; `statistician at PSA psoc psic` starts a new one.
+
+### 14.2 Pending state schema
+
+`assistant_turn_set_pending()` stores canonical option identity, not
+display prose:
+
+```text
+pending = list(
+  active            = TRUE,
+  route             = "contextual_coding",
+  requested_systems = c("psoc", "psic"),
+  occupation, establishment_activity, wage_payer,
+  missing_slot      = "establishment_activity_detail",
+  question          = "<the deterministic question, verbatim>",
+  system            = "psic",
+  parent_code       = "8531",
+  options           = list(list(index = 1L, code = "85312", label = "..."),
+                           list(index = 2L, code = "85314", label = "...")),
+  packet            = <the clarification_required packet that asked>
+)
+```
+
+`options` and `packet` are what make a reply resolvable: the options carry
+the codes the coding service already verified, and the packet carries every
+fact that is **not** the answered slot (a resolved PSOC, for instance), so
+completing the slot preserves them instead of re-deriving them from the
+reply text.
+
+### 14.3 Bounded resolution
+
+When a question offers options, the reply is resolved against **those
+options and nothing else**. No lexical, fuzzy, n-gram, semantic or global
+retrieval is reachable from this path. Resolution order:
+
+1. **Ordinal / positional reference** — `1`–`4`, `1st`–`4th`,
+   `first`–`fourth`, `option N`, `the Nth`, `Nth one`, `former`, `latter`,
+   with `the` optional throughout. Case-insensitive, punctuation and
+   whitespace tolerant. `former`/`latter` resolve **only** when exactly two
+   options exist; with three or more they identify nothing and are refused.
+   An index beyond the option count is refused, never clamped.
+2. **Exact option label**, normalised for case and punctuation.
+3. **Unique token subset** — every token of the reply appears in exactly
+   one option's label (`upland` → `Growing of rice in upland`). A subset
+   that fits more than one option (`special needs`, `growing of rice`) is
+   **not** a match.
+
+A selected option is re-verified against the canonical repository before it
+can become an answer (`assistant_verified_option_half()`): unknown code, or
+any edition status other than `current`, returns nothing and the question is
+asked again.
+
+A reply the bounded set cannot interpret re-asks **the same question**,
+unchanged, with the same options and the same pending state. The
+application never invents a second, differently worded question for the
+same slot.
+
+### 14.4 Short ambiguous replies
+
+For an **open** activity slot (no options), a reply consisting of a single
+qualifier from `ASSISTANT_AMBIGUOUS_SHORT_REPLIES` — `residential`,
+`private`, `public`, `government`, `commercial`, `hospital`, `school`,
+`farm`, … — names a setting, not an activity, and is refused rather than
+retrieved. The question narrows instead
+(`assistant_narrow_activity_question()`), naming no code. The refusal is
+strictly single-token: `residential construction` says what the
+establishment does and still resolves normally.
+
+### 14.5 Cleanup
+
+Pending state is cleared when the clarification resolves, when an explicit
+new coding request supersedes it, on New chat, and when the session ends.
+A resolved turn leaves no pending state.
+
+## 15. Deterministic rendering and the explanation policy
+
+### 15.1 Deterministic only, by default
+
+For a `resolved`, `clarification_required` or `no_verified_match` coding
+packet the contract is:
+
+```text
+deterministic packet -> deterministic render -> END TURN
+```
+
+The model is **never** invoked to add prose to a coding answer, and its
+output is never appended automatically. On a handled route it is offered no
+tools at all, its streamed text is suppressed chunk by chunk, and the
+authoritative rendering is what the transcript receives.
+
+### 15.2 One message per turn
+
+`assistant_turn_set_render()` / `assistant_turn_take_render()` hand this
+turn's authoritative rendering to the **first** content chunk of the
+stream, so the streaming assistant message carries the answer itself. This
+exists because `shinychat`'s `chunk_end` reducer commits a streaming
+message to the transcript whether or not anything was written into it: a
+fully suppressed turn previously left a contentless assistant bubble —
+rendered with shinychat's raw `<svg>` placeholder icon — sitting beside the
+real answer. If the provider emits no content chunk at all, app.R appends
+the same text instead, so the answer never depends on the model speaking.
+
+Suppressed chunks return `""`, never `NULL`. `shinychat::chat_append_message()`
+branches on the value: a character scalar is appended verbatim, while a
+`NULL` is routed through `pre_process_ui()`, which appends the literal
+markup `<shinychat-raw-html></shinychat-raw-html>` into the transcript once
+per suppressed chunk.
+
+### 15.3 Explanation policy
+
+The model may speak only when the user explicitly asks it to —
+`assistant_explanation_requested()` matches short meta questions such as
+`why?`, `explain this`, `what does this mean?`, `what is the difference?`,
+`bakit?`, `pakipaliwanag`. Such a turn:
+
+- is **not** coded and is **not** treated as a clarification reply;
+- leaves the pending state and the latest packet exactly as they were;
+- keeps the `contextual_coding` route, so the response guard still runs.
+
+The generated text is appended only if it passes
+`assistant_guard_response()`. It cannot change codes, labels, status,
+`allowed_codes` or clarification state, because none of those are re-derived
+on an explanation turn. If the explanation fails or is rejected, the
+deterministic facts already rendered remain sufficient.
+
+After every handled coding turn `assistant_ground_turns()` replaces the
+model's own discarded assistant turn in the provider history with the text
+the user actually saw. The history stays alternating (no turn is added),
+an explanation request has the real answer in context, and one turn's
+spontaneous language change cannot seed the next.
+
+### 15.4 Transcript hygiene
+
+`assistant_transcript_artifacts()` rejects generated prose containing
+`<svg`/`svg`, `shinychat-raw-html`, `shiny-tool-request`,
+`shiny-tool-result`, a registered tool name, an `assistant_*(` call, the
+words `tool request`/`tool result`/`tool call`, or a raw JSON object. A
+rejected reply is replaced by the deterministic rendering. The
+deterministic renderer cannot produce any of these by construction — it
+emits only markdown built from packet fields — and this is asserted
+directly over the renders of the whole regression matrix.
+
+The bare word `clear`, which the governing specification also lists, is
+deliberately **not** treated as an artefact in generated prose: it is
+ordinary English ("that is clear"), and rejecting a reply for containing it
+would discard sound explanations. It cannot appear from this application's
+side, because the deterministic renderer never emits it — which is the
+property actually asserted.

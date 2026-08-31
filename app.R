@@ -813,11 +813,17 @@ server <- function(input, output, session) {
     # status, source and clarification question all come from the packet,
     # never from generated prose.
     #
-    # The model's own text is used only as OPTIONAL explanation, and only
-    # after passing the response guard against this turn's allowed_codes.
-    # If the provider failed, produced nothing, or produced something the
-    # guard rejects, the deterministic answer still stands -- classification
-    # never depends on the conversational model succeeding.
+    # DETERMINISTIC ONLY (RM_CLARIFICATION_LIFECYCLE spec 20/21). A coding
+    # turn ends at the deterministic rendering. The model's own text is
+    # NEVER appended automatically, because on a handled turn it is
+    # commentary on a question R has already answered and it contradicted
+    # that answer live: a resolved PSOC 1111 + PSIC 84113 was followed by a
+    # fresh Tagalog request for the mayor's duties, a resolved PSIC 78200
+    # by "please hold on while I look for the appropriate PSIC", and a
+    # deterministic clarification by a second, differently-worded copy of
+    # itself. The model may speak only when the user explicitly asks it to
+    # (`assistant_explanation_requested()`), which arrives here as an
+    # UNHANDLED coding turn and is served by the guarded path below.
     #
     # Non-coding routes are untouched: live streaming already rendered
     # them, so appending here would duplicate.
@@ -827,27 +833,29 @@ server <- function(input, output, session) {
 
       res <- rm_server_result$current
       if (isTRUE(res$handled)) {
-        # 1. The authoritative block, straight from R.
-        if (!is.na(res$render) && nzchar(trimws(res$render))) {
+        # The authoritative block, straight from R. On a normal turn the
+        # stream already carried it (assistant_turn_take_render(), which
+        # is what stops shinychat committing an empty assistant bubble
+        # next to the answer); this append is the fallback for a turn
+        # where the provider emitted no content chunk at all.
+        if (!assistant_turn_render_emitted(rm_turn_state) &&
+            !is.na(res$render) && nzchar(trimws(res$render))) {
           rm_chat$append(res$render, role = "assistant")
         }
 
-        # 2. Optional explanation. A batch gets none: there is no single
-        #    answer to explain, and letting the model summarise six results
-        #    is precisely how the live build collapsed them into one.
-        if (!identical(res$route, "batch_contextual_coding")) {
-          text <- tryCatch(ellmer::contents_text(turn), error = function(e) NULL)
-          if (!is.null(text) && nzchar(trimws(text))) {
-            guarded <- assistant_guard_response(text, res$packet)
-            # Only ADD prose that survived the guard. The deterministic
-            # block above already carries every authoritative fact, so a
-            # rejected explanation is simply dropped rather than replaced
-            # by a second copy of the same rendering.
-            if (!isTRUE(guarded$used_fallback)) {
-              rm_chat$append(guarded$text, role = "assistant")
-            }
+        # Ground the provider's own history with what the user actually
+        # saw, replacing the prose that was discarded. Best-effort: a
+        # failure here cannot affect the answer that has already been
+        # rendered.
+        tryCatch(
+          rm_client$set_turns(
+            assistant_ground_turns(rm_client$get_turns(), res$render)
+          ),
+          error = function(e) {
+            message(sprintf("[rm-assistant] could not ground chat history: %s",
+                            conditionMessage(e)))
           }
-        }
+        )
         return(invisible(NULL))
       }
 

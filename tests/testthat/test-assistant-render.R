@@ -74,7 +74,12 @@ test_that("H2: assistant text on the contextual_coding route is suppressed, not 
 
   txt <- ellmer::ContentText(text = "PSOC 1112 is CHIEF EXECUTIVES.")
   out <- assistant_render_text_content_for_route(txt, "contextual_coding")
-  expect_null(out)
+  # "" and not NULL: shinychat routes a NULL chunk through
+  # `pre_process_ui()`, which appends the literal custom-element markup
+  # <shinychat-raw-html></shinychat-raw-html> into the transcript, once per
+  # suppressed chunk. A character scalar takes shinychat's own
+  # `is.character()` fast path and appends nothing at all.
+  expect_identical(out, "")
 })
 
 test_that("H2: an unresolvable route (NA) defaults to suppression, not to rendering", {
@@ -83,7 +88,7 @@ test_that("H2: an unresolvable route (NA) defaults to suppression, not to render
 
   txt <- ellmer::ContentText(text = "some generated prose")
   out <- assistant_render_text_content_for_route(txt, NA_character_)
-  expect_null(out)
+  expect_identical(out, "")
 })
 
 test_that("H2: the live S7 dispatch path suppresses for a session actually registered on contextual_coding", {
@@ -104,7 +109,7 @@ test_that("H2: the live S7 dispatch path suppresses for a session actually regis
   out <- shiny::withReactiveDomain(fake_session, {
     assistant_render_tool_content(txt)
   })
-  expect_null(out)
+  expect_identical(out, "")
 })
 
 test_that("H2: the live S7 dispatch path renders normally for a session on a non-coding route", {
@@ -193,7 +198,7 @@ test_that("an unregistered/unknown session fails closed for contextual coding te
   out <- shiny::withReactiveDomain(unknown_session, {
     assistant_render_tool_content(txt)
   })
-  expect_null(out)
+  expect_identical(out, "")
 })
 
 test_that("the suppression registers cleanly and is idempotent", {

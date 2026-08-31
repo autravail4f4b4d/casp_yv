@@ -346,8 +346,25 @@ assistant_handle_turn <- function(text, turn_state) {
     packets = list(),
     render = NA_character_,
     allowed_codes = character(0),
-    explanation_context = NA_character_
+    explanation_context = NA_character_,
+    explanation_requested = FALSE
   )
+
+  # EXPLANATION TURNS (spec 21). "why?" / "explain this" is a question
+  # ABOUT the answer just given, not a new description of work. Coding it
+  # would classify the word "why"; treating it as a clarification reply
+  # would consume the outstanding question. It is therefore handled by
+  # neither: the route stays `contextual_coding` (so live model text is
+  # still suppressed and the output guard still runs against the retained
+  # packet), no new coding is performed, and the pending state is left
+  # exactly as it was. app.R's guarded-append path then lets the model --
+  # and only then -- speak.
+  if (assistant_explanation_requested(raw) &&
+      !is.null(assistant_turn_latest_packet(turn_state))) {
+    out$explanation_requested <- TRUE
+    out$route <- "contextual_coding"
+    return(out)
+  }
 
   if (!(routed$route %in% ASSISTANT_SERVER_HANDLED_ROUTES)) {
     return(out)
@@ -369,13 +386,103 @@ assistant_handle_turn <- function(text, turn_state) {
   })
 
   if (is.null(handled)) return(out)
+  # The authoritative rendering is handed to the turn's first content
+  # chunk (see `assistant_turn_set_render()`), so one message per turn
+  # carries the answer instead of an empty bubble plus an appended one.
+  assistant_turn_set_render(turn_state, handled$render)
   handled
+}
+
+# One resolved/clarification result, assembled the same way wherever it
+# comes from, so the bounded-resolution path and the ordinary path cannot
+# drift apart in what they report.
+.assistant_single_result <- function(route, packet) {
+  list(
+    route = route,
+    handled = TRUE,
+    status = packet$status,
+    packet = packet,
+    packets = list(packet),
+    render = assistant_render_coding_result(packet),
+    allowed_codes = assistant_allowed_codes(packet),
+    explanation_context = assistant_render_coding_result(packet),
+    explanation_requested = FALSE
+  )
+}
+
+#' Resolve a reply inside the BOUNDED pending universe (spec 12).
+#'
+#' Returns NULL when the reply is not one this function is responsible for,
+#' in which case the caller falls through to the ordinary open-slot path.
+#' It never performs, and never authorises, a fresh global retrieval.
+.assistant_bounded_reply <- function(text, pending, turn_state) {
+  if (is.null(pending)) return(NULL)
+  base <- pending$packet
+  if (is.null(base)) return(NULL)
+
+  options <- pending$options
+  if (!is.null(options) && length(options) > 0L) {
+    # A question WITH options has a closed answer set. Everything is
+    # decided here; nothing reaches retrieval, whatever the user typed.
+    m <- assistant_match_pending_option(text, options)
+    if (isTRUE(m$matched)) {
+      resolved <- assistant_packet_with_selected_option(
+        base, m$option, system = pending$system %||% "psic"
+      )
+      if (!is.null(resolved)) {
+        assistant_turn_set_latest_packet(turn_state, resolved)
+        # Answered: no pending state may survive (spec 16).
+        assistant_turn_clear(turn_state)
+        return(.assistant_single_result("contextual_coding", resolved))
+      }
+    }
+    # Uninterpretable inside the bounded set -- or a selected option that
+    # no longer verifies as current. Ask the SAME question again rather
+    # than guessing or widening the search (spec 12/23).
+    reask <- assistant_packet_reask(base)
+    assistant_turn_set_latest_packet(turn_state, reask)
+    assistant_turn_set_pending(
+      turn_state, reask,
+      occupation = pending$occupation,
+      establishment_activity = pending$establishment_activity,
+      requested_systems = pending$requested_systems,
+      wage_payer = pending$wage_payer
+    )
+    return(.assistant_single_result("contextual_coding", reask))
+  }
+
+  # An OPEN activity slot. A bare qualifier ("residential") names a
+  # setting, not an activity, and must not be sent into unrestricted PSIC
+  # retrieval (spec 13). Narrow the question instead.
+  slot <- pending$missing_slot
+  if (!is.null(slot) && !is.na(slot) && slot %in% .ASSISTANT_ACTIVITY_SLOTS &&
+      assistant_reply_too_ambiguous(text)) {
+    narrowed <- assistant_packet_narrow_question(
+      base, assistant_narrow_activity_question(text, pending$occupation)
+    )
+    assistant_turn_set_latest_packet(turn_state, narrowed)
+    assistant_turn_set_pending(
+      turn_state, narrowed,
+      occupation = pending$occupation,
+      establishment_activity = pending$establishment_activity,
+      requested_systems = pending$requested_systems,
+      wage_payer = pending$wage_payer
+    )
+    return(.assistant_single_result("contextual_coding", narrowed))
+  }
+
+  NULL
 }
 
 .assistant_handle_single <- function(routed, turn_state, pending) {
   # A clarification reply reuses the SAME stored request rather than being
   # re-parsed as a fresh one -- this is what keeps "residential
   # construction" attached to the carpenter that prompted the question.
+  if (isTRUE(routed$is_clarification_reply) && !is.null(pending)) {
+    bounded <- .assistant_bounded_reply(routed$text, pending, turn_state)
+    if (!is.null(bounded)) return(bounded)
+  }
+
   args <- if (isTRUE(routed$is_clarification_reply) && !is.null(pending)) {
     assistant_turn_apply_reply(turn_state, routed$text)
   } else {
@@ -402,16 +509,37 @@ assistant_handle_turn <- function(text, turn_state) {
     wage_payer = args$wage_payer
   )
 
-  list(
-    route = routed$route,
-    handled = TRUE,
-    status = packet$status,
-    packet = packet,
-    packets = list(packet),
-    render = assistant_render_coding_result(packet),
-    allowed_codes = assistant_allowed_codes(packet),
-    explanation_context = assistant_render_coding_result(packet)
-  )
+  .assistant_single_result(routed$route, packet)
+}
+
+#' Ground the provider's own conversation history with the authoritative
+#' answer (spec 21/22).
+#'
+#' WHY. The deterministic block is appended to the TRANSCRIPT, not to the
+#' ellmer client, so the model never saw the answer the user was given. It
+#' therefore carried its own discarded prose forward as context -- which is
+#' how a resolved PSIC 78200 turn was followed by "please hold on while I
+#' look for the appropriate PSIC", and how one turn's spontaneous Tagalog
+#' seeded the next. Replacing that final assistant turn with the text the
+#' user actually saw keeps the history alternating (no second assistant
+#' turn is introduced), gives an explanation request a grounded packet to
+#' explain, and removes the discarded prose from the context window.
+#'
+#' Pure list transformation so it is testable without a provider.
+#'
+#' @param turns list of `ellmer::Turn`.
+#' @param text character(1) the authoritative rendering.
+#' @return the turns, with the trailing assistant turn replaced when there
+#'   is one to replace. Unchanged otherwise -- never appends.
+assistant_ground_turns <- function(turns, text) {
+  t <- .assistant_scalar_chr(text)
+  if (is.null(t) || !nzchar(trimws(t))) return(turns)
+  if (is.null(turns) || length(turns) == 0L) return(turns)
+  last <- turns[[length(turns)]]
+  role <- tryCatch(last@role, error = function(e) NA_character_)
+  if (!identical(as.character(role), "assistant")) return(turns)
+  turns[[length(turns)]] <- ellmer::Turn("assistant", t)
+  turns
 }
 
 .assistant_handle_batch <- function(routed, turn_state) {
@@ -453,6 +581,7 @@ assistant_handle_turn <- function(text, turn_state) {
     packets = packets,
     render = assistant_render_batch_results(res$resolved, res$unresolved),
     allowed_codes = assistant_allowed_codes(merged),
-    explanation_context = NA_character_
+    explanation_context = NA_character_,
+    explanation_requested = FALSE
   )
 }

@@ -244,6 +244,10 @@ may be `NA`.
 | Cancelled | User presses "Stop generating"; the partial reply stops |
 | New chat | `rm_assistant-new_chat` clears the transcript AND the ellmer client's turn history, then the static greeting reappears — again with no model call |
 | Unavailable | `rm_assistant_unavailable_ui(reason)` replaces the whole chat: "RM Assistant is temporarily unavailable" plus "You can still search and browse all classifications using the main application", and optionally a short non-technical reason. Decided once at startup from the deployment's provider configuration. Never renders a stack trace or provider error text |
+| Coding answer | **Exactly one assistant message per coding turn**, containing only the deterministic rendering (code, label, level, coding role, edition, status, source, and the clarification question when there is one). No model prose is appended, so no second, contradictory message and no spontaneous language change follows a correct answer. See `docs/ASSISTANT_CONTRACT.md` §15 |
+| Clarification with options | The deterministic question is rendered **once**, followed by its bounded option list. Replying `2`, `second`, `option 2`, `the latter`, or the option's own label selects that option; a reply the option set cannot interpret re-asks the same question unchanged |
+| Clarification, bare qualifier | A single-word setting (`residential`, `private`, `hospital`, …) answering an open activity question narrows the question instead of producing a code. See `docs/ASSISTANT_CONTRACT.md` §14.4 |
+| Explanation | Only when the user explicitly asks (`why?`, `explain this`, `what does this mean?`, `bakit?`). The model's text is appended as an extra message only after passing the response guard; codes, labels, status and clarification state are unchanged |
 | Provider fails mid-stream | **Known limitation** — the transcript rolls back and the user's text is restored, but no explanation is shown. Documented in `docs/ASSISTANT_CONTRACT.md` §12 |
 
 Responsive note specific to this panel: `shiny-chat-container` is a CSS

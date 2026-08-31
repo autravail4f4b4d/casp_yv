@@ -199,18 +199,38 @@ test_that("a multi-line turn that is not N coding requests routes exactly as bef
 
 test_that("a clarification reply is NEVER treated as a batch", {
   pending <- list(active = TRUE, missing_slot = "establishment_activity")
-  # Even a reply that itself looks like several coding lines stays a reply:
-  # the pending guard returns before batch detection is reached.
-  r <- assistant_route_request("residential construction psoc\nschool building psoc",
+  # A multi-line ANSWER stays one reply: the pending guard returns before
+  # batch detection is reached, so the lines cannot be split into
+  # independent requests and re-coded against the wrong context.
+  r <- assistant_route_request("residential construction\nschool building",
                                pending = pending)
   expect_identical(r$route, "contextual_coding")
   expect_true(r$is_clarification_reply)
   expect_null(r$items)
+})
+
+test_that("several EXPLICIT coding requests supersede a pending question", {
+  # Precedence change (RM_CLARIFICATION_LIFECYCLE spec 14/15): an explicit
+  # new coding request outranks a stale pending clarification, and that is
+  # not weakened by the user sending several of them at once. Applying a
+  # six-line paste of new requests to the outstanding
+  # `establishment_activity` slot would code all six as one activity --
+  # which is exactly the "clearly new coding request" case spec 15 forbids
+  # treating as a continuation. Each line is still parsed independently, so
+  # the batch-collapse defect this test was originally written for stays
+  # closed.
+  pending <- list(active = TRUE, missing_slot = "establishment_activity")
+
+  r <- assistant_route_request("residential construction psoc\nschool building psoc",
+                               pending = pending)
+  expect_identical(r$route, "batch_contextual_coding")
+  expect_false(r$is_clarification_reply)
+  expect_length(r$items, 2L)
 
   r2 <- assistant_route_request(.router_batch_six, pending = pending)
-  expect_identical(r2$route, "contextual_coding")
-  expect_true(r2$is_clarification_reply)
-  expect_null(r2$items)
+  expect_identical(r2$route, "batch_contextual_coding")
+  expect_false(r2$is_clarification_reply)
+  expect_length(r2$items, 6L)
 })
 
 test_that("batch routing is deterministic across repeated calls", {

@@ -181,11 +181,67 @@ assistant_render_batch_results <- function(resolved = list(), unresolved = list(
   paste(trimws(paste(out, collapse = "\n")), collapse = "\n")
 }
 
+# --- W4: transcript hygiene (spec 25) --------------------------------------
+#
+# Nothing internal to the application's plumbing may appear in a
+# user-visible reply: no markup, no custom elements, no tool names, no raw
+# tool payloads. These are matched as ARTEFACTS, not as forbidden English:
+# the patterns are anchored on syntax (`<svg`, `shinychat-raw-html`,
+# `assistant_something(`) or on the literal registered tool names, so an
+# ordinary sentence cannot trip them.
+#
+# The deterministic renderer cannot produce any of these by construction --
+# it emits only markdown built from packet fields -- so this guard exists
+# for generated prose, which is the only text on a coding route that this
+# application does not author itself.
+ASSISTANT_TRANSCRIPT_ARTIFACT_PATTERNS <- c(
+  "<\\s*svg", "</\\s*svg", "\\bsvg\\b",
+  "shinychat-raw-html", "shiny-tool-request", "shiny-tool-result",
+  "\\bassistant_[a-z_]+\\s*\\(",
+  "\\btool (request|result|call)\\b",
+  "\\{\\s*\"[a-z_]+\"\\s*:"
+)
+
+#' Which internal artefacts, if any, does this text contain?
+#'
+#' @return character vector of the patterns that matched; empty when clean.
+assistant_transcript_artifacts <- function(text) {
+  t <- .assistant_scalar_chr(text)
+  if (is.null(t)) return(character(0))
+  low <- tolower(t)
+  hits <- vapply(
+    ASSISTANT_TRANSCRIPT_ARTIFACT_PATTERNS,
+    function(p) grepl(p, low, perl = TRUE),
+    logical(1), USE.NAMES = FALSE
+  )
+  named <- vapply(
+    ASSISTANT_INTERNAL_TOOL_NAME_LITERALS,
+    function(n) grepl(n, low, fixed = TRUE),
+    logical(1), USE.NAMES = FALSE
+  )
+  c(ASSISTANT_TRANSCRIPT_ARTIFACT_PATTERNS[hits],
+    ASSISTANT_INTERNAL_TOOL_NAME_LITERALS[named])
+}
+
 #' Apply the guard: return the model's text when it is safe, otherwise the
 #' deterministic rendering.
 #'
 #' @return list(text, used_fallback, check).
 assistant_guard_response <- function(text, packet) {
+  artifacts <- assistant_transcript_artifacts(text)
+  if (length(artifacts) > 0L) {
+    message(sprintf(
+      "[rm-assistant] response guard rejected a reply carrying internal artefacts: %s",
+      paste(artifacts, collapse = ", ")
+    ))
+    return(list(
+      text = assistant_render_coding_result(packet),
+      used_fallback = TRUE,
+      check = list(ok = FALSE, offending_codes = character(0),
+                   allowed = assistant_allowed_codes(packet),
+                   reason = "Response contained internal rendering artefacts.")
+    ))
+  }
   chk <- assistant_guard_check(text, packet)
   if (isTRUE(chk$ok)) {
     return(list(text = as.character(text), used_fallback = FALSE, check = chk))

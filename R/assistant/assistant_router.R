@@ -153,9 +153,20 @@ assistant_route_request <- function(text, pending = NULL) {
   # A pending clarification wins over re-routing: "residential construction"
   # is an ANSWER, not a new search. Guarded so an explicit new code lookup
   # or system question can still supersede it (spec 13).
+  #
+  # SUPERSESSION (spec 14). The original guard required a CODE TOKEN as
+  # well as a named system, so "statistician at PSA psoc psic" -- which
+  # names two systems and no code, because asking for a code is the whole
+  # point -- was read as an answer to the outstanding teacher question. The
+  # stale occupation was kept, PSOC 2330 was reported for a statistician
+  # and the sentence was retrieved as an activity (74994). An explicit new
+  # coding request with a substantive subject now supersedes on its own;
+  # `assistant_explicit_new_coding_request()` requires that subject, so a
+  # bare "psic" or "what is the code" is still treated as an answer.
   if (!is.null(pending) && isTRUE(pending$active)) {
     supersedes <- (length(code_tokens) > 0L && length(systems) > 0L) ||
-      grepl(.ASSISTANT_SYSTEM_INFO_PATTERNS, q, perl = TRUE)
+      grepl(.ASSISTANT_SYSTEM_INFO_PATTERNS, q, perl = TRUE) ||
+      assistant_explicit_new_coding_request(q)
     if (!supersedes) {
       out$route <- "contextual_coding"
       out$is_clarification_reply <- TRUE

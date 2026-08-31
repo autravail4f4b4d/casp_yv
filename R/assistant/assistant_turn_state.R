@@ -76,7 +76,56 @@ assistant_turn_set_route <- function(state, route) {
   # accumulator below. `set_route()` is called once per turn, synchronously,
   # before any provider round-trip, so this is the correct reset point.
   state$batch_allowed <- NULL
+  # ... and for the deterministic render carrier (see
+  # `assistant_turn_set_render()`), for exactly the same reason: one turn's
+  # authoritative answer must never be emitted into the next turn's stream.
+  state$pending_render <- NULL
+  state$render_emitted <- FALSE
   invisible(state$current_route)
+}
+
+# --- deterministic render carrier (W3/W4) ----------------------------------
+#
+# THE DEFECT THIS REMOVES. On a coding turn the model's own text is
+# suppressed chunk by chunk (assistant_render.R), and the authoritative
+# answer used to be appended as a SEPARATE message once the stream
+# finished. shinychat still opens a streaming assistant message for every
+# turn and its `chunk_end` reducer commits that message to the transcript
+# whether or not anything was ever written into it -- so every coding turn
+# deposited an extra, contentless assistant bubble, rendered with
+# shinychat's raw `<svg>` placeholder icon, immediately before the real
+# answer. Two bubbles per turn, one of them empty.
+#
+# THE FIX. The deterministic render is handed to the FIRST content chunk of
+# the turn, so the streaming message carries the authoritative answer
+# itself. One message per turn, containing exactly the text R produced.
+# `assistant_turn_render_emitted()` tells app.R whether that happened; if
+# the provider produced no chunk at all, app.R appends the same text
+# instead, so the answer never depends on the model having spoken.
+
+#' Hand this turn's authoritative rendering to the stream.
+assistant_turn_set_render <- function(state, text) {
+  if (is.null(state) || !is.environment(state)) return(invisible(NULL))
+  t <- .assistant_scalar_chr(text)
+  state$pending_render <- if (is.null(t) || !nzchar(trimws(t))) NULL else t
+  state$render_emitted <- FALSE
+  invisible(state$pending_render)
+}
+
+#' Take the authoritative rendering exactly once. NULL afterwards.
+assistant_turn_take_render <- function(state) {
+  if (is.null(state) || !is.environment(state)) return(NULL)
+  t <- state$pending_render
+  if (is.null(t)) return(NULL)
+  state$pending_render <- NULL
+  state$render_emitted <- TRUE
+  t
+}
+
+#' Was this turn's authoritative rendering already emitted into the stream?
+assistant_turn_render_emitted <- function(state) {
+  if (is.null(state) || !is.environment(state)) return(FALSE)
+  isTRUE(state$render_emitted)
 }
 
 #' The route the router actually declared for this turn, which is the only
@@ -177,9 +226,23 @@ assistant_turn_pending <- function(state) {
 
 #' Record a coding request that is waiting on one missing slot.
 #'
-#' Stores only the minimal deterministic context needed to rerun the same
+#' Stores the minimal deterministic context needed to rerun the same
 #' request (spec 12): the slots already known, the systems asked for, and
 #' which slot is missing. No prose, no candidate pool, no model output.
+#'
+#' STRUCTURED OPTIONS (spec 9). When the question offers choices, their
+#' CANONICAL IDENTITY is stored, not just the display prose: `options`
+#' keeps `list(index, code, label)` per choice and `system`/`parent_code`
+#' record what the question is about. Storing only `question` -- the
+#' previous behaviour -- is precisely why "latter" could not be resolved:
+#' by the time the reply arrived, the two verified codes the application
+#' had already chosen between (85312 / 85314) no longer existed anywhere in
+#' the session, so the reply had nothing to be matched against and fell
+#' through to global retrieval.
+#'
+#' `packet` itself is retained for the same reason: completing the pending
+#' slot must PRESERVE every other verified fact (PSOC 2330) rather than
+#' re-derive it from the reply text.
 assistant_turn_set_pending <- function(state, packet, occupation = NULL,
                                        establishment_activity = NULL,
                                        requested_systems = c("psoc", "psic"),
@@ -196,9 +259,44 @@ assistant_turn_set_pending <- function(state, packet, occupation = NULL,
     establishment_activity = establishment_activity,
     wage_payer = wage_payer,
     missing_slot = packet$clarification$missing_slot,
-    question = packet$clarification$question
+    question = packet$clarification$question,
+    system = .assistant_pending_system(packet),
+    parent_code = .assistant_pending_parent_code(packet),
+    options = .assistant_pending_options(packet),
+    packet = packet
   )
   invisible(state$pending)
+}
+
+# Which system the outstanding question is about. Only the industry half
+# ever raises an option question today; the occupation half is handled for
+# symmetry so a future PSOC subtype question needs no change here.
+.assistant_pending_system <- function(packet) {
+  slot <- packet$clarification$missing_slot
+  if (!is.null(slot) && !is.na(slot) && identical(slot, "occupation")) "psoc" else "psic"
+}
+
+.assistant_pending_parent_code <- function(packet) {
+  ind <- packet$industry
+  if (is.null(ind)) return(NA_character_)
+  agg <- ind$supported_aggregate_code
+  if (is.null(agg) || is.na(agg)) NA_character_ else as.character(agg)
+}
+
+# Options as stored: 1-based index plus the canonical code and label the
+# coding service verified when it raised the question.
+.assistant_pending_options <- function(packet) {
+  opts <- packet$clarification$options
+  if (is.null(opts) || length(opts) == 0L) return(list())
+  out <- vector("list", length(opts))
+  for (i in seq_along(opts)) {
+    out[[i]] <- list(
+      index = i,
+      code = as.character(opts[[i]]$code),
+      label = as.character(opts[[i]]$label)
+    )
+  }
+  out
 }
 
 #' Clear the pending question (resolved, superseded, or topic change).
@@ -210,6 +308,8 @@ assistant_turn_clear <- function(state) {
   state$pending <- NULL
   state$batch <- NULL
   state$last_batch <- NULL
+  state$pending_render <- NULL
+  state$render_emitted <- FALSE
   invisible(NULL)
 }
 
