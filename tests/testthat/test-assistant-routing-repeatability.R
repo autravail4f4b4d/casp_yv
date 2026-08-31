@@ -109,7 +109,12 @@ test_that("the specific live regressions cannot recur", {
   teach <- .repeat_outcome("teacher in private high school psoc psic",
                            "secondary education teacher",
                            "private general secondary education")
-  expect_identical(teach$psic, "85312")
+  # v10 (spec 20): the verified secondary-education PARENT, not a guessed
+  # subclass. What this harness pins is that the structured outcome is
+  # STABLE, whichever contract is in force.
+  expect_identical(teach$psic, "8531")
+  expect_identical(teach$missing_slot, "establishment_activity_detail")
+  expect_false(identical(teach$psic, "85102"))
 
   corn <- .repeat_outcome("corn farmer psoc psic", "corn farmer", "growing of corn")
   expect_false(is.na(corn$psic))

@@ -136,7 +136,25 @@ ASSISTANT_GUIDANCE_VAGUE_ACTIVITIES <- c(
   # Vague terms the project's own PSIC rules already listed, kept together
   # so there is one refusal list rather than two.
   "trading", "contractor", "general services", "financial services",
-  "online business", "business", "office", "institution", "agency"
+  "online business", "business", "office", "institution", "agency",
+  # BARE SECTION NAMES. The manual's own list already refuses two of these
+  # ("mine", "transportation"); these are the rest of the same shape -- the
+  # name of a whole PSIC section, which says nothing about what one
+  # establishment produces or provides.
+  #
+  # Measured need (spec 19). A carpenter query whose establishment activity
+  # was the occupation-derived word "construction" resolved confidently to
+  # PSIC 08106 "Construction sand and gravel quarrying". The facet gate now
+  # rejects the quarry, but the survivors were still 41001 residential /
+  # 42100 roads and railways / 42201 telecommunication lines -- four
+  # different Divisions under no shared parent, i.e. exactly the situation
+  # the manual refuses to code. "Construction" is not an answer to "what
+  # does the establishment build?", so it must be probed, not coded.
+  #
+  # This is a whole-description test (see `assistant_activity_is_vague()`):
+  # "construction of residential buildings" and "residential carpentry"
+  # both carry a meaningful non-refused token and are unaffected.
+  "construction", "manufacturing", "agriculture", "industry"
 )
 
 # The manual's own probing questions, verbatim in substance.
@@ -157,6 +175,31 @@ ASSISTANT_GUIDANCE_GOVERNMENT_PROBE <- paste(
   "If it is the executive branch of a local government, is it a provincial,",
   "city, or municipal government?"
 )
+
+# The tier half of the probe, dropped once the respondent has already said
+# which tier it is. Spec 13: "Do NOT ask the user to choose regional/local
+# if the supplied context is national." The same applies in the other
+# direction -- someone who said "city government" should not be asked
+# whether it is a city government.
+ASSISTANT_GUIDANCE_GOVERNMENT_OFFICE_PROBE <-
+  "Which government office, institution, school or hospital is it?"
+
+#' The government probe, minus any question the wording already answers.
+#'
+#' Reads the controlled government-tier facet (assistant_compat.R) over the
+#' description AND its controlled expansions, so a named national agency
+#' ("PSA", which normalizes to "national government agency") counts as
+#' having stated a tier exactly as the literal wording would.
+#'
+#' @return character(1).
+assistant_government_probe <- function(activity = NULL) {
+  a <- .assistant_scalar_chr(activity)
+  if (is.null(a)) return(ASSISTANT_GUIDANCE_GOVERNMENT_PROBE)
+  text <- paste(assistant_expand_query(a), collapse = " ")
+  tier <- assistant_compat_facets(text, ASSISTANT_GOVERNMENT_TIERS)
+  if (length(tier) > 0L) return(ASSISTANT_GUIDANCE_GOVERNMENT_OFFICE_PROBE)
+  ASSISTANT_GUIDANCE_GOVERNMENT_PROBE
+}
 
 # Column 16, outsourced personnel: coded to the industry where they worked
 # only if they are paid there; otherwise to the manpower/outsourcing agency.
@@ -343,11 +386,18 @@ assistant_activity_mentions_outsourcing <- function(activity) {
 }
 
 #' Does the description mention a government / public-sector context?
+#'
+#' Tested against the description AND its controlled expansions, so a named
+#' public body reaches the same branch as the literal words do: "PSA"
+#' normalizes to "national government agency" (assistant_slots.R) and is
+#' therefore government context, without this function carrying a list of
+#' agency names of its own.
 assistant_activity_mentions_government <- function(activity) {
   a <- .assistant_scalar_chr(activity)
   if (is.null(a)) return(FALSE)
-  grepl("government|barangay|municipal|city hall|provincial|public sector|lgu|state",
-        tolower(a))
+  text <- tolower(paste(assistant_expand_query(a), collapse = " "))
+  grepl("government|barangay|municipal|city hall|provincial|public sector|lgu|state|public administration",
+        text)
 }
 
 #' The single most useful real-world probe for a vague or under-specified
@@ -357,7 +407,7 @@ assistant_activity_probe_question <- function(activity = NULL, occupation = NULL
     return(ASSISTANT_GUIDANCE_OUTSOURCING_PROBE)
   }
   if (assistant_activity_mentions_government(activity)) {
-    return(ASSISTANT_GUIDANCE_GOVERNMENT_PROBE)
+    return(assistant_government_probe(activity))
   }
   a <- .assistant_scalar_chr(activity)
   if (is.null(a)) return(assistant_establishment_question(occupation))

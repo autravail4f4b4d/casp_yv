@@ -709,69 +709,77 @@ server <- function(input, output, session) {
     # are set HERE, synchronously, before any asynchronous provider
     # round-trip begins -- this is what interlock (2) actually reads.
     rm_all_tools <- rm_assistant_tools(turn_state = rm_turn_state)
+
+    # Holds THIS turn's deterministic result between the pre-model observer
+    # below and the post-turn render observer further down. A plain
+    # environment, not a reactiveVal: it is written and read inside the
+    # same user turn, and it must never itself trigger invalidation.
+    rm_server_result <- new.env(parent = emptyenv())
+    rm_server_result$current <- NULL
+
     observeEvent(input[["rm_assistant-chat_user_input"]],
       {
         msg <- input[["rm_assistant-chat_user_input"]]
-        routed <- assistant_route_request(
-          msg, pending = assistant_turn_pending(rm_turn_state)
-        )
-        # FAIL CLOSED: the route/requested-systems are recorded FIRST,
-        # unconditionally -- so even if the `set_tools()` narrowing below
-        # throws, the interlock inside the tool bodies is already primed
-        # with the correct (or, on routing failure, the restrictive
-        # default) route. There is no code path left where a thrown error
-        # leaves the PREVIOUS, possibly-unrestricted route/tool set active.
-        assistant_turn_set_route(rm_turn_state, routed$route)
-        assistant_turn_set_requested_systems(rm_turn_state, routed$requested_systems)
 
-        # MULTI-INPUT (spec 25-28). A turn carrying several independent
-        # coding requests is resolved HERE, deterministically, one item at
-        # a time -- not left to the model to call the coding tool N times
-        # and not collapsed into one request. The live build collapsed a
-        # six-line batch into a single answer (3424 for all six) and then
-        # leaked that answer into the next unrelated turn.
+        # ==================================================================
+        # SERVER-SIDE DETERMINISTIC EXECUTION (v10, spec 9/10)
+        # ==================================================================
         #
-        # Each item gets its own slot extraction, its own coding-service
-        # call and its own allowed_codes; nothing from item i is visible
-        # to item j. The merged packet exists only so the output guard has
-        # the union of legitimately-retrieved codes to validate against.
-        if (identical(routed$route, "batch_contextual_coding") &&
-            length(routed$items) > 0L) {
-          tryCatch({
-            assistant_turn_begin_batch(rm_turn_state, length(routed$items))
-            packets <- list()
-            for (it in routed$items) {
-              args <- assistant_batch_item_args(it)
-              pkt <- do.call(assistant_coding_service, args)
-              packets[[length(packets) + 1L]] <- pkt
-              assistant_turn_record_batch_item(
-                rm_turn_state, it, pkt,
-                occupation = args$occupation,
-                establishment_activity = args$establishment_activity,
-                wage_payer = args$wage_payer
-              )
-            }
-            assistant_turn_finalize_batch(rm_turn_state)
-            assistant_turn_set_latest_packet(
-              rm_turn_state, assistant_batch_merge_packets(packets)
-            )
-          }, error = function(e) {
-            # Fail closed: no batch results recorded means the guard has no
-            # allowed_codes, so no code can be presented for this turn.
-            message(sprintf("[rm-assistant] batch resolution failed: %s",
+        # This is the change that makes live behaviour match local tests.
+        # Previously the server only chose the ROUTE and then handed the
+        # turn to the model, which chose the coding tool AND the slot
+        # values passed to it -- so "mayor psoc psic" could yield a
+        # clarification on one turn and 84113 on the next, from the same
+        # deterministic service, because the model supplied different
+        # arguments each time. See the root-cause block at the top of
+        # R/assistant/assistant_execution.R.
+        #
+        # `assistant_handle_turn()` now performs route determination, slot
+        # extraction, the coding-service call, pending-state update and
+        # authoritative rendering BEFORE any provider round-trip. It also
+        # records route/requested-systems on the turn state, so the tool
+        # interlock and render suppression stay primed exactly as before.
+        res <- tryCatch(
+          assistant_handle_turn(msg, rm_turn_state),
+          error = function(e) {
+            # FAIL CLOSED. `assistant_handle_turn()` already clears the
+            # latest packet on internal failure; this outer guard covers a
+            # failure in routing itself, before it could do so.
+            message(sprintf("[rm-assistant] server turn handler failed: %s",
                             conditionMessage(e)))
+            assistant_turn_set_route(rm_turn_state, "contextual_coding")
             assistant_turn_set_latest_packet(rm_turn_state, NULL)
-          })
+            NULL
+          }
+        )
+        rm_server_result$current <- res
+
+        # TOOL SURFACE.
+        #
+        # On a route the server has ALREADY answered, the model is given NO
+        # tools at all. It cannot call the coding service, cannot choose
+        # slots, and cannot emit a tool-status chunk -- which is what
+        # removes the repeated "Checking official PSA classifications..."
+        # loop on batch turns (one status line per model tool call, with
+        # the prose suppressed behind it, leaving an apparently empty
+        # answer). The model's only remaining job on these routes is
+        # optional explanation of a result R has already fixed.
+        #
+        # Non-coding routes keep their ordinary route-specific tool set.
+        target_tools <- if (isTRUE(res$handled)) {
+          list()
+        } else {
+          assistant_tools_for_route(
+            if (is.null(res)) "contextual_coding" else res$route,
+            rm_all_tools
+          )
         }
         tryCatch(
-          rm_client$set_tools(assistant_tools_for_route(routed$route, rm_all_tools)),
+          rm_client$set_tools(target_tools),
           error = function(e) {
-            # `set_tools()` itself failed. The tool OFFERING may now be
-            # stale, but that is no longer the authority boundary: the
-            # interlock above already has the correct route recorded, so
-            # even an offered low-level tool would refuse at call time.
-            # Belt-and-braces, re-assert the MOST RESTRICTIVE surface
-            # rather than leaving whatever was previously installed.
+            # A failure here can no longer change the ANSWER on a handled
+            # route -- the deterministic packet already exists. Re-assert
+            # the most restrictive surface anyway.
             message(sprintf("[rm-assistant] route tool swap failed: %s",
                             conditionMessage(e)))
             assistant_turn_set_route(rm_turn_state, "contextual_coding")
@@ -796,46 +804,59 @@ server <- function(input, output, session) {
     # zero server round-trips (spec 9). Passing it again would set it twice.
     rm_chat <- shinychat::chat_mod_server("rm_assistant", client = rm_client)
 
-    # H2: VALIDATE-THEN-APPEND for coding turns.
+    # AUTHORITATIVE RENDER (v10, spec 11).
     #
-    # assistant_render.R suppresses LIVE per-chunk rendering of
-    # `ellmer::ContentText` for any session on the `contextual_coding`
-    # route, so nothing the model generates for a coding turn reaches the
-    # DOM unvalidated. This observer is the other half: once a turn is
-    # fully complete, it reads the ASSEMBLED text back from ellmer's own
-    # Turn object (`contents_text()`, not a parallel buffer this code
-    # maintains), runs it through the SAME response guard used previously
-    # only post-hoc, and appends either the validated text or the
-    # deterministic fallback via the module's own `$append()`.
+    # For a route the server handled, the answer was already computed in
+    # R before the provider was called, and `assistant_render.R` suppresses
+    # the model's live text on coding routes. This observer emits the
+    # DETERMINISTIC rendering -- code, label, level, coding role, edition,
+    # status, source and clarification question all come from the packet,
+    # never from generated prose.
     #
-    # For every other route, live streaming already rendered the text
-    # (assistant_render.R falls through to shinychat's default method for
-    # non-coding routes), so appending it again here would duplicate it --
-    # this observer only acts when the route recorded for THIS turn was
-    # `contextual_coding`.
+    # The model's own text is used only as OPTIONAL explanation, and only
+    # after passing the response guard against this turn's allowed_codes.
+    # If the provider failed, produced nothing, or produced something the
+    # guard rejects, the deterministic answer still stands -- classification
+    # never depends on the conversational model succeeding.
+    #
+    # Non-coding routes are untouched: live streaming already rendered
+    # them, so appending here would duplicate.
     observeEvent(rm_chat$last_turn(), {
       turn <- rm_chat$last_turn()
       if (is.null(turn)) return(invisible(NULL))
+
+      res <- rm_server_result$current
+      if (isTRUE(res$handled)) {
+        # 1. The authoritative block, straight from R.
+        if (!is.na(res$render) && nzchar(trimws(res$render))) {
+          rm_chat$append(res$render, role = "assistant")
+        }
+
+        # 2. Optional explanation. A batch gets none: there is no single
+        #    answer to explain, and letting the model summarise six results
+        #    is precisely how the live build collapsed them into one.
+        if (!identical(res$route, "batch_contextual_coding")) {
+          text <- tryCatch(ellmer::contents_text(turn), error = function(e) NULL)
+          if (!is.null(text) && nzchar(trimws(text))) {
+            guarded <- assistant_guard_response(text, res$packet)
+            # Only ADD prose that survived the guard. The deterministic
+            # block above already carries every authoritative fact, so a
+            # rejected explanation is simply dropped rather than replaced
+            # by a second copy of the same rendering.
+            if (!isTRUE(guarded$used_fallback)) {
+              rm_chat$append(guarded$text, role = "assistant")
+            }
+          }
+        }
+        return(invisible(NULL))
+      }
+
+      # Unhandled route that is nonetheless on a coding route (e.g. the
+      # handler failed): fall back to the previous validate-then-append
+      # behaviour so nothing unvalidated can reach the DOM.
       if (!identical(assistant_turn_current_route(rm_turn_state), "contextual_coding")) {
         return(invisible(NULL))
       }
-      # A batch turn is rendered ENTIRELY deterministically (spec 28):
-      # every item's code, label, level, edition and status comes from its
-      # own packet. The model's prose is discarded rather than guarded,
-      # because for a batch there is no single answer for it to have got
-      # right -- and letting it summarise six results is exactly how the
-      # live build collapsed them into one.
-      if (assistant_turn_is_batch(rm_turn_state)) {
-        last <- assistant_turn_last_batch(rm_turn_state)
-        if (!is.null(last)) {
-          rm_chat$append(
-            assistant_render_batch_results(last$resolved, last$unresolved),
-            role = "assistant"
-          )
-          return(invisible(NULL))
-        }
-      }
-
       text <- tryCatch(ellmer::contents_text(turn), error = function(e) NULL)
       if (is.null(text) || !nzchar(trimws(text))) return(invisible(NULL))
       packet <- assistant_turn_latest_packet(rm_turn_state)
@@ -854,6 +875,9 @@ server <- function(input, output, session) {
       assistant_turn_set_route(rm_turn_state, "contextual_coding")
       assistant_turn_set_requested_systems(rm_turn_state, c("psoc", "psic"))
       assistant_turn_set_latest_packet(rm_turn_state, NULL)
+      # The previous turn's deterministic result must not survive into the
+      # new conversation and be re-rendered against an unrelated turn.
+      rm_server_result$current <- NULL
     })
 
     # KNOWN LIMITATION -- mid-stream provider failure is silent client-side.

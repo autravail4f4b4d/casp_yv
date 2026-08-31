@@ -203,15 +203,45 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
     assistant_compat_coverage(expansions, acc$label[[i]])
   }, integer(1))
 
+  # An ancestor of another surviving candidate is never the better answer
+  # than the descendant it contains -- it is strictly less specific about
+  # the same thing. Measured need: once the government-tier veto correctly
+  # removed 84112/84113 for a NATIONAL context, the survivors were the
+  # Section P, the Division 84 and the Group 8411, all aggregates with
+  # identical query coverage, and retrieval order alone selected the
+  # Section. 8411 is the canonical ceiling; P is three levels above it.
+  # `hierarchy_role` alone is not sufficient here. It links only parents
+  # that are THEMSELVES in the candidate set, so a chain broken by an
+  # unretrieved intermediate goes undetected: for the PSA set the rows were
+  # P, 84, 8411 and 84119, and because the Group 841 sitting between 84 and
+  # 8411 was never retrieved, 84 came back "standalone" and still outranked
+  # 8411. `.assistant_ancestor_of_other()` walks the FULL canonical chain,
+  # so an ancestor is demoted whether or not the intervening levels happen
+  # to have been retrieved.
+  # Descendant COUNT, not a flag: a flag cannot separate a Section from the
+  # Class three levels below it when both are ancestors. Ascending order
+  # therefore prefers the narrowest ancestor. The within-set role still
+  # contributes, so a chain the shortlist happens to contain intact is
+  # ranked identically to one it does not.
+  is_ancestor <- .assistant_ancestor_of_other(
+    as.character(acc$code), system_chr, version_chr
+  ) + as.integer(!is.na(acc$hierarchy_role) & acc$hierarchy_role == "ancestor")
+  # Last specificity tiebreaker. Two aggregates can tie on every key above
+  # -- the Division 84 and the Class 8411 have identical query coverage --
+  # and without this, retrieval order alone decides between a whole PSIC
+  # sector and the canonical ceiling for the context.
+  depth <- .assistant_canonical_depth(
+    as.character(acc$code), system_chr, version_chr
+  )
   is_detailed <- !is.na(acc$coding_role) & acc$coding_role == "detailed"
   ord <- if (isTRUE(prefer_detailed)) {
     order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
           acc$unasked_specialization, -acc$query_coverage,
-          !is_detailed, seq_len(nrow(acc)))
+          !is_detailed, is_ancestor, -depth, seq_len(nrow(acc)))
   } else {
     order(!acc$survey_guidance, -acc$example_evidence, acc$residual_match,
           acc$unasked_specialization, -acc$query_coverage,
-          seq_len(nrow(acc)))
+          is_ancestor, -depth, seq_len(nrow(acc)))
   }
   acc <- acc[ord, , drop = FALSE]
   acc <- utils::head(acc, limit_int)
@@ -227,17 +257,25 @@ assistant_slot_candidates <- function(system, phrase, version = NULL,
   # siblings match the wording directly and others only match as a
   # residual/negated category, the user has already distinguished them and
   # there is nothing left to ask.
-  # An unasked-for specialization is excluded from the ambiguity pool for
-  # exactly the reason a residual category is: the user's wording already
-  # distinguishes it, so it is not a real alternative to ask about.
-  affirmative <- !acc$residual_match & acc$unasked_specialization == 0L
-  amb_pool <- if (any(affirmative)) {
-    acc[affirmative, , drop = FALSE]
-  } else if (any(!acc$residual_match)) {
-    acc[!acc$residual_match, , drop = FALSE]
-  } else {
-    acc
-  }
+  #
+  # An unasked-for SPECIALIZATION is a weaker signal than a residual marker
+  # and is deliberately NOT excluded here. It stays a RANKING signal only
+  # (see `ord` above), so the plain reading is offered first, but it no
+  # longer silently deletes the alternatives. Spec 20 is explicit about the
+  # difference: "teacher in a private high school" must not descend to
+  # 85312 while 85314 (with special needs) and 85322/85324 (technical and
+  # vocational) remain current, compatible and genuinely possible -- the
+  # user said none of those words, but they also said nothing that RULES
+  # THEM OUT, and a residual marker is the only case where the wording
+  # itself does. The correct answer there is the supported parent plus one
+  # real-world question, not a confident leaf.
+  #
+  # The cases that must still settle without asking are separated by
+  # stronger, orthogonal evidence and are unaffected: 41001 vs 41002
+  # NON-residential by the residual marker, and 86121 Private GENERAL
+  # hospital vs 86122 mental / 86123 maternity by query coverage below.
+  affirmative <- !acc$residual_match
+  amb_pool <- if (any(affirmative)) acc[affirmative, , drop = FALSE] else acc
 
   # A sibling that answers STRICTLY LESS of the user's wording than
   # another is not a real alternative to ask about. "private general

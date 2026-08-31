@@ -818,25 +818,121 @@ retrieval_embedding_cache_reset <- function() {
 #'   tests. Defaults to the HTTP provider. Supplying it also disables the
 #'   query cache.
 #'
+#' MODE GATE. `mode` is resolved from `RETRIEVAL_SEMANTIC_MODE` (see
+#' R/retrieval/retrieval_shadow.R) and decides whether these candidates
+#' may reach the caller at all:
+#'
+#'   off      nothing runs. Returns no candidates immediately, so the
+#'            tier costs nothing -- no normalization, no provider call,
+#'            no allocation. This is the repository default.
+#'   shadow   the query RUNS and is RECORDED, and then no candidates are
+#'            returned. Fusion therefore receives exactly what it
+#'            receives at `off`, which is what makes shadow mode
+#'            provably unable to move `selected_code`, `allowed_codes`,
+#'            clarification status or current-edition verification.
+#'   active   candidates are returned. Not reachable in this release:
+#'            `retrieval_semantic_mode()` clamps `active` to `shadow`.
+#'   NULL     UNGATED. The caller is explicitly taking responsibility for
+#'            authority. Used by `retrieval_semantic_search()` -- which
+#'            is a measurement interface with no authority of its own --
+#'            by the index builder, and by the benchmark harness.
+#'
+#' @param mode "off", "shadow", "active", or NULL for ungated generation.
+#'
 #' @return A candidate data.frame (idx, score, rank).
 retrieval_embeddings_candidates <- function(query, index, top_k = 50L,
                                             min_score = 0, config = NULL,
-                                            embed_fn = NULL) {
-  # Everything is wrapped: no failure inside the semantic tier may ever
-  # reach the caller as a condition.
-  out <- tryCatch({
-    if (!.retrieval_embedding_index_ok(index)) return(retrieval_no_candidates())
+                                            embed_fn = NULL,
+                                            mode = retrieval_semantic_mode()) {
+  # `off` short-circuits before anything is touched. Zero overhead is a
+  # requirement, not an optimisation: this is the default state.
+  if (!is.null(mode) && identical(mode, "off")) return(retrieval_no_candidates())
+
+  status <- new.env(parent = emptyenv())
+  status$value <- "ok"
+  out <- .retrieval_embeddings_candidates_raw(query, index, top_k = top_k,
+                                              min_score = min_score,
+                                              config = config,
+                                              embed_fn = embed_fn,
+                                              status = status)
+
+  if (!is.null(mode) && identical(mode, "shadow")) {
+    # Measure, then discard. The deterministic half of the record is
+    # unknown at this point and is attached later by
+    # `retrieval_shadow_annotate()` if the caller knows it.
+    .retrieval_shadow_capture(query, index, out, status$value, mode)
+    return(retrieval_no_candidates())
+  }
+
+  out
+}
+
+# Translate a candidate frame into a shadow observation. Never throws,
+# never affects the return value of its caller.
+.retrieval_shadow_capture <- function(query, index, cand, status, mode) {
+  if (!exists("retrieval_shadow_record", mode = "function")) return(invisible(NULL))
+  tryCatch({
+    codes <- character(0); scores <- numeric(0); ranks <- integer(0)
+    if (is.data.frame(cand) && nrow(cand) > 0L && !is.null(index$codes)) {
+      all_codes <- as.character(index$codes)
+      keep <- utils::head(seq_len(nrow(cand)), RETRIEVAL_SHADOW_TOP_K)
+      idx <- as.integer(cand$idx[keep])
+      codes <- ifelse(idx >= 1L & idx <= length(all_codes), all_codes[idx], NA_character_)
+      scores <- as.numeric(cand$score[keep])
+      ranks <- as.integer(cand$rank[keep])
+    }
+    retrieval_shadow_record(
+      query = query,
+      system = if (is.null(index)) NULL else index$system,
+      version = if (is.null(index)) NULL else index$version,
+      codes = codes, scores = scores, ranks = ranks,
+      provider_status = status, origin = "fusion", mode = mode
+    )
+  }, error = function(e) NULL)
+  invisible(NULL)
+}
+
+# The candidate generator itself, with no authority policy applied.
+#
+# `status` is an optional environment into which the reason for an empty
+# result is written, so shadow telemetry can distinguish "the provider
+# never answered" from "nothing cleared the floor". Values: "ok",
+# "no_index", "no_query", "provider_unavailable", "degenerate", "error".
+.retrieval_embeddings_candidates_raw <- function(query, index, top_k = 50L,
+                                                 min_score = 0, config = NULL,
+                                                 embed_fn = NULL,
+                                                 status = NULL) {
+  set_status <- function(v) {
+    if (!is.null(status)) status$value <- v
+    invisible(NULL)
+  }
+
+  # An inner function rather than a bare block: `return()` inside a
+  # `tryCatch()` expression returns from the ENCLOSING function, which
+  # would skip every post-condition below.
+  generate <- function() {
+    if (!.retrieval_embedding_index_ok(index)) {
+      set_status("no_index")
+      return(retrieval_no_candidates())
+    }
 
     q <- .retrieval_embedding_query_text(query)
-    if (is.na(q)) return(retrieval_no_candidates())
+    if (is.na(q)) {
+      set_status("no_query")
+      return(retrieval_no_candidates())
+    }
 
     qv <- .retrieval_embedding_query_vector(q, index, config = config,
                                             embed_fn = embed_fn)
-    if (is.null(qv)) return(retrieval_no_candidates())
+    if (is.null(qv)) {
+      set_status("provider_unavailable")
+      return(retrieval_no_candidates())
+    }
 
     # Both sides are unit-length, so this product IS the cosine.
     score <- as.numeric(index$vectors %*% as.numeric(qv))
     if (length(score) != nrow(index$vectors) || all(!is.finite(score))) {
+      set_status("degenerate")
       return(retrieval_no_candidates())
     }
     score[!is.finite(score)] <- NA_real_
@@ -847,7 +943,14 @@ retrieval_embeddings_candidates <- function(query, index, top_k = 50L,
       top_k = top_k,
       min_score = min_score
     )
-  }, error = function(e) retrieval_no_candidates())
+  }
+
+  # Everything is wrapped: no failure inside the semantic tier may ever
+  # reach the caller as a condition.
+  out <- tryCatch(generate(), error = function(e) {
+    set_status("error")
+    retrieval_no_candidates()
+  })
 
   if (is.null(out) || !is.data.frame(out)) return(retrieval_no_candidates())
   out
@@ -943,7 +1046,14 @@ retrieval_semantic_search <- function(query, index, top_k = 10L,
       return(empty)
     }
 
-    cand <- retrieval_embeddings_candidates(
+    # UNGATED on purpose. This function is a MEASUREMENT interface: it
+    # is what shadow telemetry and the benchmark harness call, and it
+    # feeds nothing into fusion. Routing it through the mode gate would
+    # make shadow mode unable to measure the very thing it exists to
+    # measure. Authority still lives entirely at the gate, which is on
+    # `retrieval_embeddings_candidates()` -- the only entry point the
+    # engine uses.
+    cand <- .retrieval_embeddings_candidates_raw(
       query, index, top_k = top_k, min_score = min_score,
       config = config, embed_fn = embed_fn
     )

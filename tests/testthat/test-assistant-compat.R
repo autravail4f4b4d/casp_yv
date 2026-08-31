@@ -127,9 +127,13 @@ test_that("query coverage stays silent where the ambiguity is real", {
 test_that("teacher in a private high school resolves to secondary, not aides or preschool", {
   p <- assistant_coding_service("teacher", "private high school")
   expect_identical(p$occupation$selected_code, "2330")
-  expect_identical(p$industry$selected_code, "85312")
   expect_false(identical(p$occupation$selected_code, "5312"))
   expect_false(identical(p$industry$selected_code, "85102"))
+  # v10 (spec 20): secondary context is recognised, but the detailed
+  # subclass is NOT guessed while compatible siblings remain. The verified
+  # parent is returned with one real-world question.
+  expect_identical(p$industry$selected_code, "8531")
+  expect_identical(p$clarification$missing_slot, "establishment_activity_detail")
 })
 
 test_that("palay farming never resolves to rice milling", {

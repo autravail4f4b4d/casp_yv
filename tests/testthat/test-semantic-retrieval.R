@@ -17,6 +17,13 @@
 
 # ------------------------------------------------------------- helpers
 
+# The candidate generator, reached WITHOUT the v10 semantic mode gate.
+# The gate lives on `retrieval_embeddings_candidates()` and is what makes
+# shadow mode non-authoritative; it is proved in
+# test-semantic-non-authority.R. These tests are about the generator's own
+# behaviour, so they opt out of the gate with the documented `mode = NULL`.
+sem_candidates <- function(...) retrieval_embeddings_candidates(..., mode = NULL)
+
 # Replace the provider entry point for the duration of `code`, then put the
 # original back. This is what a real embedding endpoint would occupy.
 with_stub_provider <- function(fn, code) {
@@ -281,7 +288,7 @@ test_that("a failing embedding provider leaves the other tiers working", {
 test_that("a failing provider degrades the tier to nothing, not to noise", {
   b <- sr_build(sr_psoc(), "psoc", "2022")
   with_stub_provider(function(texts) stop("timeout"), {
-    cand <- retrieval_embeddings_candidates("rice farmer", b$index)
+    cand <- sem_candidates("rice farmer", b$index)
     expect_true(is.data.frame(cand))
     expect_identical(nrow(cand), 0L)
     expect_identical(names(cand), c("idx", "score", "rank"))
@@ -311,7 +318,7 @@ test_that("with nothing configured the tier is inert and the app is unaffected",
   b <- sr_build(sr_psoc(), "psoc", "2022")
   # Real provider path, genuinely unconfigured: no stub, no network.
   retrieval_embedding_cache_reset()
-  cand <- retrieval_embeddings_candidates("rice farmer", b$index)
+  cand <- sem_candidates("rice farmer", b$index)
   expect_identical(nrow(cand), 0L)
 
   res <- search_classification_data_result(
@@ -330,19 +337,19 @@ test_that("the query cache spares a repeated provider call", {
   counting <- function(texts) { calls <<- calls + 1L; b$embed(texts) }
 
   with_stub_provider(counting, {
-    first <- retrieval_embeddings_candidates("tsuper ng trak", b$index)
+    first <- sem_candidates("tsuper ng trak", b$index)
     expect_identical(calls, 1L)
-    second <- retrieval_embeddings_candidates("tsuper ng trak", b$index)
+    second <- sem_candidates("tsuper ng trak", b$index)
     expect_identical(calls, 1L)          # served from cache
     expect_identical(first$idx, second$idx)
     expect_equal(first$score, second$score)
 
     # A different query is a different key.
-    retrieval_embeddings_candidates("rice farmer", b$index)
+    sem_candidates("rice farmer", b$index)
     expect_identical(calls, 2L)
 
     retrieval_embedding_cache_reset()
-    retrieval_embeddings_candidates("tsuper ng trak", b$index)
+    sem_candidates("tsuper ng trak", b$index)
     expect_identical(calls, 3L)
   })
 })
@@ -384,8 +391,8 @@ test_that("an injected embed_fn is never cached", {
   counting <- function(texts) { calls <<- calls + 1L; b$embed(texts) }
 
   retrieval_embedding_cache_reset()
-  retrieval_embeddings_candidates("tsuper ng trak", b$index, embed_fn = counting)
-  retrieval_embeddings_candidates("tsuper ng trak", b$index, embed_fn = counting)
+  sem_candidates("tsuper ng trak", b$index, embed_fn = counting)
+  sem_candidates("tsuper ng trak", b$index, embed_fn = counting)
   # Caching a caller-supplied closure would be unsound -- its behaviour is
   # not part of the cache key -- so it is deliberately not cached.
   expect_identical(calls, 2L)

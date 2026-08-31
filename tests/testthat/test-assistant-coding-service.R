@@ -66,10 +66,21 @@ test_that("barangay health aide stays a different occupation", {
 # --- Teacher (live: correct PSOC, preschool PSIC) --------------------------
 
 test_that("private high-school teacher never returns a preschool PSIC", {
+  # v10 (spec 20): the PSIC must NOT descend to a detailed subclass while
+  # several current compatible siblings remain -- general vs technical /
+  # vocational, and with vs without special needs. It returns the verified
+  # parent and asks one real-world question instead. This previously
+  # resolved straight to 85312, which was over-specific: the wording does
+  # not state the special-needs facet, so the subclass was being decided
+  # by ranking rather than by evidence.
   p <- .svc("secondary education teacher", "private general secondary education")
   expect_identical(.psoc(p), "2330")
-  expect_identical(.psic(p), "85312")
+  expect_identical(.psic(p), "8531")
+  expect_identical(p$industry$coding_role, "aggregate")
+  expect_identical(p$clarification$missing_slot, "establishment_activity_detail")
+  # Still never preschool, and no unauthorised detailed code leaks through.
   expect_false(any(grepl("^8510", assistant_allowed_codes(p))))
+  expect_identical(p$allowed_codes$psic, "8531")
 })
 
 # --- Corn / palay ----------------------------------------------------------

@@ -71,6 +71,13 @@ ASSISTANT_ACTION_VOCABULARY <- list(
                              "medical", "health", "healthcare", "dental",
                              "dentistry", "midwifery", "nursing", "therapy"),
   construct   = c("construction", "constructing", "building", "buildings"),
+  # Extraction is a different PSIC section from construction (B vs F).
+  # Measured on the live v10 build: an occupation-derived activity
+  # "construction" selected 08106 "Construction SAND AND GRAVEL QUARRYING"
+  # -- a quarry -- for a carpenter, because "construction" is a whole token
+  # of that label and nothing in this vocabulary knew what quarrying was.
+  extract     = c("quarrying", "quarry", "quarries", "mining", "mine",
+                  "mines", "extraction", "extracting", "drilling"),
   regulate    = c("regulation", "regulating", "regulatory")
 )
 
@@ -113,6 +120,39 @@ ASSISTANT_OWNERSHIP_VALUES <- list(
               "commercial"),
   public  = c("public", "government", "governmental", "state", "national",
               "municipal", "provincial", "barangay", "lgu")
+)
+
+# --- government tier (spec 13) ---------------------------------------------
+#
+# Ownership above is a one-bit public/private split, so every tier of
+# government lands in the same bucket and nothing distinguishes a national
+# agency from a city hall. PSIC draws that line explicitly and canonically:
+#
+#   8411  General public administration activities   (no tier stated)
+#   84112 Public administration, REGIONAL government
+#   84113 Public administration, LOCAL government
+#
+# There is NO national subclass, so 8411 is the ceiling for a national
+# context -- and asking a respondent who already said "national" to choose
+# between regional and local is asking them to contradict themselves. That
+# was a measured live v9/v10 defect: `statistician at PSA` returned a forced
+# regional/local option list.
+#
+# Only three values, matching the only distinction the classification makes.
+# `provincial`/`city`/`municipal`/`barangay` are deliberately folded into
+# `local` because PSIC folds them there too -- an executive branch of a
+# provincial government IS 84113. Measured across the whole repository, ten
+# labels in total state a tier (PSIC 03112, 6411/64110, 78101, 84112, 84113,
+# 2513/25130; PSOC 1113, 2164), so this facet is as narrow in practice as it
+# is in definition. "central" and "federal" were tried and REMOVED: they hit
+# "CENTRAL banking" and "CENTRAL heating boilers", neither of which is a
+# statement about a tier of government.
+ASSISTANT_GOVERNMENT_TIERS <- list(
+  national = c("national", "nationwide"),
+  regional = c("regional", "region"),
+  local    = c("local", "provincial", "province", "city", "municipal",
+               "municipality", "barangay", "town", "village", "villages",
+               "lgu")
 )
 
 # --- vehicle type (spec 20 "driver types", spec 48) ------------------------
@@ -244,6 +284,68 @@ assistant_compat_facets <- function(text, vocabulary) {
   FALSE
 }
 
+# Words that introduce a COMPLEMENT rather than continue the head. "and" is
+# deliberately absent: it joins co-heads ("Repair AND maintenance of ..."),
+# which must both count.
+.ASSISTANT_ACTION_HEAD_BOUNDARY <- paste0(
+  "\\b(of|for|in|into|from|with|by|on|at|to|such|including|includes|",
+  "except|excluding|used|made|intended|chiefly|primarily|through|via)\\b"
+)
+
+#' The action(s) a candidate label states about ITSELF, as opposed to about
+#' the things it acts on.
+#'
+#' WHY A LABEL'S ACTION SET IS NOT SIMPLY EVERY ACTION WORD IN IT
+#' -------------------------------------------------------------
+#' `assistant_compat_conflict()` treats a candidate that states several
+#' actions as offering ALTERNATIVES, so any one of them agreeing with the
+#' query is enough. That is right for a genuine either/or aggregate, and
+#' wrong for the far commoner shape where the second action word is a
+#' MODIFIER: "Manufacture of machinery for MINING, QUARRYING and
+#' CONSTRUCTION" is a factory, not a quarry and not a building site.
+#'
+#' Measured over all 2202 PSIC 2026 rows, 45 labels state two or more
+#' actions. 44 of them are "<head action> of|for|... <complement>", where
+#' the head comes FIRST and everything after the first complement
+#' preposition describes the goods or purpose. The 45th is 08106
+#' "Construction sand and gravel quarrying" -- a preposition-less noun
+#' compound, where English puts the head LAST and "construction" is the
+#' grade of sand being quarried.
+#'
+#' The rule below is exactly that reading, and it resolves all 45 correctly:
+#' take the segment before the first complement preposition; if it still
+#' names several actions, the last action-bearing token in it is the head.
+#'
+#' Narrowing applies to the CANDIDATE only. A query legitimately states
+#' several things the user actually said, and must keep all of them.
+#'
+#' @return character vector, `character(0)` when the label states no action.
+.assistant_compat_principal_actions <- function(text) {
+  t <- as.character(text)
+  if (length(t) != 1L || is.na(t) || !nzchar(t)) return(character(0))
+
+  all_act <- assistant_compat_facets(t, ASSISTANT_ACTION_VOCABULARY)
+  if (length(all_act) < 2L) return(all_act)
+
+  low <- tolower(t)
+  m <- regexpr(.ASSISTANT_ACTION_HEAD_BOUNDARY, low, perl = TRUE)
+  head_seg <- if (m > 0L) substr(low, 1L, m - 1L) else low
+
+  head_act <- assistant_compat_facets(head_seg, ASSISTANT_ACTION_VOCABULARY)
+  # No action before the complement ("Retail sale OF construction
+  # materials"): nothing has been narrowed, so keep the previous reading.
+  if (length(head_act) == 0L) return(all_act)
+  if (length(head_act) == 1L) return(head_act)
+
+  for (tk in rev(.assistant_compat_tokens(head_seg))) {
+    hit <- names(ASSISTANT_ACTION_VOCABULARY)[
+      vapply(ASSISTANT_ACTION_VOCABULARY, function(terms) tk %in% terms, logical(1))
+    ]
+    if (length(hit) > 0L) return(hit)
+  }
+  head_act
+}
+
 #' Do the query and candidate CONTRADICT each other on a controlled facet?
 #'
 #' Returns TRUE only when both sides state a facet value and no stated
@@ -258,7 +360,7 @@ assistant_compat_conflict <- function(query_texts, label, description = NA_chara
 
   # --- action -------------------------------------------------------------
   q_act <- assistant_compat_facets(q_text, ASSISTANT_ACTION_VOCABULARY)
-  c_act <- assistant_compat_facets(c_text, ASSISTANT_ACTION_VOCABULARY)
+  c_act <- .assistant_compat_principal_actions(c_text)
   if (length(q_act) > 0L && length(c_act) > 0L) {
     ok <- any(vapply(q_act, function(a) {
       any(vapply(c_act, function(b) .assistant_actions_compatible(a, b), logical(1)))
@@ -289,6 +391,19 @@ assistant_compat_conflict <- function(query_texts, label, description = NA_chara
   q_own <- assistant_compat_facets(q_text, ASSISTANT_OWNERSHIP_VALUES)
   c_own <- assistant_compat_facets(c_text, ASSISTANT_OWNERSHIP_VALUES)
   if (length(q_own) > 0L && length(c_own) > 0L && length(intersect(q_own, c_own)) == 0L) {
+    return(TRUE)
+  }
+
+  # --- government tier ----------------------------------------------------
+  #
+  # A national context contradicts "Public administration, REGIONAL
+  # government" and "Public administration, LOCAL government" the same way
+  # "private" contradicts "public". The untiered aggregate 8411 states no
+  # tier and therefore survives for every tier -- which is what makes it
+  # the correct ceiling for a national context rather than a guess.
+  q_tier <- assistant_compat_facets(q_text, ASSISTANT_GOVERNMENT_TIERS)
+  c_tier <- assistant_compat_facets(c_text, ASSISTANT_GOVERNMENT_TIERS)
+  if (length(q_tier) > 0L && length(c_tier) > 0L && length(intersect(q_tier, c_tier)) == 0L) {
     return(TRUE)
   }
 

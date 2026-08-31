@@ -183,8 +183,23 @@ ASSISTANT_ACTIVITY_EXPANSIONS <- list(
   "national government agency" = c("public administration"),
   "government agency"      = c("public administration"),
   "government office"      = c("public administration"),
-  "psa"                    = c("public administration"),
-  "philippine statistics authority" = c("public administration"),
+
+  # A named national agency normalizes to the TIER first and the activity
+  # second (spec 13: "PSA -> national government agency"). Both halves
+  # matter and neither is a code:
+  #   * "public administration" is what makes the activity retrievable;
+  #   * "national government agency" carries the word `national`, which is
+  #     the controlled government-tier value (assistant_compat.R). Without
+  #     it a bare "PSA" states no tier, and the regional/local subclasses
+  #     survive into the candidate set and produce a forced choice the
+  #     respondent has already answered -- measured live.
+  # Deliberately wording-level and agency-agnostic: any national agency
+  # added here inherits the same behaviour, and none of them names a code.
+  "psa"                    = c("national government agency", "public administration"),
+  "philippine statistics authority" =
+    c("national government agency", "public administration"),
+  "national agency"        = c("national government agency", "public administration"),
+  "national government office" = c("national government agency", "public administration"),
 
   # --- Trade wording that names a practice, not the industry -------------
   #

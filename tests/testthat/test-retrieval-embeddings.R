@@ -11,6 +11,17 @@
 
 # ---------------------------------------------------------------- helpers
 
+# From v10, `retrieval_embeddings_candidates()` carries the semantic MODE
+# GATE: at the repository default (`RETRIEVAL_SEMANTIC_MODE=off`) it
+# returns nothing by design, and at `shadow` it measures and then returns
+# nothing. That gate is the subject of test-semantic-non-authority.R.
+#
+# The tests in THIS file are about the candidate generator underneath it
+# -- cosine ranking, top-k, fail-open on every provider malfunction -- so
+# they call it ungated. `mode = NULL` is the documented way for a caller
+# that owns its own authority decision to reach the generator.
+sem_candidates <- function(...) retrieval_embeddings_candidates(..., mode = NULL)
+
 # `withr` is not guaranteed to be part of this project's locked
 # dependencies, so environment variables are saved and restored by hand.
 with_env_vars <- function(vars, code) {
@@ -420,7 +431,7 @@ test_that("querying a stub-built index returns sensible ranked candidates", {
   embed <- stub_embedder(64L)
   index <- retrieval_embeddings_build(corpus, embed_fn = embed)
 
-  cand <- retrieval_embeddings_candidates("truck driver", index,
+  cand <- sem_candidates("truck driver", index,
                                           top_k = 50L, embed_fn = embed)
 
   expect_true(is.data.frame(cand))
@@ -441,7 +452,7 @@ test_that("querying a stub-built index returns sensible ranked candidates", {
   # "software developer" shares no token with "truck driver", so it is
   # dropped rather than ranked. Re-query with the filter off to confirm it
   # is genuinely below the truck-driver rows and not merely missing.
-  all_cand <- retrieval_embeddings_candidates("truck driver", index,
+  all_cand <- sem_candidates("truck driver", index,
                                               top_k = 50L, min_score = NULL,
                                               embed_fn = embed)
   expect_identical(nrow(all_cand), 5L)
@@ -456,7 +467,7 @@ test_that("top_k is respected", {
   embed <- stub_embedder(64L)
   index <- retrieval_embeddings_build(corpus, embed_fn = embed)
 
-  cand <- retrieval_embeddings_candidates("truck driver", index,
+  cand <- sem_candidates("truck driver", index,
                                           top_k = 2L, embed_fn = embed)
   expect_lte(nrow(cand), 2L)
   expect_identical(cand$rank, seq_len(nrow(cand)))
@@ -467,8 +478,8 @@ test_that("querying is deterministic across identical calls", {
   embed <- stub_embedder(64L)
   index <- retrieval_embeddings_build(corpus, embed_fn = embed)
 
-  a <- retrieval_embeddings_candidates("truck driver", index, embed_fn = embed)
-  b <- retrieval_embeddings_candidates("truck driver", index, embed_fn = embed)
+  a <- sem_candidates("truck driver", index, embed_fn = embed)
+  b <- sem_candidates("truck driver", index, embed_fn = embed)
   expect_identical(a, b)
 
   # And the index itself is reproducible bar its timestamp.
@@ -483,19 +494,19 @@ test_that("a NULL, empty or invalid index yields an empty candidate set", {
   embed <- stub_embedder()
 
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", NULL, embed_fn = embed))
+    sem_candidates("truck driver", NULL, embed_fn = embed))
 
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver",
+    sem_candidates("truck driver",
                                     retrieval_embeddings_build(retrieval_corpus(NULL),
                                                                embed_fn = embed),
                                     embed_fn = embed))
 
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", list(), embed_fn = embed))
+    sem_candidates("truck driver", list(), embed_fn = embed))
 
   expect_empty_candidates(
-    retrieval_embeddings_candidates(
+    sem_candidates(
       "truck driver",
       list(index_version = 1L, vectors = matrix(numeric(0), nrow = 0, ncol = 0),
            n_docs = 0L, dim = 0L),
@@ -505,7 +516,7 @@ test_that("a NULL, empty or invalid index yields an empty candidate set", {
   stale <- retrieval_embeddings_build(sample_corpus(), embed_fn = embed)
   stale$index_version <- 0L
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", stale, embed_fn = embed))
+    sem_candidates("truck driver", stale, embed_fn = embed))
 })
 
 test_that("a blank, NA or malformed query yields an empty candidate set", {
@@ -515,7 +526,7 @@ test_that("a blank, NA or malformed query yields an empty candidate set", {
   for (q in list("", "   ", NA_character_, NULL, character(0),
                  c("a", "b"), "!!! ???")) {
     expect_empty_candidates(
-      retrieval_embeddings_candidates(q, index, embed_fn = embed))
+      sem_candidates(q, index, embed_fn = embed))
   }
 })
 
@@ -525,31 +536,31 @@ test_that("an induced provider failure never propagates out of the tier", {
 
   thrower <- function(texts) stop("embedding endpoint is on fire")
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", index, embed_fn = thrower))
+    sem_candidates("truck driver", index, embed_fn = thrower))
 
   nuller <- function(texts) NULL
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", index, embed_fn = nuller))
+    sem_candidates("truck driver", index, embed_fn = nuller))
 
   # Malformed provider output: a JSON body the parser could not turn into
   # a matrix reaches this layer as a non-matrix value.
   garbage <- function(texts) list(error = "rate limited")
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", index, embed_fn = garbage))
+    sem_candidates("truck driver", index, embed_fn = garbage))
 
   textual <- function(texts) "<html>502 Bad Gateway</html>"
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", index, embed_fn = textual))
+    sem_candidates("truck driver", index, embed_fn = textual))
 
   # Right type, wrong dimensionality: the model was swapped under a stale
   # index. Mixing dimensions must not be attempted.
   wrong_dim <- function(texts) matrix(1, nrow = length(texts), ncol = 7L)
   expect_empty_candidates(
-    retrieval_embeddings_candidates("truck driver", index, embed_fn = wrong_dim))
+    sem_candidates("truck driver", index, embed_fn = wrong_dim))
 
   # Non-finite output.
   nasty <- function(texts) matrix(NaN, nrow = length(texts), ncol = 64L)
-  res <- retrieval_embeddings_candidates("truck driver", index, embed_fn = nasty)
+  res <- sem_candidates("truck driver", index, embed_fn = nasty)
   expect_true(is.data.frame(res))
   expect_identical(nrow(res), 0L)
 })
@@ -562,7 +573,7 @@ test_that("with no backend configured the tier is inert but harmless", {
     index <- retrieval_embeddings_build(sample_corpus(), embed_fn = embed)
 
     expect_empty_candidates(
-      retrieval_embeddings_candidates("truck driver", index))
+      sem_candidates("truck driver", index))
   })
 })
 

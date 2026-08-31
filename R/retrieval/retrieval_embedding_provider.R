@@ -27,6 +27,19 @@
 #                                none)
 #   RETRIEVAL_EMBEDDING_TIMEOUT  seconds, default 5
 #
+# One further variable, in the same family and read with the same
+# helper, decides not whether a vector CAN be obtained but whether the
+# result may carry any weight:
+#
+#   RETRIEVAL_SEMANTIC_MODE      "off" | "shadow" | "active"
+#                                (default "off"; `active` is clamped to
+#                                `shadow` in this release)
+#
+# It is defined in R/retrieval/retrieval_shadow.R. The two settings are
+# deliberately orthogonal -- transport versus authority -- so a
+# configured endpoint can sit at `off`, and `shadow` can be measured in
+# a test with an injected encoder and no endpoint at all.
+#
 # Configuration lives entirely in the environment so that no endpoint and
 # no credential is ever committed. `retrieval_embedding_config()` returns
 # only `has_key`, never the key itself, precisely so that a config object

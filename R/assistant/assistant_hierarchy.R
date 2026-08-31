@@ -102,3 +102,136 @@ assistant_hierarchy_annotate <- function(rows) {
   rows$hierarchy_of <- hierarchy_of
   rows
 }
+
+# ---------------------------------------------------------------------------
+# Full-chain ancestry (v10)
+# ---------------------------------------------------------------------------
+#
+# `assistant_hierarchy_annotate()` above deliberately looks only at
+# parent_code links WITHIN the candidate set: that is all it needs to label
+# a clean ancestor chain, and it must stay cheap enough to run on every
+# search.
+#
+# That is not enough for RANKING. A candidate set is a bounded shortlist,
+# so an intermediate level is frequently absent. Measured: for a national
+# public-administration query the survivors were the Section P, the
+# Division 84, the Class 8411 and the sub-class 84119 -- but the Group 841
+# sitting between 84 and 8411 was never retrieved. With the chain broken,
+# 84 came back "standalone", outranked 8411, and the answer degraded from
+# the canonical ceiling to an entire PSIC Division.
+#
+# This resolves the real chain from the repository instead, memoised per
+# system+version so the cost is one lookup per process, not per query.
+
+.assistant_parent_map_cache <- new.env(parent = emptyenv())
+
+.assistant_parent_map_reset <- function() {
+  rm(list = ls(.assistant_parent_map_cache, all.names = TRUE),
+     envir = .assistant_parent_map_cache)
+  invisible(NULL)
+}
+
+#' code -> parent_code lookup for one system/version, memoised.
+#'
+#' Returns an empty map for a system with no hierarchy (every
+#' `parent_code` NA), which makes every ancestry test below FALSE -- the
+#' correct answer for a flat classification such as PTSCS.
+.assistant_parent_map <- function(system, version) {
+  key <- paste(system, version, sep = "::")
+  hit <- .assistant_parent_map_cache[[key]]
+  if (!is.null(hit)) return(hit)
+  map <- tryCatch({
+    d <- get_classification(system, version)
+    if (is.null(d) || !all(c("code", "parent_code") %in% names(d))) {
+      stats::setNames(character(0), character(0))
+    } else {
+      p <- as.character(d$parent_code)
+      names(p) <- as.character(d$code)
+      p[!is.na(p) & nzchar(p)]
+    }
+  }, error = function(e) stats::setNames(character(0), character(0)))
+  .assistant_parent_map_cache[[key]] <- map
+  map
+}
+
+#' How many OTHER candidates in the set is each code an ancestor of?
+#'
+#' A COUNT rather than a flag, because a flag cannot rank two ancestors
+#' against each other. Measured: for the national public-administration
+#' set the survivors were the Section P, the Division 84, the Class 8411
+#' and the residual sub-class 84119. All three of P/84/8411 are ancestors,
+#' so a boolean tied them and retrieval order picked P -- an entire PSIC
+#' Section. Counting descendants orders them by specificity instead:
+#' P covers 3, 84 covers 2, 8411 covers 1, so ascending order puts the
+#' narrowest ancestor first and 8411 wins once the residual 84119 has been
+#' demoted by the residual-marker rule.
+#'
+#' @param codes character vector of candidate codes.
+#' @param system,version character(1).
+#'
+#' @return integer vector the same length as `codes`. Never errors; a
+#'   system with no canonical hierarchy yields all zeros.
+.assistant_ancestor_of_other <- function(codes, system, version) {
+  n <- length(codes)
+  if (n < 2L) return(rep(0L, n))
+  map <- .assistant_parent_map(system, version)
+  if (length(map) == 0L) return(rep(0L, n))
+
+  # Full ancestor chain of one code. The depth cap is a cycle backstop;
+  # real classifications are about five levels deep.
+  ancestors_of <- function(code) {
+    out <- character(0)
+    cur <- code
+    for (i in seq_len(12L)) {
+      # SINGLE bracket on purpose: `map[["absent"]]` throws "subscript out
+      # of bounds" on an atomic vector, and a code with no parent entry --
+      # a top-level row, or one from a differently-keyed set -- is the
+      # normal case here, not an error. `map["absent"]` yields NA, which
+      # simply ends the walk.
+      nxt <- unname(map[cur])
+      if (length(nxt) != 1L || is.na(nxt) || !nzchar(nxt) || nxt %in% out) break
+      out <- c(out, nxt)
+      cur <- nxt
+    }
+    out
+  }
+
+  chains <- lapply(codes, ancestors_of)
+  # Counted against DIFFERENT candidates only, never against itself.
+  vapply(seq_len(n), function(i) {
+    sum(vapply(chains[-i], function(ch) codes[[i]] %in% ch, logical(1)))
+  }, integer(1))
+}
+
+#' Canonical depth of each code -- how many levels down the real hierarchy.
+#'
+#' A Section is 0, a Division 1, a Group 2, a Class 3, a sub-class 4. Used
+#' as the last specificity tiebreaker: when two AGGREGATES survive with
+#' every other ranking key tied, the deeper one says more about the same
+#' subject. Measured: for a national public-administration query the
+#' Division 84 ("Public Administration and Defense; Compulsory Social
+#' Security" -- an entire PSIC sector) and the Class 8411 ("General public
+#' administration activities" -- the canonical ceiling this context can
+#' support) tied on every key including query coverage, and retrieval
+#' order alone chose the Division.
+#'
+#' @return integer vector the same length as `codes`; 0 where unknown.
+.assistant_canonical_depth <- function(codes, system, version) {
+  n <- length(codes)
+  if (n == 0L) return(integer(0))
+  map <- .assistant_parent_map(system, version)
+  if (length(map) == 0L) return(rep(0L, n))
+  vapply(codes, function(code) {
+    d <- 0L
+    cur <- code
+    seen <- character(0)
+    for (i in seq_len(12L)) {
+      nxt <- unname(map[cur])
+      if (length(nxt) != 1L || is.na(nxt) || !nzchar(nxt) || nxt %in% seen) break
+      seen <- c(seen, nxt)
+      cur <- nxt
+      d <- d + 1L
+    }
+    d
+  }, integer(1), USE.NAMES = FALSE)
+}
