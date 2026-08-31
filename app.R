@@ -83,7 +83,17 @@ ui <- bslib::page_navbar(
   # Compare PSIC Editions / About outputs below) is the robust fix used
   # throughout this server function instead.
   id = "main_nav",
-  header = shiny::tags$head(shiny::tags$link(rel = "stylesheet", href = "app.css")),
+  # UI-01..UI-05 refinement styles live in their own stylesheets, loaded
+  # AFTER app.css so they layer on the Subtle Gradient tokens rather than
+  # forking them. Split by concern so the refinement workstreams never
+  # contend for one 60 KB file: ui-dialog.css owns the shared dialog/drawer
+  # shell (UI-02/03/04/05), ui-filters.css owns the search sidebar and
+  # correspondence guidance (UI-01/04/05).
+  header = shiny::tags$head(
+    shiny::tags$link(rel = "stylesheet", href = "app.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-dialog.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-filters.css")
+  ),
   # Visible tab LABELS change per HANDOFF §2; the `value =` identities that
   # drive input$main_nav are deliberately untouched, so every existing
   # req(input$main_nav == ...) gate below keeps working unchanged.
@@ -91,8 +101,15 @@ ui <- bslib::page_navbar(
   # nav_label() pairs each label with its Phosphor glyph. The icon is
   # aria-hidden -- the visible text is the accessible name, so the tab is
   # never announced as an icon and never relies on the glyph loading.
+  # UI-02. The Browse-hierarchy affordance is composed HERE rather than
+  # inside search_ui(), so the hierarchy feature and the search filters
+  # stay in separate modules: the slot renders its own button (and nothing
+  # at all for a system with no canonical hierarchy), and
+  # hierarchy_browser_server() below wires the whole feature in one call.
   bslib::nav_panel(nav_label("search", "Search"),
-                   value = "search", search_ui()),
+                   value = "search",
+                   search_ui(),
+                   hierarchy_browse_slot_ui()),
   bslib::nav_panel(nav_label("arrow-left-right", "PSOC + PSIC"),
                    value = "dual_search", dual_search_ui()),
   bslib::nav_panel(nav_label("split", "Compare Editions"),
@@ -607,6 +624,18 @@ server <- function(input, output, session) {
   }
   render_dual_panel("psoc", dual_psoc, dual_psoc_query)
   render_dual_panel("psic", dual_psic, dual_psic_query)
+
+  # UI-03. Explicit "View details" / "Compare selected details" dialogs for
+  # the dual panel. Row CLICK still only selects -- opening a dialog is a
+  # deliberate second action -- and the comparison always carries the
+  # safeguard that a PSOC code does not imply an equivalent PSIC code.
+  dual_search_details_server(input, output, session, dual_psoc, dual_psic)
+
+  # UI-02. One call wires the whole hierarchy browser: the slot button, the
+  # dialog, lazy expansion, hierarchy-local search and "View in Search".
+  # `results` lets View-in-Search select the canonical record in the Search
+  # table after the dialog closes.
+  hierarchy_browser_server(input, output, session, results = results)
 
   # --- Compare PSIC Editions: bidirectional 2019<->2026 correspondence. ---
   correspondence_query_debounced <- reactive(input$correspondence_query) |> debounce(250)

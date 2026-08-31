@@ -63,6 +63,14 @@ dual_search_id <- function(system_id, suffix) {
   paste0("dual_search_", system_id, "_", suffix)
 }
 
+# UI-03 ids. The per-side "view_details" trigger is built with
+# dual_search_id(); the comparison controls are shared, so they are named
+# once here.
+DUAL_SEARCH_VIEW_SUFFIX <- "view_details"
+DUAL_SEARCH_COMPARE_OUTPUT <- "dual_search_compare"
+DUAL_SEARCH_COMPARE_INPUT <- "dual_search_compare_open"
+DUAL_SEARCH_VIEW_IN_SEARCH <- "dual_search_view_in_search"
+
 #' Build ONE independent search panel.
 #'
 #' Pure: returns a tag object, reads nothing, mutates nothing. The panel is
@@ -129,9 +137,14 @@ dual_search_panel_ui <- function(system_id) {
       DT::DTOutput(dual_search_id(system_id, "results"))
     ),
 
+    # UI-03: the large permanent detail block that used to live here is
+    # gone. Clicking a row now SELECTS it (DT's own single-row selection,
+    # unchanged) and this compact line reports the selection and carries the
+    # explicit "View details" action that opens the dialog. Nothing opens
+    # automatically on row click.
     shiny::tags$div(
       class = "psa-dual-detail",
-      shiny::tags$h4(class = "psa-dual-detail-head", "Selected entry"),
+      shiny::tags$h4(class = "psa-dual-detail-head visually-hidden", "Selected entry"),
       shiny::uiOutput(dual_search_id(system_id, "detail"))
     )
   )
@@ -143,6 +156,8 @@ dual_search_panel_ui <- function(system_id) {
 #' desktop, stacked at tablet/mobile (see .psa-dual-grid in www/app.css).
 dual_search_ui <- function() {
   shiny::tagList(
+    # Focus management for the UI-03 detail/comparison dialogs. Idempotent.
+    psa_dialog_deps(),
     shiny::tags$div(
       class = "psa-dual",
 
@@ -162,6 +177,15 @@ dual_search_ui <- function() {
         class = "psa-dual-grid",
         dual_search_panel_ui("psoc"),
         dual_search_panel_ui("psic")
+      ),
+
+      # UI-03: compare the two selections in one dialog. Rendered as an
+      # output purely so the control can be genuinely disabled until one row
+      # of EACH kind is selected -- it is not a second search surface and it
+      # reads no data.
+      shiny::tags$div(
+        class = "psa-dual-compare",
+        shiny::uiOutput(DUAL_SEARCH_COMPARE_OUTPUT)
       ),
 
       shiny::tags$p(
@@ -252,4 +276,171 @@ dual_search_side_count_text <- function(result, query) {
     limit          = result$limit,
     is_browsing    = !nzchar(trimws(q))
   )
+}
+
+
+# --- UI-03: compact selection line, comparison bar, dialog wiring -------
+#
+# Still per-side and still pure. `dual_selection_summary_ui()` receives ONE
+# side's selected row and knows nothing about the other side; the only
+# function that sees both is the comparison builder, and the sentence it is
+# required to print is exactly the one that denies any mapping between them.
+
+#' The one-line replacement for the old below-table detail block.
+#'
+#' Reports what is selected and carries the explicit "View details" action.
+#' A row click never opens anything by itself.
+#'
+#' @param entry A zero- or one-row canonical tibble.
+#' @param system_id character(1). "psoc" or "psic".
+dual_selection_summary_ui <- function(entry, system_id) {
+  view_id <- dual_search_id(system_id, DUAL_SEARCH_VIEW_SUFFIX)
+  side <- DUAL_SEARCH_SIDES[[system_id]]
+  kind <- if (is.null(side)) toupper(system_id) else side$heading
+
+  if (is.null(entry) || nrow(entry) == 0L) {
+    return(shiny::tags$div(
+      class = "psa-selection-line psa-selection-line--empty",
+      shiny::tags$span(
+        class = "psa-selection-line__text",
+        "No row selected. Select a row in the table above, then choose View details."
+      ),
+      psa_dialog_open_button(
+        view_id, "View details",
+        class = "psa-dialog-open--quiet",
+        disabled = TRUE,
+        aria_label = paste("View details —", kind, "— no row selected")
+      )
+    ))
+  }
+
+  entry <- entry[1, , drop = FALSE]
+  shiny::tags$div(
+    class = "psa-selection-line",
+    shiny::tags$span(
+      class = "psa-selection-line__text",
+      shiny::tags$span(class = "psa-selection-line__code mono", entry$code),
+      shiny::tags$span(entry$label)
+    ),
+    status_badge(entry$status, prefix = release_display_label(entry$version)),
+    psa_dialog_open_button(
+      view_id, "View details",
+      class = "psa-dialog-open--quiet",
+      aria_label = paste("View details for", entry$code, entry$label)
+    )
+  )
+}
+
+#' The "Compare selected details" control.
+#'
+#' Genuinely disabled (and `aria-disabled`) until one row of EACH kind is
+#' selected, with a text hint saying why -- never a control that silently
+#' does nothing.
+dual_search_compare_ui <- function(psoc_entry, psic_entry) {
+  has_psoc <- !is.null(psoc_entry) && nrow(psoc_entry) > 0L
+  has_psic <- !is.null(psic_entry) && nrow(psic_entry) > 0L
+  ready <- has_psoc && has_psic
+
+  hint <- if (ready) {
+    "Shown side by side for reference only."
+  } else if (has_psoc) {
+    "Select a PSIC row as well to compare."
+  } else if (has_psic) {
+    "Select a PSOC row as well to compare."
+  } else {
+    "Select one PSOC row and one PSIC row to compare."
+  }
+
+  shiny::tagList(
+    psa_dialog_open_button(
+      DUAL_SEARCH_COMPARE_INPUT,
+      "Compare selected details",
+      disabled = !ready
+    ),
+    shiny::tags$p(class = "psa-dual-compare__hint", hint)
+  )
+}
+
+#' Install the UI-03 dialog wiring for the PSOC + PSIC screen.
+#'
+#' ONE call from app.R covers both single-record dialogs, the comparison
+#' dialog and their View in Search action. Per-side independence is
+#' preserved: each side's selection is derived only from that side's own
+#' result and its own `_rows_selected` input, exactly as
+#' `dual_search_side_selection()` already does.
+#'
+#' @param psoc_side,psic_side Reactives returning either the count-aware
+#'   result list or `list(result = , error = )` as app.R's
+#'   `dual_side_search()` produces.
+#' @param results Optional Search results reactive, forwarded to
+#'   `view_in_search_apply()`.
+dual_search_details_server <- function(input, output, session,
+                                       psoc_side, psic_side,
+                                       results = NULL) {
+  .unwrap <- function(side_value) {
+    if (is.null(side_value)) return(NULL)
+    if (is.list(side_value) && "result" %in% names(side_value)) {
+      if (!is.null(side_value$error)) return(NULL)
+      return(side_value$result)
+    }
+    side_value
+  }
+
+  selection_of <- function(system_id, side) {
+    shiny::reactive({
+      res <- .unwrap(side())
+      if (is.null(res)) return(NULL)
+      dual_search_side_selection(
+        res,
+        input[[paste0(dual_search_id(system_id, "results"), "_rows_selected")]]
+      )
+    })
+  }
+
+  psoc_selection <- selection_of("psoc", psoc_side)
+  psic_selection <- selection_of("psic", psic_side)
+
+  output[[DUAL_SEARCH_COMPARE_OUTPUT]] <- shiny::renderUI({
+    dual_search_compare_ui(psoc_selection(), psic_selection())
+  })
+  shiny::outputOptions(output, DUAL_SEARCH_COMPARE_OUTPUT, suspendWhenHidden = FALSE)
+
+  # Which system's single-record dialog is open, so one shared
+  # "View in Search" input can serve both without either side reading the
+  # other's state.
+  open_system <- shiny::reactiveVal(NULL)
+
+  open_detail <- function(system_id, selection) {
+    entry <- selection()
+    shiny::req(!is.null(entry), nrow(entry) > 0L)
+    open_system(system_id)
+    psa_dialog_show(
+      entry_detail_dialog_ui(entry, view_input_id = DUAL_SEARCH_VIEW_IN_SEARCH),
+      session = session
+    )
+  }
+
+  shiny::observeEvent(input[[dual_search_id("psoc", DUAL_SEARCH_VIEW_SUFFIX)]], {
+    open_detail("psoc", psoc_selection)
+  })
+  shiny::observeEvent(input[[dual_search_id("psic", DUAL_SEARCH_VIEW_SUFFIX)]], {
+    open_detail("psic", psic_selection)
+  })
+
+  shiny::observeEvent(input[[DUAL_SEARCH_COMPARE_INPUT]], {
+    open_system(NULL)
+    psa_dialog_show(
+      entry_comparison_dialog_ui(psoc_selection(), psic_selection()),
+      session = session
+    )
+  })
+
+  shiny::observeEvent(input[[DUAL_SEARCH_VIEW_IN_SEARCH]], {
+    sys <- open_system()
+    shiny::req(sys)
+    entry <- if (identical(sys, "psoc")) psoc_selection() else psic_selection()
+    view_in_search_apply(entry, session = session, results = results)
+  })
+
+  invisible(NULL)
 }

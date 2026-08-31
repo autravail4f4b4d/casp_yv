@@ -1,0 +1,512 @@
+/* =========================================================================
+   UI-02 / UI-03 / UI-04 / UI-05 — shared dialog + drawer shell.
+   Owned by workstream UI-A. Loaded AFTER app.css, so every value here is a
+   Subtle Gradient token from app.css :root — no new palette, no fork.
+
+   PRESENTATION ONLY. Nothing here changes classification, search,
+   correspondence or RM behaviour.
+
+   Two variants share one overlay primitive:
+     .psa-dialog--modal   centred sheet
+     .psa-dialog--drawer  right-edge side sheet (UI-04's inspector)
+   Both collapse to a full-screen sheet at <=768px, which is the handoff's
+   375/320 requirement met one breakpoint early so tablet portrait also
+   stops fighting a two-column dialog.
+   ========================================================================= */
+
+/* ---- Overlay ---------------------------------------------------------- */
+
+.psa-dialog .psa-dialog__content {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  color: var(--text-body);
+  box-shadow: var(--shadow-mockup);
+  overflow: hidden;
+}
+
+.psa-dialog .psa-dialog__header {
+  align-items: flex-start;
+  gap: var(--space-lg);
+  padding: var(--space-xxl) var(--space-xxl) var(--space-lg);
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--mesh-soft);
+}
+
+.psa-dialog .psa-dialog__heading {
+  min-width: 0; /* lets long official titles wrap instead of overflowing */
+}
+
+.psa-dialog .psa-dialog__eyebrow {
+  margin-bottom: var(--space-xs);
+}
+
+.psa-dialog .psa-dialog__title {
+  margin: 0;
+  font-size: var(--size-heading-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.psa-dialog .psa-dialog__description {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--size-caption);
+  color: var(--text-mute);
+}
+
+.psa-dialog .psa-dialog__close {
+  flex: 0 0 auto;
+  /* 44px hit area: the handoff's mobile touch-target requirement, applied
+     everywhere rather than only under a media query. */
+  width: 44px;
+  height: 44px;
+  margin: calc(var(--space-sm) * -1) calc(var(--space-sm) * -1) 0 0;
+  border-radius: var(--radius-pill);
+  opacity: 0.7;
+}
+
+.psa-dialog .psa-dialog__close:hover,
+.psa-dialog .psa-dialog__close:focus-visible {
+  opacity: 1;
+}
+
+.psa-dialog .psa-dialog__body {
+  padding: var(--space-xxl);
+  overflow-x: hidden; /* zero page-level horizontal overflow contract */
+}
+
+.psa-dialog .psa-dialog__footer {
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-xxl);
+  border-top: 1px solid var(--border-hairline);
+  background: var(--surface-card);
+}
+
+.psa-dialog .psa-dialog__empty {
+  margin: 0;
+  font-size: var(--size-caption);
+}
+
+/* ---- Buttons ---------------------------------------------------------- */
+
+.psa-dialog__btn,
+.psa-dialog-open {
+  border-radius: var(--radius-button);
+  font-size: var(--size-button-cap);
+  font-weight: var(--weight-semibold);
+  padding: var(--pad-button-secondary-y) var(--pad-button-secondary-x);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.psa-dialog__btn--primary,
+.psa-dialog-open {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.psa-dialog__btn--primary:hover,
+.psa-dialog-open:hover {
+  background: var(--color-primary-press);
+  border-color: var(--color-primary-press);
+  color: var(--color-on-primary);
+}
+
+.psa-dialog__btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border-hairline);
+  color: var(--text-body);
+}
+
+.psa-dialog-open--quiet {
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+.psa-dialog-open--quiet:hover {
+  background: var(--surface-lavender);
+  color: var(--color-primary-deep);
+}
+
+/* Disabled is never colour-only: the label stays legible and the control
+   is genuinely non-interactive and announced as disabled. */
+.psa-dialog-open[disabled],
+.psa-dialog-open[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.psa-dialog-open:focus-visible,
+.psa-dialog__btn:focus-visible,
+.psa-hier-toggle:focus-visible,
+.psa-hier-label:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---- Drawer variant --------------------------------------------------- */
+
+.psa-dialog--drawer .psa-dialog__dialog {
+  margin: 0 0 0 auto;
+  max-width: 440px;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+.psa-dialog--drawer .psa-dialog__content {
+  height: 100%;
+  border-radius: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.psa-dialog--drawer .psa-dialog__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* ---- Responsive: full-screen sheet at tablet portrait and below -------- */
+
+@media (max-width: 768px) {
+  .psa-dialog .psa-dialog__dialog,
+  .psa-dialog--drawer .psa-dialog__dialog {
+    margin: 0;
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .psa-dialog .psa-dialog__content {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .psa-dialog .psa-dialog__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: var(--space-lg);
+  }
+
+  .psa-dialog .psa-dialog__header {
+    padding: var(--space-lg);
+  }
+
+  .psa-dialog .psa-dialog__footer {
+    padding: var(--space-md) var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .psa-dialog .psa-dialog__footer .psa-dialog__btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .psa-dialog .psa-dialog__title {
+    font-size: var(--size-body-md);
+  }
+  .psa-dialog .psa-dialog__body {
+    padding: var(--space-md);
+  }
+}
+
+/* =========================================================================
+   UI-02 — hierarchy browser
+   ========================================================================= */
+
+.psa-hierarchy {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.psa-hierarchy__search {
+  margin-bottom: var(--space-md);
+}
+
+.psa-hierarchy__search .form-group,
+.psa-hierarchy__search .shiny-input-container {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.psa-hierarchy__hint {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+}
+
+.psa-hierarchy__tree {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-8);
+  padding: var(--space-sm);
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.psa-hier-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.psa-hier-list .psa-hier-list {
+  margin-left: var(--space-lg);
+  border-left: 1px solid var(--border-hairline);
+  padding-left: var(--space-sm);
+}
+
+.psa-hier-node {
+  margin: 0;
+}
+
+.psa-hier-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  min-height: 36px;
+}
+
+.psa-hier-toggle {
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text-mute);
+  border-radius: var(--radius-4);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.psa-hier-toggle:hover {
+  background: var(--surface-lavender);
+  color: var(--color-primary);
+}
+
+/* A leaf gets the same gutter so codes stay aligned down the column. */
+.psa-hier-spacer {
+  flex: 0 0 auto;
+  width: 28px;
+}
+
+.psa-hier-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text-body);
+  border-radius: var(--radius-4);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--size-caption);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.psa-hier-label:hover {
+  background: var(--surface-lavender);
+}
+
+/* Selection is carried by weight + a left rule + aria-current, never by
+   colour alone. */
+.psa-hier-node--selected > .psa-hier-row > .psa-hier-label {
+  background: var(--surface-lavender);
+  box-shadow: inset 3px 0 0 0 var(--color-primary);
+  font-weight: var(--weight-semibold);
+}
+
+/* A local-search hit is marked with a visible text badge as well as tint. */
+.psa-hier-node--match > .psa-hier-row > .psa-hier-label {
+  background: var(--surface-cream);
+}
+
+.psa-hier-badge {
+  display: inline-block;
+  margin-left: var(--space-xs);
+  padding: 0 var(--pad-pill-x);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+
+.psa-hier-code {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  margin-right: var(--space-sm);
+}
+
+.psa-hierarchy__entry {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-8);
+  padding: var(--space-lg);
+  background: var(--surface-card);
+}
+
+.psa-hierarchy__breadcrumb {
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+  overflow-wrap: anywhere;
+  margin-bottom: var(--space-sm);
+}
+
+.psa-hierarchy__facts {
+  margin: var(--space-md) 0 0;
+  font-size: var(--size-caption);
+}
+
+.psa-hierarchy__facts dt {
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+  font-weight: var(--weight-regular);
+  margin-top: var(--space-sm);
+}
+
+.psa-hierarchy__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.psa-hierarchy-slot {
+  margin: var(--space-md) 0;
+}
+
+@media (max-width: 900px) {
+  /* No forced two-column layout below desktop (handoff UI-02). */
+  .psa-hierarchy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .psa-hierarchy__tree {
+    max-height: 45vh;
+  }
+}
+
+/* =========================================================================
+   UI-03 — compact selection line + detail / comparison dialogs
+   ========================================================================= */
+
+.psa-selection-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-8);
+  background: var(--surface-card);
+}
+
+.psa-selection-line__text {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: var(--size-caption);
+  overflow-wrap: anywhere;
+}
+
+.psa-selection-line__code {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  margin-right: var(--space-sm);
+}
+
+.psa-selection-line--empty {
+  background: var(--surface-cream);
+  color: var(--text-mute);
+}
+
+.psa-dual-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.psa-dual-compare__hint {
+  margin: 0;
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+}
+
+.psa-compare-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.psa-compare-col {
+  min-width: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-8);
+  padding: var(--space-lg);
+}
+
+.psa-compare-col__head {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--size-micro-cap);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+
+/* Neutral/plum informational note. Never error semantics: this is a
+   methodological safeguard, not a failure (handoff section 2). */
+.psa-compare-note {
+  margin-top: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border-hairline);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-8);
+  background: var(--surface-lavender);
+  color: var(--text-body);
+  font-size: var(--size-caption);
+}
+
+.psa-detail-dialog__facts {
+  margin: var(--space-md) 0 0;
+  font-size: var(--size-caption);
+}
+
+.psa-detail-dialog__facts dt {
+  font-size: var(--size-micro-cap);
+  color: var(--text-mute);
+  margin-top: var(--space-sm);
+}
+
+.psa-detail-dialog__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  /* Mobile comparison is stacked, never a squeezed two-column grid. */
+  .psa-compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-lg);
+  }
+  .psa-selection-line {
+    align-items: stretch;
+  }
+  .psa-selection-line .psa-dialog-open {
+    width: 100%;
+    justify-content: center;
+  }
+}
