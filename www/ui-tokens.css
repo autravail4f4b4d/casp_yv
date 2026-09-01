@@ -1,178 +1,227 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap');
 
 /* =========================================================================
-   ui-tokens.css — dark editorial token layer, typography and global canvas
+   ui-tokens.css — Lumora light editorial tokens, typography, global canvas
    =========================================================================
 
-   WHY THIS FILE EXISTS, AND WHY IT IS SMALL.
+   WHAT THIS FILE IS, AND WHY IT IS THE ONLY PLACE THE PALETTE LIVES.
 
-   app.css already routes essentially every colour through a semantic token
-   (200 var() references against 6 raw literals in its body). ui-dialog.css
-   and ui-filters.css are 100% tokenised. So the dark "liquid glass"
-   direction is implemented by RETARGETING that existing token layer here,
-   loaded after app.css, rather than by forking or rewriting 60 KB of
-   working rules.
+   app.css routes essentially every colour through a semantic token (200
+   var() references against 6 raw literals in its body), and ui-dialog.css
+   and ui-filters.css contain ZERO colour literals -- they are pure token
+   consumers. Audited before this pass, and it is what makes a whole-theme
+   replacement a token edit rather than a rewrite of 90 KB of working rules.
 
-   That choice is deliberate and load-bearing:
+   So this file RETARGETS that existing semantic layer. The previous pass
+   pointed it at a near-black canvas with a plum accent and an Instrument
+   Serif display face; it now points at the Lumora light system. No rule in
+   app.css, ui-dialog.css or ui-filters.css had to change to follow it.
 
-     * every UI-01..UI-05 rule keeps working, unmodified;
-     * a future design pass changes values here, not rules everywhere;
-     * the classification/RM contracts are untouched — this file has no
-       knowledge of codes, editions, correspondence or assistant state.
+   Ownership: TOKENS, TYPOGRAPHY and the GLOBAL CANVAS (body, Bootstrap and
+   DataTables ground). Surfaces live in ui-glass.css; motion in
+   ui-motion.css.
 
-   Ownership: this file owns TOKENS, TYPOGRAPHY and the GLOBAL CANVAS
-   (body, ambient background, Bootstrap/DT ground reskin). Glass surfaces
-   live in ui-glass.css; motion lives in ui-motion.css.
-
-   CONTRAST. Every functional-text token below was chosen to clear WCAG AA
-   (4.5:1) against --psa-bg #050505; the measured ratio is recorded beside
-   each one. Transparency is decorative here — no information is carried by
-   blur or alpha alone (see §19 of the handoff).
+   CONTRAST. Every functional-text token clears WCAG AA against the white
+   canvas, and the measured ratio is recorded beside it. Nothing in this
+   system depends on transparency for legibility.
    ========================================================================= */
 
 :root {
-  /* ---- New liquid-glass tokens (handoff §5) ---------------------------- */
-  --psa-bg: #050505;
-  --psa-bg-elevated: rgba(255, 255, 255, 0.025);
-  --psa-panel: rgba(255, 255, 255, 0.035);
-  --psa-panel-strong: rgba(255, 255, 255, 0.055);
-  --psa-text: rgba(255, 255, 255, 0.96);
-  --psa-text-muted: rgba(255, 255, 255, 0.62);
-  --psa-text-subtle: rgba(255, 255, 255, 0.40);
-  --psa-line: rgba(255, 255, 255, 0.10);
-  --psa-line-strong: rgba(255, 255, 255, 0.18);
-  --psa-focus: rgba(255, 255, 255, 0.88);
-  --psa-plum: #8f668f;
-  --psa-radius-sm: 12px;
-  --psa-radius-md: 18px;
-  --psa-radius-lg: 26px;
-  --psa-radius-pill: 999px;
+  /* ---- Lumora palette (handoff section 2, verbatim) -------------------- */
+  --lumora-background: #ffffff;
+  --lumora-foreground: #111111;
+  --lumora-ink: #0a0a0a;
+  --lumora-muted: #8d8d8d;
+  --lumora-subtle: #b6b6b6;
+  --lumora-line: #e6e5e2;
+  --lumora-surface: #f1f0ee;
+  --lumora-surface-2: #e3e2df;
 
-  /* Solid companions to the alpha tokens above.
-     --psa-text-subtle measures 3.7:1 on --psa-bg, which is AA for large
-     text and non-text only. Anything that must be READ as functional copy
-     uses --psa-text-muted (7.8:1) instead; the subtle step is reserved for
-     rules, glyph strokes and decorative marks. */
-  --psa-text-solid: #f5f5f5;         /* 18.4:1 */
-  --psa-text-muted-solid: #a0a0a0;   /*  7.8:1 */
+  --lumora-accent: #b15f2c;
+  --lumora-accent-from: #cf8047;
+  --lumora-accent-to: #97501f;
 
-  /* A plum light enough to be READ on black. #8f668f measures 4.3:1 — just
-     under AA — so it stays a border/fill/glow value and this lighter step
-     carries any plum TEXT. */
-  --psa-plum-text: #c9a9c9;          /*  9.7:1 */
-  --psa-plum-deep: #6f4d6f;
-  --psa-plum-glow: rgba(143, 102, 143, 0.28);
+  --lumora-hero-from: #ecebe9;
+  --lumora-hero-to: #c9c9c9;
 
-  /* ---- Typography (handoff §4) ----------------------------------------- */
-  /* Instrument Serif is DISPLAY ONLY. The stack degrades to Georgia and
-     then to the generic serif, so a blocked Google Fonts request costs the
-     app nothing but the exact face. */
-  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
-  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-             'Segoe UI', sans-serif;
+  --lumora-radius-pill: 9999px;
+  --lumora-radius-card: 2rem;
+  --lumora-radius-card-sm: 1.25rem;
+  --lumora-radius-control: .875rem;
+
+  --lumora-shell: 88rem;
+
+  /* Measured companions the reference does not name.
+     ------------------------------------------------
+     `--lumora-muted` #8d8d8d measures 3.1:1 on white: fine for large text,
+     rules and glyphs, and NOT enough for body copy. The reference is a
+     marketing site and can afford that; a classification utility cannot,
+     so functional secondary text uses --lumora-muted-text instead. This is
+     the handoff's own instruction in section 24: do not copy low-opacity
+     text that fails contrast in this app. */
+  --lumora-muted-text: #5f5f5f;      /*  6.9:1 on #ffffff */
+  --lumora-ink-on-dark: #ffffff;     /* 19.6:1 on #0a0a0a */
+  --lumora-muted-on-dark: rgba(255, 255, 255, 0.72);
+
+  /* #b15f2c measures 4.6:1 on white -- AA for text, and the accent is only
+     ever used for small markers, rails, focus and short labels. The darker
+     step carries accent TEXT that sits on a tinted surface. */
+  --lumora-accent-text: #97501f;     /*  6.1:1 on #ffffff */
+  --lumora-accent-wash: rgba(177, 95, 44, 0.08);
+  --lumora-accent-wash-strong: rgba(177, 95, 44, 0.16);
+
+  /* ---- Typography (handoff section 1) ---------------------------------- */
+  /* ONE face. No serif anywhere: the previous pass's display serif is
+     removed outright, not demoted. If the Google Fonts request fails the
+     stack falls through to the same system sans the app used before any of
+     this, so a blocked font costs the exact face and nothing else. */
+  --font-ui: 'Onest', ui-sans-serif, system-ui, -apple-system,
+             BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: var(--font-ui);
   --font-sans: var(--font-ui);
 
-  /* ---- Retargeted app.css base ramps ----------------------------------- */
-  /* Plum on a near-black ground: the light-theme ramp (#54436b and darker)
-     is invisible here, so each step moves up the scale while keeping its
-     ROLE — primary, deep, press, tint — intact. */
-  --plum: #8f668f;
-  --plum-deep: #6f4d6f;
-  --plum-press: #a87ea8;
-  --plum-tint: #c9a9c9;
+  /* Intentional weights (handoff section 1), named so a rule can state its
+     intent instead of a number. */
+  --weight-regular: 400;   /* body / supporting copy                       */
+  --weight-medium: 500;    /* navigation / labels / compact headings       */
+  --weight-semibold: 600;  /* page headings / result labels / primary CTAs */
+  --weight-bold: 700;      /* rare strong emphasis only                    */
 
-  --ink: #f5f5f5;
-  --ink-mute: #a0a0a0;
+  /* ---- Retargeted app.css base ramps ----------------------------------- */
+  /* The accent role that used to be plum is now burnt orange. The names
+     stay because app.css, ui-filters.css and ui-dialog.css already read
+     them; only what they resolve to moves. */
+  --plum: var(--lumora-accent);
+  --plum-deep: var(--lumora-accent-to);
+  --plum-press: var(--lumora-accent-to);
+  --plum-tint: var(--lumora-accent-from);
+
+  --ink: var(--lumora-foreground);
+  --ink-mute: var(--lumora-muted-text);
   --white: #ffffff;
 
-  /* "cream" and "lavender" keep their NAMES (dozens of rules reference
-     them) but become the two quiet elevated darks they now mean. */
-  --cream: #0c0c0c;
-  --lavender: #131016;
+  /* "cream" and "lavender" keep their names -- dozens of rules reference
+     them -- and become the warm light surface and the accent wash. */
+  --cream: var(--lumora-surface);
+  --lavender: var(--lumora-accent-wash);
 
-  --hairline: rgba(255, 255, 255, 0.10);
-  --hairline-strong: rgba(255, 255, 255, 0.30);
+  --hairline: var(--lumora-line);
+  --hairline-strong: #d5d4d0;
 
-  --blue: #8fc0f0;                   /* 10.6:1 */
-  --blue-hover: #b8d8f8;             /* 14.1:1 */
+  --blue: #1f5c99;                   /*  6.4:1 on #ffffff */
+  --blue-hover: #17456f;             /*  9.4:1 */
 
-  --red: #ff9182;                    /*  9.3:1 */
-  --green: #6fd8b0;                  /* 11.7:1 */
+  --red: #a33a28;                    /*  6.0:1 */
+  --green: #1f6b52;                  /*  6.0:1 */
 
   /* ---- Retargeted app.css semantic layer -------------------------------- */
-  --color-primary: var(--plum);
-  --color-primary-deep: var(--plum-deep);
-  --color-primary-press: var(--plum-press);
-  --color-primary-tint: var(--plum-tint);
-  --color-on-primary: #0a0a0a;
+  --color-primary: var(--lumora-accent);
+  --color-primary-deep: var(--lumora-accent-to);
+  --color-primary-press: var(--lumora-accent-to);
+  --color-primary-tint: var(--lumora-accent-from);
+  --color-on-primary: #ffffff;
 
-  --text-body: var(--psa-text-solid);
-  --text-mute: var(--psa-text-muted-solid);
-  --text-on-primary: #0a0a0a;
-  --text-on-primary-mute: rgba(10, 10, 10, 0.72);
+  --text-body: var(--lumora-foreground);
+  --text-mute: var(--lumora-muted-text);
+  --text-on-primary: #ffffff;
+  --text-on-primary-mute: rgba(255, 255, 255, 0.78);
   --text-link: var(--blue);
   --text-link-hover: var(--blue-hover);
 
-  --surface-canvas: var(--psa-bg);
-  --surface-card: var(--psa-panel);
-  --surface-cream: var(--psa-bg-elevated);
-  --surface-lavender: rgba(143, 102, 143, 0.14);
-  --surface-plum: var(--plum-deep);
+  --surface-canvas: var(--lumora-background);
+  --surface-card: #ffffff;
+  --surface-cream: var(--lumora-surface);
+  --surface-lavender: var(--lumora-accent-wash);
+  --surface-plum: var(--lumora-ink);
 
-  --border-hairline: var(--psa-line);
-  --border-strong: var(--psa-line-strong);
-  --border-on-plum: rgba(255, 255, 255, 0.22);
+  --border-hairline: var(--lumora-line);
+  --border-strong: var(--lumora-surface-2);
+  --border-on-plum: rgba(255, 255, 255, 0.28);
 
   --status-error: var(--red);
   --status-success: var(--green);
 
-  /* The mesh band was the one warm gradient in the light system and marked
-     Search as the default destination. It keeps that job, restated as the
-     handoff's ambient glow: white at the top-centre, a muted plum low and
-     right. No animation, no raster. */
+  /* The Search hero band. A light vertical wash (handoff section 7) -- no
+     photo, no canvas, no raster. */
   --mesh-band:
-    radial-gradient(ellipse 120% 90% at 50% -20%, rgba(255, 255, 255, 0.070), transparent 62%),
-    radial-gradient(ellipse 80% 70% at 88% 118%, rgba(143, 102, 143, 0.10), transparent 58%),
-    var(--psa-bg);
+    linear-gradient(180deg,
+      var(--lumora-hero-from) 0%,
+      var(--lumora-surface) 55%,
+      var(--lumora-background) 100%);
   --mesh-soft:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.045) 0%, rgba(143, 102, 143, 0.05) 100%),
-    #0a0a0a;
+    linear-gradient(160deg, var(--lumora-surface) 0%, #ffffff 100%);
 
-  /* Elevation on black is carried by a luminous inner top edge plus a deep
-     ambient drop, not by a grey shadow (which is invisible here). */
+  /* Elevation on a light ground is a soft neutral drop, not the luminous
+     inner edge the dark system needed. */
   --elev-0: none;
-  --elev-1: 0 18px 50px rgba(0, 0, 0, 0.55);
-  --elev-2: 0 28px 80px rgba(0, 0, 0, 0.62);
-  --elev-3: 0 10px 30px rgba(0, 0, 0, 0.50);
-  --elev-4: rgba(255, 255, 255, 0.18) 0 0 0 1px inset;
-  --ring-plum-inset: 0 0 0 1px var(--psa-focus) inset,
-                     0 0 0 4px rgba(255, 255, 255, 0.10);
+  --elev-1: 0 1px 2px rgba(17, 17, 17, 0.04), 0 8px 24px rgba(17, 17, 17, 0.06);
+  --elev-2: 0 2px 6px rgba(17, 17, 17, 0.06), 0 24px 60px rgba(17, 17, 17, 0.10);
+  --elev-3: 0 1px 3px rgba(17, 17, 17, 0.06), 0 10px 28px rgba(17, 17, 17, 0.08);
+  --elev-4: var(--lumora-line) 0 0 0 1px inset;
+  --ring-plum-inset: 0 0 0 1px rgba(17, 17, 17, 0.30) inset,
+                     0 0 0 3px var(--lumora-accent-wash-strong);
 
-  /* ---- Geometry: larger, softer, per handoff §3 ------------------------- */
-  --radius-lg: var(--psa-radius-sm);
-  --radius-xl: var(--psa-radius-md);
-  --radius-xxl: var(--psa-radius-lg);
-  --radius-pill: var(--psa-radius-pill);
-  --radius-card: var(--psa-radius-lg);
-  --radius-input: var(--psa-radius-sm);
-  --radius-button: var(--psa-radius-pill);
+  /* ---- Geometry (handoff section 2) ------------------------------------- */
+  /* rem-based, so browser zoom and user text scaling keep working. Section
+     22 explicitly forbids the reference's viewport-driven root-font hijack,
+     which would destabilise DataTables, selectize, modals and zoom. */
+  --psa-radius-sm: var(--lumora-radius-control);   /* .875rem */
+  --psa-radius-md: var(--lumora-radius-card-sm);   /* 1.25rem */
+  --psa-radius-lg: var(--lumora-radius-card);      /* 2rem    */
+  --psa-radius-pill: var(--lumora-radius-pill);
+
+  --radius-lg: var(--lumora-radius-control);
+  --radius-xl: var(--lumora-radius-card-sm);
+  --radius-xxl: var(--lumora-radius-card);
+  --radius-pill: var(--lumora-radius-pill);
+  --radius-card: var(--lumora-radius-card-sm);
+  --radius-input: var(--lumora-radius-control);
+  --radius-button: var(--lumora-radius-pill);
+
+  --container-max: var(--lumora-shell);
+
+  /* ---- Surface + line tokens the surface layer reads --------------------
+     These names came from the dark pass and are consumed ~100 times across
+     ui-glass.css. They are repointed rather than renamed: renaming would
+     churn every surface rule and every accepted structural test for no
+     behavioural gain. What they MEAN is unchanged -- page ground, elevated
+     panel, quiet line, strong line, focus -- only their values moved from a
+     near-black system to a near-white one. */
+  --psa-bg: var(--lumora-background);
+  --psa-bg-elevated: var(--lumora-surface);
+  --psa-panel: #ffffff;
+  --psa-panel-strong: var(--lumora-surface);
+  --psa-text: var(--lumora-foreground);
+  --psa-text-muted: var(--lumora-muted-text);
+  --psa-text-subtle: var(--lumora-muted);
+  --psa-line: var(--lumora-line);
+  --psa-line-strong: var(--lumora-surface-2);
+  --psa-focus: var(--lumora-accent);
+
+  --psa-text-solid: var(--lumora-foreground);       /* 17.7:1 on white */
+  --psa-text-muted-solid: var(--lumora-muted-text); /*  6.9:1 */
+
+  /* Former plum-accent aliases, now the burnt-orange accent. */
+  --psa-plum: var(--lumora-accent);
+  --psa-plum-text: var(--lumora-accent-text);
+  --psa-plum-deep: var(--lumora-accent-to);
+  --psa-plum-glow: var(--lumora-accent-wash-strong);
 
   /* ---- Bootstrap ground ------------------------------------------------- */
-  /* bs_theme() in app.R already compiles Bootstrap against the dark
-     palette. These re-assert the same values at runtime so a cached or
-     partially-recompiled bundle can never leave a white plate behind a
-     dark panel. */
-  --bs-body-bg: var(--psa-bg);
-  --bs-body-color: var(--psa-text-solid);
-  --bs-emphasis-color: var(--psa-text-solid);
-  --bs-secondary-color: var(--psa-text-muted-solid);
-  --bs-tertiary-color: var(--psa-text-muted-solid);
-  --bs-border-color: var(--psa-line);
-  --bs-secondary-bg: var(--psa-panel);
-  --bs-tertiary-bg: var(--psa-bg-elevated);
+  /* bs_theme() in app.R compiles Bootstrap against the same palette. These
+     re-assert it at runtime so a cached or partially recompiled bundle can
+     never leave a dark plate behind a light panel. */
+  --bs-body-bg: var(--lumora-background);
+  --bs-body-color: var(--lumora-foreground);
+  --bs-emphasis-color: var(--lumora-ink);
+  --bs-secondary-color: var(--lumora-muted-text);
+  --bs-tertiary-color: var(--lumora-muted-text);
+  --bs-border-color: var(--lumora-line);
+  --bs-secondary-bg: var(--lumora-surface);
+  --bs-tertiary-bg: var(--lumora-surface);
   --bs-link-color: var(--blue);
   --bs-link-hover-color: var(--blue-hover);
-  --bs-heading-color: var(--psa-text-solid);
+  --bs-heading-color: var(--lumora-foreground);
 }
 
 /* =========================================================================
@@ -180,338 +229,305 @@
    ========================================================================= */
 
 html {
-  /* Tells the engine this document is dark, so NATIVE chrome follows:
-     scrollbars, form-control defaults, spellcheck underlines and the
-     rubber-band overscroll. Without it a light scrollbar track paints a
-     bright strip down the edge of every scroll region on the page. */
-  color-scheme: dark;
-  background: var(--psa-bg);
-  /* The ambient layer is fixed to the viewport, so no horizontal overflow
-     can be introduced by it at any breakpoint (handoff §18). */
+  /* The document is light again, so native chrome -- scrollbars, form
+     defaults, overscroll -- follows without per-control overrides. */
+  color-scheme: light;
+  background: var(--lumora-background);
   overflow-x: hidden;
 }
 
 body {
-  background: var(--psa-bg);
-  color: var(--psa-text-solid);
+  background: var(--lumora-background);
+  color: var(--lumora-foreground);
   font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Ambient background (handoff §7). Static gradients — no video, no canvas,
-   no raster, no animation to reduce. pointer-events:none and z-index:-1
-   keep it strictly decorative and out of every hit test. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.055), transparent 46%),
-    radial-gradient(ellipse at 85% 70%, rgba(143, 102, 143, 0.05), transparent 42%);
-}
+/* The dark pass painted a fixed ambient radial glow behind everything. A
+   light editorial system does not want one: the canvas is simply white and
+   depth comes from surfaces and hairlines. Neutralised here rather than
+   left to fight the new ground. */
+body::before { content: none; display: none; }
 
 ::selection {
-  background: rgba(143, 102, 143, 0.40);
-  color: var(--psa-text-solid);
+  background: var(--lumora-accent-wash-strong);
+  color: var(--lumora-foreground);
 }
 
 /* =========================================================================
-   Display typography (handoff §4)
+   Typography
    =========================================================================
-   The serif is applied by an OPT-IN class and to the few genuinely
-   editorial headings. It is never inherited into a data surface, because
-   the handoff forbids it for codes, tables, filters, forms, buttons, RM
-   transcript copy and metadata. */
+   ONE FACE, NO SERIF. The previous pass shipped an opt-in `.psa-display`
+   serif class plus a pin list that forced codes, tables, forms and buttons
+   back to the UI face so the serif could not reach them. None of that is
+   needed now: --font-display resolves to Onest, so every heading and every
+   data surface is already the same family, and the pin list is gone with
+   the serif. */
+
+h1, h2, h3, h4, h5, h6,
+.psa-display {
+  font-family: var(--font-ui);
+  color: var(--lumora-foreground);
+  letter-spacing: -0.015em;
+}
 
 .psa-display {
-  font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  line-height: 1.06;
-  color: var(--psa-text-solid);
+  font-weight: var(--weight-semibold);
+  line-height: 1.08;
 }
 
+/* Emphasis inside a heading takes the accent, not an italic serif. */
 .psa-display em,
 .psa-display i {
-  font-style: italic;
-  color: var(--psa-plum-text);
+  font-style: normal;
+  color: var(--lumora-accent-text);
 }
 
-/* Editorial headings: the page-intro band on every secondary tab, and the
-   Sources section headings. These sit at the top of a READING surface, not
-   inside a data workspace, so they take the display face.
-
-   The size is raised with them. The light system set these at 15-20px in a
-   600-weight sans; Instrument Serif is a 400-weight face with a smaller
-   apparent x-height, so at 15px it read as quieter than the body copy under
-   it -- the opposite of a heading's job. Where the size is pinned by an
-   inline `style` in the R markup (the Sources and Compare Editions heroes),
-   only the family is changed here; those two are left at their authored
-   size rather than fighting an inline declaration from a stylesheet. */
-.psa-sources-section > h3,
-.psa-dual-title,
-.psa-corr-workspace > h3,
-.psa-hero > h2 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.005em;
-}
-
-.psa-sources-section > h3 { font-size: 21px; }
-
-/* PINNED BACK TO THE UI FACE.
-   --font-display now resolves to the serif, and app.css routes
-   --type-heading-* through it. These surfaces name classification labels,
-   codes and record metadata, which the handoff explicitly excludes from the
-   display face — so they are restated in the UI stack here. */
-.psa-detail-title,
-.psa-dual-detail-head,
-.psa-hier-label,
-.psa-hier-code,
-.psa-corr-node-label,
-.psa-source-card-name,
-.psa-verified-card,
-.psa-verified-card *,
-table.dataTable,
-table.dataTable *,
-.form-control,
-.form-select,
-.btn,
-label,
-.psa-tag,
-.psa-dialog__title {
-  font-family: var(--font-ui);
-}
-
-/* An official classification CODE is data. It reads as data: tabular
-   figures, slight positive tracking, never the display serif. */
+/* An official classification CODE is data: tabular figures so columns
+   align, a little more weight so it reads as the primary datum. */
+.mono,
+.psa-code,
 .psa-hier-code,
 .psa-dual-field code,
 .psa-corr-node-label code,
 code.psa-code {
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.005em;
 }
 
 /* =========================================================================
-   Form controls on black
-   =========================================================================
-   Dark translucent fill, quiet resting border, unmistakable focus ring
-   (handoff §10, §19). Contrast of the VALUE text never depends on the
-   translucency: the text token is the solid near-white. */
+   Form controls (handoff section 11)
+   ========================================================================= */
 
 .form-control,
 .form-select,
 .selectize-input,
 textarea.form-control {
-  background-color: var(--psa-bg-elevated);
-  color: var(--psa-text-solid);
-  border: 1px solid var(--psa-line);
-  border-radius: var(--radius-input);
+  background-color: #ffffff;
+  color: var(--lumora-foreground);
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-control);
+  min-height: 2.5rem;
 }
 
 .form-control::placeholder,
 textarea.form-control::placeholder {
-  /* Placeholders are hints, not content; still kept at the AA muted step
-     rather than the subtle one, because a search field's placeholder is
-     the only affordance telling a first-time user what to type. */
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
   opacity: 1;
 }
 
+/* Focus is the accent, and it is a RING rather than a colour swap, so it
+   survives forced-colors and is never the only signal. */
 .form-control:focus,
 .form-select:focus,
 .selectize-input.focus,
 .selectize-input.input-active {
-  background-color: var(--psa-panel);
-  color: var(--psa-text-solid);
-  border-color: var(--psa-focus);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
-  outline: none;
+  background-color: #ffffff;
+  color: var(--lumora-foreground);
+  border-color: rgba(17, 17, 17, 0.30);
+  outline: 2px solid var(--lumora-accent);
+  outline-offset: 1px;
+  box-shadow: none;
 }
 
 .form-label,
 .control-label,
 .shiny-input-container > label,
 .form-check-label {
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
+  font-weight: var(--weight-medium);
 }
 
-/* Selectize renders its own dropdown outside the field, so it needs the
-   dark ground stated explicitly or it falls back to Bootstrap white. */
+/* Selectize renders its menu outside the field, so it states its own ground
+   or it inherits nothing. This is the surface UI-POST-04 was raised for: on
+   the dark theme the menu background matched the page byte for byte and the
+   menu had no perceptible edge. The same defect is possible in reverse on
+   white, so the menu keeps a real line and a real shadow. */
 .selectize-dropdown,
 .selectize-dropdown-content {
-  background: #0d0d0d;
-  color: var(--psa-text-solid);
-  border: 1px solid var(--psa-line-strong);
-  border-radius: var(--radius-input);
+  background: #ffffff;
+  color: var(--lumora-foreground);
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-control);
   box-shadow: var(--elev-1);
 }
 
 .selectize-dropdown .active,
 .selectize-dropdown .option:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--psa-text-solid);
+  background: var(--lumora-surface);
+  color: var(--lumora-foreground);
 }
 
-.selectize-input > .item { color: var(--psa-text-solid); }
+.selectize-input > .item { color: var(--lumora-foreground); }
 
 .form-check-input {
-  background-color: var(--psa-bg-elevated);
-  border-color: var(--psa-line-strong);
+  background-color: #ffffff;
+  border-color: var(--lumora-surface-2);
 }
 
 .form-check-input:checked {
-  background-color: var(--plum);
-  border-color: var(--plum);
+  background-color: var(--lumora-accent);
+  border-color: var(--lumora-accent);
 }
 
 .form-check-input:focus-visible {
-  border-color: var(--psa-focus);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+  border-color: var(--lumora-accent);
+  outline: 2px solid var(--lumora-accent);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* =========================================================================
-   DT result tables on black
-   =========================================================================
-   DataTables ships its own light stylesheet. Its chrome — header, paging,
-   the "Showing x to y" info line, the filter box — is restated here so a
-   result table never opens a white hole in the canvas. Row semantics
-   (hover, .selected) are already defined in app.css against tokens and are
-   therefore left alone. */
+   DataTables on a light ground
+   ========================================================================= */
 
 .dataTables_wrapper,
-.dataTables_wrapper .dataTables_info,
-.dataTables_wrapper .dataTables_length,
-.dataTables_wrapper .dataTables_filter,
 table.dataTable {
-  color: var(--psa-text-solid);
+  color: var(--lumora-foreground);
 }
 
 .dataTables_wrapper .dataTables_info,
 .dataTables_wrapper .dataTables_length label,
 .dataTables_wrapper .dataTables_filter label {
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
 }
 
 table.dataTable,
 table.dataTable tbody tr,
 table.dataTable tbody td {
   background-color: transparent;
-  border-color: var(--psa-line);
+  border-color: var(--lumora-line);
 }
 
 table.dataTable thead th,
 table.dataTable thead td {
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
   background-color: transparent;
-  border-bottom-color: var(--psa-line-strong);
-  font-weight: 600;
+  border-bottom-color: var(--lumora-line);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 0.6875rem;
 }
 
 table.dataTable.stripe tbody tr.odd,
 table.dataTable.display tbody tr.odd {
-  background-color: rgba(255, 255, 255, 0.018);
+  background-color: rgba(241, 240, 238, 0.45);
+}
+
+/* Short single-word cell vocabulary: Status ("current" / "archived"),
+   Relationship, Confidence.
+   ------------------------------------------------------------------------
+   The class is attached at the DT column definition in app.R, not by a
+   positional selector here, so it follows the column rather than its index.
+   `nowrap` raises the column min-content width, which is the point: the
+   table then asks its container for the width it needs and the container
+   scrolls, instead of the browser breaking "current" into "curre / nt" to
+   fit a squeezed column. */
+table.dataTable td.psa-nowrap,
+table.dataTable th.psa-nowrap {
+  white-space: nowrap;
+}
+
+/* Every result grid keeps its own horizontal scroll, so a table allowed to
+   be wider than its panel scrolls INSIDE that panel and never widens the
+   page. */
+.psa-dual-results .dataTables_wrapper,
+.psa-corr-table-col .dataTables_wrapper {
+  overflow-x: auto;
 }
 
 /* PAGINATION.
-   DT is rendered through its Bootstrap 5 integration, so each page control
-   is `li.paginate_button.page-item > a.page-link` and the current page is
+   DT renders through its Bootstrap 5 integration, so each control is
+   `li.paginate_button.page-item > a.page-link` and the current page is
    `.active`, NOT DataTables' own `.current`. The visible box is the inner
-   `.page-link`, which is why the `li` is the wrong element to shape. Read
-   out of the running page; styling the `li` alone left Bootstrap's default
-   squared boxes and a flooded plum `.active` chip. */
+   `.page-link`, which is why the `li` is the wrong element to shape. */
 .dataTables_wrapper .dataTables_paginate .paginate_button {
   border: none;
   background: transparent;
 }
 
 .dataTables_wrapper .dataTables_paginate .page-link {
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--psa-radius-pill);
+  border-radius: var(--lumora-radius-pill);
   margin-inline: 2px;
-  min-width: 38px;
+  min-width: 2.375rem;
   text-align: center;
 }
 
 .dataTables_wrapper .dataTables_paginate .page-link:hover {
-  color: var(--psa-text-solid);
-  background: rgba(255, 255, 255, 0.07);
-  border-color: var(--psa-line);
+  color: var(--lumora-foreground);
+  background: var(--lumora-surface);
+  border-color: var(--lumora-line);
 }
 
-/* Current page: a quiet plum wash plus a ring and a weight change, rather
-   than Bootstrap's solid primary fill -- same restraint as the selected
-   table row, and still not colour-alone (Bootstrap emits aria-current).
-
-   Done through Bootstrap's OWN pagination variables rather than by
-   overriding its properties: `dataTables.bootstrap5.min.css` is appended by
-   the widget after every sheet this app controls, so a property override
-   here loses the cascade (measured -- the active chip stayed a solid
-   `rgb(143, 102, 143)` with `rgb(5, 5, 5)` text). Variables inherit, so
-   setting them on the container settles it with no specificity fight. */
+/* Current page: ink fill and weight, not a colour-only chip. Done through
+   Bootstrap's OWN pagination variables rather than by overriding its
+   properties, because `dataTables.bootstrap5.min.css` is appended by the
+   widget AFTER every sheet this app controls -- a property override here
+   loses the cascade. Variables inherit, so setting them on the container
+   settles it with no specificity fight. */
 .dataTables_wrapper .dataTables_paginate,
 .dataTables_wrapper .dataTables_paginate .pagination {
-  --bs-pagination-color: var(--psa-text-muted-solid);
+  --bs-pagination-color: var(--lumora-muted-text);
   --bs-pagination-bg: transparent;
   --bs-pagination-border-color: transparent;
-  --bs-pagination-hover-color: var(--psa-text-solid);
-  --bs-pagination-hover-bg: rgba(255, 255, 255, 0.07);
-  --bs-pagination-hover-border-color: var(--psa-line);
-  --bs-pagination-focus-color: var(--psa-text-solid);
-  --bs-pagination-focus-bg: rgba(255, 255, 255, 0.10);
+  --bs-pagination-hover-color: var(--lumora-foreground);
+  --bs-pagination-hover-bg: var(--lumora-surface);
+  --bs-pagination-hover-border-color: var(--lumora-line);
+  --bs-pagination-focus-color: var(--lumora-foreground);
+  --bs-pagination-focus-bg: var(--lumora-surface);
   --bs-pagination-focus-box-shadow: none;
-  --bs-pagination-active-color: var(--psa-text-solid);
-  --bs-pagination-active-bg: rgba(143, 102, 143, 0.28);
-  --bs-pagination-active-border-color: var(--psa-plum-text);
-  --bs-pagination-disabled-color: var(--psa-text-subtle);
+  --bs-pagination-active-color: #ffffff;
+  --bs-pagination-active-bg: var(--lumora-ink);
+  --bs-pagination-active-border-color: var(--lumora-ink);
+  --bs-pagination-disabled-color: var(--lumora-subtle);
   --bs-pagination-disabled-bg: transparent;
   --bs-pagination-disabled-border-color: transparent;
 }
 
 .dataTables_wrapper .dataTables_paginate .page-item.active .page-link {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .dataTables_wrapper .dataTables_paginate .page-link:focus-visible {
-  outline: 2px solid var(--psa-focus);
+  outline: 2px solid var(--lumora-accent);
   outline-offset: 2px;
   box-shadow: none;
 }
 
 /* =========================================================================
-   Global footer
+   Global footer, muted text, rules
    ========================================================================= */
 
 body > .container-fluid > footer,
 footer.border-top {
-  border-top-color: var(--psa-line) !important;
-  color: var(--psa-text-muted-solid) !important;
+  border-top-color: var(--lumora-line) !important;
+  color: var(--lumora-muted-text) !important;
   background: transparent;
 }
 
-/* Bootstrap's .text-muted resolves to a light-theme grey that measures
-   under 3:1 on black. Restated at the AA muted step. */
-.text-muted { color: var(--psa-text-muted-solid) !important; }
+/* Bootstrap's .text-muted resolves to a grey that measures under AA on
+   white for small copy. Restated at the measured 6.9:1 step. */
+.text-muted { color: var(--lumora-muted-text) !important; }
 
-hr { border-color: var(--psa-line); opacity: 1; }
+hr { border-color: var(--lumora-line); opacity: 1; }
 
 /* =========================================================================
-   Focus visibility (handoff §19)
+   Focus visibility (handoff section 24)
    =========================================================================
-   A white ring on a near-black ground, offset so it reads on both bare
-   canvas and glass. Never removed, never colour-only: it is a ring, i.e. a
-   shape change. */
+   A burnt-orange ring, offset so it reads on white, on a light surface and
+   on an ink card alike. Never removed, never colour-only: it is a ring,
+   i.e. a shape change. */
 
 :focus-visible {
-  outline: 2px solid var(--psa-focus);
+  outline: 2px solid var(--lumora-accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -519,62 +535,95 @@ hr { border-color: var(--psa-line); opacity: 1; }
 .btn:focus-visible,
 .nav-link:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--psa-focus);
+  outline: 2px solid var(--lumora-accent);
   outline-offset: 3px;
 }
 
-/* =========================================================================
-   Scroll regions
-   =========================================================================
-   `color-scheme: dark` above already asks the engine for dark native
-   scrollbars, but it is advisory: engines that ignore it, and any embedded
-   or screenshot renderer that paints host-styled chrome, still put a light
-   bar down the edge of every scroll region -- the hierarchy tree, the
-   edition list and the inspector body all have one. These state the colours
-   outright so the result does not depend on the host honouring the hint.
-
-   scrollbar-width: thin, not none: a scroll region must stay visibly
-   scrollable. Hiding the bar would remove an affordance to gain a look. */
+/* Scroll regions. `color-scheme: light` above already asks the engine for
+   light native scrollbars; these state the colours outright so the result
+   does not depend on the host honouring the hint. `thin`, not `none`: a
+   scroll region must stay visibly scrollable. */
 * {
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: var(--lumora-surface-2) transparent;
   scrollbar-width: thin;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-
 ::-webkit-scrollbar-track { background: transparent; }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: var(--psa-radius-pill);
+  background: var(--lumora-surface-2);
+  border-radius: var(--lumora-radius-pill);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.30); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--lumora-subtle);
+  background-clip: content-box;
+}
 
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* Short single-word cell vocabulary: Status ("current" / "archived"),
-   Relationship, Provenance, Confidence.
-   ------------------------------------------------------------------------
-   The class is attached at the DT column definition in app.R, not by a
-   positional selector here, so it follows the column rather than its index.
-   `nowrap` raises the column min-content width, which is the point: the
-   table then asks its container for the width it needs and the container
-   scrolls, instead of the browser breaking "current" into "curre / nt" to
-   fit a 52px column. The local scroll containers are unchanged, and no
-   page-level overflow is introduced -- both verified at 375 and 320. */
-table.dataTable td.psa-nowrap,
-table.dataTable th.psa-nowrap {
-  white-space: nowrap;
+/* =========================================================================
+   Alpha-mixed secondary text: raised for the light ground
+   =========================================================================
+   MEASURED, AND A DIRECT CONSEQUENCE OF THE INVERSION.
+
+   app.css expresses secondary copy as
+   `color-mix(in srgb, var(--color-text) N%, transparent)`. Those N values
+   were chosen against a NEAR-BLACK canvas, where 55% white-on-black
+   measures ~5.8:1 and clears AA comfortably. Composited against white with
+   `--color-text: #111111` the same steps land at:
+
+     50%  ->  rgb(136,136,136)  3.54:1   fails AA
+     55%  ->  rgb(124,124,124)  4.17:1   fails AA
+     60%  ->  rgb(112,112,112)  4.94:1   passes
+     62%+                       5.3:1+   passes
+
+   So every 50% and 55% rule that carries FUNCTIONAL text is raised to the
+   measured muted token (6.9:1). `.rm-assistant-disclaimer` is the clearest
+   example of why this is not cosmetic: its own comment in app.css records
+   that 40% was raised to 55% specifically to clear AA on the dark theme,
+   and it carries the "verified codes come from this application's data"
+   assurance.
+
+   Handoff section 24 asks for exactly this: do not copy low-opacity text
+   that fails contrast in this app.
+
+   This block sits in ui-tokens.css, which loads BEFORE ui-glass.css, so a
+   surface that deliberately gives one of these elements its own treatment
+   (the accent eyebrow, for instance) still wins. */
+.navbar .nav-link,
+.psa-dual-field .lucide,
+.psa-dual-detail-head,
+.psa-dual-note,
+.psa-dual-intro,
+.psa-pscc-breadcrumb,
+.psa-pscc-meta-label,
+.psa-col-legend-title,
+.psa-result-count,
+.psa-detail-head h6,
+.psa-eyebrow,
+.psa-source-line,
+.psa-panel-head h6,
+.psa-empty,
+.rm-assistant-disclaimer {
+  color: var(--lumora-muted-text);
 }
 
-/* Every result grid keeps its own horizontal scroll, so a table that is now
-   allowed to be wider than its panel scrolls INSIDE that panel. app.css
-   already does this for the Search split and the dual results region; the
-   correspondence grid is stated here for the same reason. */
-.psa-dual-results .dataTables_wrapper,
-.psa-corr-table-col .dataTables_wrapper {
-  overflow-x: auto;
+/* app.css marks the nav-link colour !important, so the raise has to match
+   it to take effect. */
+.navbar .nav-link { color: var(--lumora-muted-text) !important; }
+
+/* `strong` inside the result count is the count itself -- full ink. */
+.psa-result-count strong { color: var(--lumora-foreground); }
+
+/* Column HEADERS never break mid-word either. They are one or two short
+   words ("Code", "From label"), so `nowrap` costs a few pixels of column
+   and removes "COD / E" -- measured in the PSOC + PSIC panels, where the
+   uppercase, letter-spaced header was breaking inside the word. The grid
+   asks its container for the width it needs and the container scrolls. */
+table.dataTable thead th {
+  white-space: nowrap;
 }

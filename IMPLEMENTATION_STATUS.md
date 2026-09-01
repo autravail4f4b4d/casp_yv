@@ -1522,3 +1522,161 @@ Responsive sweep at 1440 / 1366 / 1024 / 992 / 991 / 768 / 375 / 320: no
 page-level horizontal overflow at any width, Status renders on one line at
 every width, and each result grid keeps its overflow contained locally
 (at 320px the dual grid scrolls internally at 230px inside a 228px box).
+
+---
+
+# UI follow-up — Compare Editions simplification and mobile refinement
+
+Governing specification:
+`UI_COMPARE_EDITIONS_AND_MOBILE_FOLLOWUP_ADDENDUM.md`.
+Status: **implemented, verified, left uncommitted for review** (§18 stop
+boundary). Base commit `3c49c8e3f22749e1cd48217ccd06d83643a3c9f9`.
+
+Presentation only. `R/assistant/` and `R/retrieval/` untouched; no
+classification, correspondence, routing or provider change; semantic
+authority remains OFF.
+
+## What changed
+
+| Area | Change |
+|---|---|
+| Direction control | inline `min-width: 260px` flex column → `.psa-corr-filters` grid; 263px → 460px on desktop, full width on mobile |
+| Correspondence table | Provenance column removed (Relationship + Confidence remain) |
+| Relationship detail | one shared facts block; no provenance row, no raw evidence dump |
+| Evidence copy | engineering trace replaced by a derived note plus UN corroboration where recorded |
+| Confidence | `moderate` displays as **Medium**; stored vocabulary unchanged |
+| Safeguard | now shown on every relationship, not only split/merged/complex |
+| Mobile | filters stack full width; 44px targets on release rows, Browse, Ask RM, inspector close |
+
+## Two regressions from the liquid-glass pass, found by this review
+
+1. `.psa-liquid-glass { position: relative }` out-ranked
+   `.psa-corr-inspector`'s own sticky/fixed positioning — same specificity,
+   later sheet, and `@media` adds none. The mobile inspector sheet was an
+   in-flow block and the desktop inspector no longer stuck.
+2. Reveal animations used `animation-fill-mode: both`. `transform: none` in
+   a keyframe computes to the **identity matrix**, which still creates a
+   containing block for `position: fixed` descendants. Measured:
+   `.psa-corr-workspace` held `matrix(1, 0, 0, 1, 0, 0)` after its reveal,
+   anchoring the sheet to the workspace (x=24, y=453 with `inset: 0`).
+   All reveals now use `backwards`.
+
+Fixing (1) also taught the same cascade lesson twice: restating `inset`
+alongside `position` re-broke the phone sheet by out-specifying the 576px
+step, so only `position` is restated.
+
+## Verification
+
+```text
+Rscript scripts/run_tests.R      FAIL 0 | WARN 0 | SKIP 0 | PASS 6965
+tests/.../test-ui-compare-editions-followup.R    128 assertions
+Rscript -e "renv::status()"      No issues found
+```
+
+Browser acceptance at 1440 / 1366 / 1024 / 768 / 375 / 320:
+
+```text
+Direction width      460 / 460 / 460 / 383 / 327 (full) / 272 (full)
+value clipped        never at any width
+page overflow        none at any width
+table overflow       contained locally (590px inside 238px at 320)
+inspector            sticky on desktop; fixed sheet <992; full-screen <576
+short cells          one line at every width
+```
+
+Inspector verified for a renamed + UN-corroborated row (Corroboration
+shown) and a split + low-confidence row with no UN evidence (Corroboration
+correctly withheld). No internal jargon in either.
+
+## Known limitations
+
+- The RM chat transcript is still unreviewed in a browser — this worktree
+  has no provider credential. Unchanged by this pass, which touches no RM
+  code, but still outstanding.
+- Incognito, a second browser engine and real touch interaction remain
+  unexercised.
+
+---
+
+# UI redesign — Lumora light editorial system (Onest)
+
+Governing specification:
+`UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF.md`.
+Branch `feature/ui-refinement-lumora-light`, created from the accepted UI
+checkpoint `3c49c8e3f22749e1cd48217ccd06d83643a3c9f9`.
+Status: **implemented, verified, left uncommitted for review** (§32).
+
+Presentation only. `R/assistant/` and `R/retrieval/` are byte-identical to
+both `3c49c8e` and `pre-staging-v10.1`; no classification, correspondence,
+routing or provider change; semantic authority remains OFF.
+
+## Starting-state note
+
+The branch was created with `git switch -c`, which carried forward the
+**uncommitted Compare Editions follow-up** from the previous pass. That was
+deliberate rather than incidental: §15 of this handoff requires exactly
+those changes ("incorporate the pending follow-up changes"), so discarding
+them would have meant re-implementing them.
+
+## Theme audit (§27), and why the replacement was a token edit
+
+| Sheet | Colour literals | Conclusion |
+|---|---|---|
+| app.css | 200 `var()` vs 6 literals | follows tokens |
+| ui-dialog.css | **0** | pure token consumer |
+| ui-filters.css | **0** | pure token consumer |
+| ui-tokens.css | 27 rgba + 30 token + 8 dark hex | the dark palette lived here |
+| ui-glass.css | 55 rgba + 76 token + 7 dark hex | the dark surfaces lived here |
+
+So the whole-theme replacement is two files rewritten (`ui-tokens.css`,
+`ui-glass.css`) plus `bs_theme()`. `ui-dialog.css` and `ui-filters.css`
+needed no edit at all — they followed the palette.
+
+`.psa-liquid-glass` was audited before being touched: 14 markup sites, and
+`--flow` / `--quiet` / `position: relative` are load-bearing, not
+decorative. The class name is retained and its RESPONSIBILITY renamed to a
+light surface primitive. A before/after selector inventory of
+`ui-glass.css` was diffed to prove the rewrite dropped nothing: 149 → 156
+selectors, the only "loss" being a selector that existed inside a comment.
+
+## Defects found and fixed during this pass
+
+1. **Classification codes wrapped mid-number.** Measured in the PSOC + PSIC
+   panels at desktop width: `22205` rendered as `2220 / 5`. A split code
+   reads as a different code. Fixed at the DT column definition for every
+   code column, plus `nowrap` on headers ("COD / E").
+2. **Alpha-mixed secondary text failed AA on white.** app.css's 50% and 55%
+   `color-mix` steps were tuned against black; on white they measure
+   3.54:1 and 4.17:1. Raised to the measured 6.9:1 token.
+3. **The large classification code measured 4.06:1** in accent on the warm
+   surface — compliant for large text, but the least legible treatment in
+   the app on its most important datum. Changed to ink (16.58:1).
+4. **The modal card lost its 2rem radius** to a higher-specificity
+   ui-dialog.css rule (0,2,0 vs 0,1,0). Specificity matched, and the mobile
+   full-screen override raised to match rather than sit underneath it.
+
+## Verification
+
+```text
+Rscript scripts/run_tests.R          FAIL 0 | WARN 0 | SKIP 0 | PASS 7074
+tests/.../test-ui-liquid-glass.R     251 assertions
+Rscript -e "renv::status()"          No issues found
+```
+
+Browser acceptance at 1440 / 1366 / 1024 / 768 / 640 / 375 / 320: no
+page-level horizontal overflow at any width, codes and headers on one line
+at every width, nav collapses at 992px, hero steps 64 → 40 → 28px, local
+table scrolling contained.
+
+All four shared dialogs (hierarchy, PSOC details, PSIC details,
+PSOC + PSIC comparison) verified white / 2rem / focus-restored on both
+Escape and close button.
+
+## Known limitations
+
+- The RM chat transcript is still unreviewed in a browser — this worktree
+  has no provider credential, so RM renders its unavailable state (which
+  was reviewed and is clean on the light ground). Unchanged by this pass,
+  which touches no RM code.
+- Incognito, a second browser engine and real touch interaction remain
+  unexercised.

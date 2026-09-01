@@ -292,32 +292,62 @@ test_that("no animation framework or remote visual asset was introduced", {
 })
 
 
-# --- 6. Typography rules from handoff section 4 ---------------------------
+# --- 6. Typography: Onest only (Lumora handoff section 1) -----------------
 
-test_that("the display serif has a local fallback and is import-only", {
+test_that("Onest is imported and is the only face in the stack", {
   tokens <- .read("www", "ui-tokens.css")
-  expect_true(.has(tokens, "Instrument+Serif"))
-  expect_true(.has(tokens, "'Instrument Serif', Georgia, 'Times New Roman', serif"))
-  # The app must remain usable if Google Fonts is blocked, so the UI face is
-  # never the imported one.
-  expect_true(.has(tokens, "--font-ui:"))
+  expect_true(.has(tokens, "family=Onest"))
+  expect_true(.has(tokens, "--font-ui: 'Onest'"))
+
+  # Display and body resolve to the SAME face: the Lumora system has no
+  # separate display family, so there is no serif/sans tension to manage.
+  expect_true(.has(tokens, "--font-display: var(--font-ui);"))
   expect_true(.has(tokens, "--font-sans: var(--font-ui);"))
+
+  # The app must remain usable if Google Fonts is blocked, so the stack
+  # falls through to the system sans rather than to a webfont-only face.
+  expect_true(.has(tokens, "ui-sans-serif, system-ui"))
 })
 
-test_that("classification data surfaces are not set in the display serif", {
-  # Handoff section 4 forbids the serif for codes, result tables, filters,
-  # forms, buttons, RM transcript copy and metadata. app.css routes its
-  # --type-heading-* tokens through --font-display, which now resolves to
-  # the serif, so those data surfaces are pinned back explicitly.
-  tokens <- .read("www", "ui-tokens.css")
-  pinned <- sub(".*PINNED BACK TO THE UI FACE\\.", "", tokens)
-  pinned <- sub("font-family: var\\(--font-ui\\);.*", "", pinned)
+# CSS declarations only. The words "Instrument" and "serif" legitimately
+# survive in PROSE that documents the removal ("the previous pass's display
+# serif is removed outright"), and a scan that cannot tell a comment from a
+# rule would either fail on its own documentation or force the documentation
+# to be deleted. Comments are stripped first so the assertion is about what
+# the browser actually reads.
+.css_rules_only <- function(css) {
+  # (?s) so `.` spans newlines -- a CSS comment block is multi-line.
+  gsub("(?s)[/][*].*?[*][/]", "", css, perl = TRUE)
+}
 
-  for (sel in c(".psa-detail-title", ".psa-hier-code", ".psa-hier-label",
-                "table.dataTable", ".form-control", ".btn", "label",
-                ".psa-verified-card")) {
-    expect_true(.has(pinned, sel), info = sel)
+.r_code_only <- function(src) {
+  paste(sub("#.*$", "", strsplit(src, "\n", fixed = TRUE)[[1]]), collapse = "\n")
+}
+
+test_that("Instrument Serif is gone from the application", {
+  # The previous pass's display face is REMOVED, not demoted (section 1).
+  # Checked across every stylesheet and the app shell, not just the token
+  # file, so a stray leftover rule anywhere fails this.
+  for (f in c("app.css", "ui-tokens.css", "ui-dialog.css",
+              "ui-filters.css", "ui-glass.css", "ui-motion.css")) {
+    expect_false(.has(.css_rules_only(.read("www", f)), "Instrument"), info = f)
   }
+  expect_false(.has(.r_code_only(.read("app.R")), "Instrument"))
+
+  # And no serif family is named as a display face. `sans-serif` is the
+  # generic fallback keyword and is expected, so it is removed before the
+  # check rather than special-cased inside it.
+  for (f in c("ui-tokens.css", "ui-glass.css")) {
+    css <- gsub("sans-serif", "", .css_rules_only(.read("www", f)), fixed = TRUE)
+    expect_false(.has(css, "serif"), info = f)
+    expect_false(.has(css, "Georgia"), info = f)
+  }
+})
+
+test_that("the app shell asks bslib for Onest and no serif", {
+  app <- .r_code_only(.read("app.R"))
+  expect_true(.has(app, '"Onest"'))
+  expect_false(.has(app, '"serif"'))
 })
 
 
@@ -354,8 +384,180 @@ test_that("the correspondence inspector's desktop plate is desktop-scoped", {
 test_that("no page-level horizontal overflow is introduced by the canvas", {
   tokens <- .read("www", "ui-tokens.css")
   expect_true(.has(tokens, "overflow-x: hidden"))
-  # The ambient layer is fixed and inert: it can neither be hit-tested nor
-  # extend the document box.
-  expect_true(.has(tokens, "position: fixed"))
-  expect_true(.has(tokens, "pointer-events: none"))
+
+  # The dark pass painted a fixed ambient radial glow behind the page. The
+  # light system has no ambient layer at all -- the canvas is simply white
+  # and depth comes from surfaces and hairlines -- so the layer is
+  # explicitly neutralised rather than left to fight the new ground. A
+  # dangling `body::before` with a dark gradient would be exactly the kind
+  # of leftover the handoff's section 25 warns about.
+  expect_true(.has(tokens, "body::before { content: none; display: none; }"))
+})
+
+
+# =========================================================================
+# 8. Lumora light system (UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF §28)
+# =========================================================================
+#
+# The theme was replaced wholesale, so these assert the NEW contract in the
+# same spirit as the rest of this file: semantic facts that fail silently in
+# a browser, never a screenshot or a bare hex spot-check.
+
+test_that("the Lumora palette is declared once, in the token layer", {
+  tokens <- .read("www", "ui-tokens.css")
+  for (tok in c("--lumora-background: #ffffff", "--lumora-foreground: #111111",
+                "--lumora-ink: #0a0a0a", "--lumora-line: #e6e5e2",
+                "--lumora-surface: #f1f0ee", "--lumora-accent: #b15f2c",
+                "--lumora-radius-card: 2rem", "--lumora-radius-control: .875rem",
+                "--lumora-radius-pill: 9999px")) {
+    expect_true(.has(tokens, tok), info = tok)
+  }
+
+  # Declared in ONE place: a second :root palette in a surface sheet is how
+  # a theme starts drifting from itself.
+  for (f in c("ui-glass.css", "ui-filters.css", "ui-dialog.css", "ui-motion.css")) {
+    expect_false(.has(.read("www", f), "--lumora-accent:"), info = f)
+  }
+})
+
+test_that("the application canvas is light and its text is dark ink", {
+  tokens <- .read("www", "ui-tokens.css")
+  expect_true(.has(tokens, "background: var(--lumora-background);"))
+  expect_true(.has(tokens, "color: var(--lumora-foreground);"))
+  expect_true(.has(tokens, "color-scheme: light;"))
+
+  # bs_theme compiles Bootstrap against the same palette. Without this the
+  # navbar, DT and selectize keep rendering dark chrome under light content.
+  app <- .read("app.R")
+  expect_true(.has(app, 'bg = "#ffffff"'))
+  expect_true(.has(app, 'fg = "#111111"'))
+  expect_true(.has(app, 'primary = "#b15f2c"'))
+  expect_true(.has(app, '"border-color" = "#e6e5e2"'))
+})
+
+test_that("no dark-theme surface value survives underneath the light theme", {
+  # Handoff §25: do not leave conflicting dark-theme rules active beneath
+  # the light one. The dark pass's signature values are the near-black
+  # plates and the plum accent.
+  strip <- function(f) gsub("(?s)[/][*].*?[*][/]", "", .read("www", f), perl = TRUE)
+  for (f in c("ui-tokens.css", "ui-glass.css", "ui-motion.css")) {
+    css <- strip(f)
+    for (dead in c("#050505", "#0b0b0b", "#0d0d0d", "#8f668f", "#c9a9c9",
+                   "rgba(143, 102, 143")) {
+      expect_false(.has(css, dead), info = paste(f, dead))
+    }
+  }
+})
+
+test_that("burnt orange is the focus and accent token", {
+  tokens <- .read("www", "ui-tokens.css")
+  expect_true(.has(tokens, "--psa-focus: var(--lumora-accent);"))
+  expect_true(.has(tokens, "outline: 2px solid var(--lumora-accent);"))
+})
+
+test_that("ink is used selectively, not as the page ground", {
+  # §9: black cards are EMPHASIS against a light page. The verified
+  # classification card is the one surface that earns it; the canvas, the
+  # sidebar, the panels and the dialog plate must all stay light.
+  glass <- .read("www", "ui-glass.css")
+  expect_true(.has(glass, "background: var(--lumora-ink);"))
+
+  block <- function(sel) {
+    # Selectors here are all `.name` with hyphens only, so escaping the
+    # leading dot is enough -- no general regex escaper needed.
+    esc <- sub("^[.]", "[.]", sel)
+    m <- regmatches(glass, regexpr(paste0(esc, "[ ][{][^}]*[}]"), glass, perl = TRUE))
+    if (length(m)) m else ""
+  }
+  for (sel in c(".psa-sidebar", ".psa-dual-panel", ".rm-assistant-card",
+                ".psa-source-card")) {
+    expect_false(.has(block(sel), "--lumora-ink"), info = sel)
+  }
+
+  # Text on the ink card inverts explicitly rather than relying on
+  # inheritance, and its secondary step is the measured one rather than the
+  # reference's .55 alpha, which lands under AA.
+  expect_true(.has(glass, ".psa-verified-card .psa-tag"))
+  expect_true(.has(glass, "--lumora-muted-on-dark"))
+})
+
+test_that("the surface primitive keeps its structural contracts", {
+  # The class was RENAMED IN RESPONSIBILITY, not in name: it is still the
+  # thing 14 markup sites and the tests above depend on.
+  glass <- .read("www", "ui-glass.css")
+  expect_true(.has(glass, ".psa-liquid-glass--flow { overflow: visible; }"))
+  expect_true(.has(glass, ".psa-liquid-glass--quiet"))
+  expect_true(.has(glass, "position: relative;"))
+  expect_true(.has(glass, ".psa-liquid-glass > * { position: relative; z-index: 1; }"))
+})
+
+test_that("primary actions are ink pills and secondary are lined white", {
+  glass <- .read("www", "ui-glass.css")
+  expect_true(.has(glass, "border-radius: var(--lumora-radius-pill);"))
+  expect_true(.has(glass, "background: var(--lumora-ink);\n  border-color: var(--lumora-ink);"))
+
+  # Hover transforms are gated off touch: a moving tap target is a defect.
+  expect_true(.has(glass, "@media (hover: hover) and (pointer: fine)"))
+})
+
+test_that("classification codes are ink, never the low-contrast accent", {
+  # Measured at 4.06:1 in accent on the warm surface -- compliant for large
+  # text, and the worst treatment in the app applied to its most important
+  # datum. Ink takes it to 16.58:1.
+  glass <- .read("www", "ui-glass.css")
+  expect_true(.has(glass, ".psa-detail-code,\n.psa-verified-code {\n  color: var(--lumora-foreground);\n}"))
+})
+
+test_that("codes and table headers never break mid-word", {
+  # A code split across two lines reads as a different code. Attached at
+  # the DT column definition so it follows the column, not its index.
+  app <- .read("app.R")
+  expect_true(.has(app, 'className = "psa-nowrap", targets = c(0, 3)'))
+  expect_true(.has(app, 'className = "psa-nowrap", targets = c(0, 2, 4, 5)'))
+
+  tokens <- .read("www", "ui-tokens.css")
+  expect_true(.has(tokens, "table.dataTable thead th {\n  white-space: nowrap;\n}"))
+})
+
+test_that("secondary text mixed by alpha was raised for the light ground", {
+  # app.css expresses secondary copy as color-mix at 50/55% of --color-text.
+  # Those steps were AA on black and measure 3.54:1 and 4.17:1 on white.
+  tokens <- .read("www", "ui-tokens.css")
+  expect_true(.has(tokens, ".rm-assistant-disclaimer"))
+  expect_true(.has(tokens, "color: var(--lumora-muted-text);"))
+  expect_true(.has(tokens, "--lumora-muted-text: #5f5f5f;"))
+})
+
+test_that("the reference's marketing machinery was NOT imported", {
+  # Handoff §0 and §20-21 rule each of these out by name. Scanned over CSS
+  # RULES, not comments: this file's own prose records what was declined
+  # ("no Lenis smooth-scroll hijack, no cursor-reveal canvas, no
+  # 000-100 loader"), and a naive substring scan would fail on that
+  # documentation -- or, worse, pressure someone into deleting it.
+  strip <- function(f) gsub("(?s)[/][*].*?[*][/]", "", .read("www", f), perl = TRUE)
+  rules <- paste(vapply(
+    c("ui-tokens.css", "ui-glass.css", "ui-motion.css",
+      "ui-filters.css", "ui-dialog.css"),
+    strip, character(1)
+  ), collapse = "\n")
+
+  for (banned in c("lenis", "Lenis", "cursor-reveal")) {
+    expect_false(.has(rules, banned), info = banned)
+  }
+
+  # The display font is the ONLY permitted external visual dependency, and
+  # the reference's remote hero imagery is explicitly excluded.
+  remote <- regmatches(rules, gregexpr("https://[^')]+", rules))[[1]]
+  expect_true(all(grepl("^https://fonts[.]googleapis[.]com/", remote)))
+  for (ext in c(".mp4", ".webm", ".jpg", ".png")) {
+    expect_false(.has(rules, ext), info = ext)
+  }
+
+  # No front-end framework was introduced. Asserted at the DEPENDENCY
+  # boundary rather than by substring: "react" is a substring of Shiny's
+  # own `reactive()`, which appears throughout app.R, so a text scan there
+  # is a false-positive generator. What actually matters is that no new
+  # package and no new script were added.
+  expect_false(any(grepl("[.]js$", list.files(file.path(.repo, "www")))))
+  expect_false(.has(.r_code_only(.read("app.R")), "htmlDependency"))
 })

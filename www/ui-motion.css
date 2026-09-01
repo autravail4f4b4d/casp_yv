@@ -25,7 +25,29 @@
    rather than a scroll observer so it needs no JavaScript at all and cannot
    leave content permanently invisible if a script fails to run — the
    element's resting state is the visible one, and the animation only
-   describes where it came from. */
+   describes where it came from.
+
+   FILL MODE IS `backwards`, NOT `both`, AND THAT IS LOAD-BEARING.
+   ---------------------------------------------------------------
+   These keyframes end on the element's OWN resting style
+   (`opacity: 1; transform: none`), so `forwards`/`both` buys nothing
+   visually - and it costs something real. A filled animation retains the
+   final keyframe as a computed value, and `transform: none` in a keyframe
+   computes to the IDENTITY MATRIX rather than to `none`. An identity
+   transform still establishes a containing block for `position: fixed`
+   descendants.
+
+   Measured at 375px: `.psa-corr-workspace` still computed
+   `transform: matrix(1, 0, 0, 1, 0, 0)` long after its reveal had
+   finished, which anchored the Compare Editions inspector sheet to the
+   workspace instead of the viewport - the sheet rendered at x=24, y=453
+   with `inset: 0` and its heading clipped, instead of covering the screen.
+   `backwards` applies the `from` state before the animation starts and
+   then hands the element back to its own style, so the reveal looks
+   identical and no transform lingers.
+
+   The reduced-motion guarantee is unaffected: the resting style IS the
+   visible state, so a 0.01ms run still ends visible. */
 
 @keyframes psa-rise-in {
   from { opacity: 0; transform: translateY(12px); }
@@ -38,7 +60,7 @@
 }
 
 .psa-hero {
-  animation: psa-rise-in 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: psa-rise-in 420ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 .psa-search-body,
@@ -46,7 +68,7 @@
 .psa-corr-workspace,
 .psa-card-deck,
 .rm-assistant-card {
-  animation: psa-rise-in 480ms cubic-bezier(0.22, 0.61, 0.36, 1) 60ms both;
+  animation: psa-rise-in 480ms cubic-bezier(.22, 1, .36, 1) 60ms backwards;
 }
 
 /* -------------------------------------------------------------------------
@@ -58,7 +80,7 @@
 
 .psa-dialog.fade .modal-dialog,
 .psa-dialog .psa-dialog__dialog {
-  transition: opacity 160ms ease, transform 160ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: opacity 160ms ease, transform 160ms cubic-bezier(.22, 1, .36, 1);
   transform: scale(0.98);
   opacity: 0;
 }
@@ -75,7 +97,7 @@
    and up from the bottom as a sheet on mobile — both within the 16px
    budget, both opacity-led. */
 .psa-corr-inspector {
-  animation: psa-rise-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: psa-rise-in 180ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 /* Hierarchy children (UI-02) fade in as they are lazily expanded. Opacity
@@ -83,7 +105,7 @@
    measurement it depends on, and the handoff explicitly rules out flashy
    expansion. */
 [id^="psa-hier-children-"] {
-  animation: psa-fade-in 140ms ease both;
+  animation: psa-fade-in 140ms ease backwards;
 }
 
 /* -------------------------------------------------------------------------
@@ -94,14 +116,14 @@
    themselves a link/target — never to a static data panel. */
 
 .psa-source-card {
-  transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1),
+  transition: transform 180ms cubic-bezier(.22, 1, .36, 1),
               background-color 180ms ease,
               box-shadow 180ms ease;
 }
 
 .psa-source-card:hover {
-  transform: scale(1.006);
-  background-color: rgba(255, 255, 255, 0.038);
+  transform: scale(1.02);
+  background-color: var(--lumora-surface);
 }
 
 /* -------------------------------------------------------------------------
@@ -136,9 +158,12 @@
    Reduced motion (handoff §7, §17, §19)
    -------------------------------------------------------------------------
    The global escape, verbatim from the handoff. Reveals still END in the
-   visible state — `both` fill on every animation above means a 0.01ms run
-   lands on the `to` frame — so no content is left hidden by honouring the
-   preference. The ambient background in ui-tokens.css is static and needs
+   visible state: every reveal above ends on the element's own resting
+   style, so a 0.01ms run lands on the visible frame and no content is left
+   hidden by honouring the preference. (That is also why the reveals use
+   `backwards` rather than `both` - see the section-reveal note above.)
+
+   The ambient background in ui-tokens.css is static and needs
    no counterpart here. */
 
 @media (prefers-reduced-motion: reduce) {
@@ -152,4 +177,32 @@
   }
 
   .psa-source-card:hover { transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   Lumora motion notes (handoff §20)
+   -------------------------------------------------------------------------
+   The reference's motion FEEL is adopted; its marketing volume is not.
+   Explicitly NOT implemented, because the handoff rules each of them out:
+   no Lenis smooth-scroll hijack, no cursor-reveal canvas, no full-screen
+   000-100 loader, no artificial minimum wait, no scroll locking.
+
+   Curves are the reference's own: cubic-bezier(.22, 1, .36, 1) for reveals
+   and surfaces, which is a soft spring-like settle rather than an ease-out.
+
+   Hover transforms are gated behind `(hover: hover) and (pointer: fine)` in
+   ui-glass.css, so a touch user never gets a tap target that moves. */
+
+/* Section reveals stay within the handoff's 8-20px budget. */
+@media (prefers-reduced-motion: reduce) {
+  /* The handoff asks for `animation: none` rather than a 0.01ms duration.
+     Both land on the resting style here -- every reveal ends on the
+     element's own state, which is why `backwards` fill is used rather than
+     `both` -- so this is the stricter of two equivalent outcomes and
+     content is never left mid-animation. */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+  }
 }

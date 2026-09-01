@@ -826,3 +826,208 @@ the width it needs and the container scrolls locally, instead of the
 browser hyphen-free-breaking "current" into "curre / nt" to fit a squeezed
 column. Every result grid keeps its own `overflow-x: auto`; page-level
 horizontal overflow stays prohibited at every width.
+
+## 21. Compare Editions simplification and mobile follow-up
+
+Governed by `UI_COMPARE_EDITIONS_AND_MOBILE_FOLLOWUP_ADDENDUM.md`. A
+presentation-only pass: no classification, correspondence, retrieval or RM
+behaviour moves, and no field leaves the data model.
+
+### 21.1 Filter region and the Direction control
+
+The filter region is a CSS grid (`.psa-corr-filters`) with named column
+classes, not an inline flex row. Direction owns the wide column
+(`minmax(300px, 460px)`) and fills it; the search field takes
+`minmax(220px, 380px)`. Below 768px the grid collapses to one full-width
+column, Direction first, and the selected value may wrap to a second line
+rather than being cut.
+
+**Why the upper bound exists.** The previous inline row gave Direction only
+`min-width: 260px` with no flex declaration, so it defaulted to
+`flex: 0 1 auto` and never grew — measured at 1440px as a 263px control in
+a 1382px row with the longest value squeezed into 233px and
+`text-overflow: ellipsis` already armed. 460px is roughly twice what the
+longest value needs, so it cannot clip at any supported width, while an
+unbounded column would stretch a two-option select across half the
+viewport. Filling the filter column is the contract; stretching across the
+page is not.
+
+### 21.2 Provenance is presentation-suppressed, not deleted
+
+Provenance is **not** a column in the correspondence table and **not** a
+row in the relationship detail. Every shipped mapping is `derived` or
+`suggested` and none is `official`, so a per-row provenance cell repeated
+one word down the whole table without helping anyone choose a code.
+
+It remains: in the canonical schema, in `search_psic_correspondence()`
+output, in `correspondence_ask_rm_context()`, in the "How to read this
+table" glossary, and in `provenance_badge()` for a future diagnostic view.
+Tests assert both halves — absent from the rendering, present in the model.
+
+### 21.3 Relationship detail
+
+One shared block, `correspondence_relationship_facts_ui()`, used by BOTH
+`correspondence_detail_ui()` (the renderer `app.R` mounts) and
+`correspondence_inspector_ui()`. Sharing is deliberate: those two renderers
+had already drifted, and simplifying only the mounted one would have left
+the other showing a provenance row and a raw evidence dump.
+
+```text
+Relationship   [Continued / Renamed / Split / Merged / …]
+Confidence     [High / Medium / Low]
+Derived correspondence   one sentence
+Corroboration            only where the evidence records it
+Statistical-use note     always
+```
+
+### 21.4 Evidence copy
+
+The stored `evidence` string is an engineering trace — section-graph
+terminology, `normalized-token similarity`, `Search method:
+class_prefix_continuity`. None of it reaches the UI. It is **replaced**,
+not reformatted, by `correspondence_evidence_summary()`.
+
+UN corroboration is claimed only when the row's own evidence cites it
+(matched on the literal `UN ISIC`); 948 of 2000 shipped relationships do,
+1052 do not, so the sentence discriminates rather than decorating. A test
+asserts the fixture really does contain the jargon, so a pass means it was
+filtered rather than absent.
+
+### 21.5 Confidence
+
+Stored vocabulary is unchanged (`high` / `moderate` / `low`). Only the
+display of `moderate` moves to **Medium**, in one place — the `label` field
+of `.CORRESPONDENCE_CONFIDENCE_GLOSS`, which both the badge and the
+glossary read, so they cannot disagree. Ordinal words only; never a
+percentage. `confidence_badge(..., with_label = FALSE)` drops the
+"Confidence:" prefix where the facts block already prints the field name.
+
+### 21.6 Statistical-use safeguard
+
+Now shown on **every** relationship, not only split / merged / complex.
+Widening is the conservative direction — nothing that used to carry the
+notice loses it — and the addendum requires the safeguard to survive the
+evidence simplification. Still neutral/plum, never the error ramp.
+
+### 21.7 Two regressions from the liquid-glass pass, fixed here
+
+Both were found by this addendum's mobile review and both were measured,
+not inferred:
+
+1. **`.psa-liquid-glass { position: relative }` out-ranked the inspector's
+   own positioning.** `.psa-corr-inspector` is the one glass surface that
+   positions itself (sticky beside the table on desktop, fixed sheet below
+   992px). Same specificity, later sheet, and a `@media` block adds none —
+   so the primitive won at every width and the mobile sheet was an ordinary
+   in-flow block. Restated for the glassed inspector in `ui-glass.css`,
+   **position only**: restating `inset` there re-broke the phone sheet by
+   out-specifying the 576px step.
+2. **Reveal animations used `animation-fill-mode: both`.** A filled
+   animation retains its final keyframe, and `transform: none` in a
+   keyframe computes to the **identity matrix**, which still establishes a
+   containing block for `position: fixed` descendants. Measured:
+   `.psa-corr-workspace` held `matrix(1, 0, 0, 1, 0, 0)` long after its
+   reveal, anchoring the inspector sheet to the workspace instead of the
+   viewport (rendered at x=24, y=453 with `inset: 0`). All reveals now use
+   `backwards`; they end on the element's own resting style, so the visual
+   is identical, the reduced-motion guarantee is unaffected, and no
+   transform lingers.
+
+### 21.8 Mobile touch targets
+
+At ≤767.98px the release-selector rows, the Browse-hierarchy trigger, the
+Ask-RM action and the inspector close control all take a 44px minimum. The
+40px desktop density of the sidebar is unchanged.
+
+## 22. Visual system — Lumora light editorial (Onest)
+
+Supersedes §20 (dark liquid glass) and §17 entirely. **Everything §17 and
+§20 say about which MEANINGS carry a treatment still holds** — status is
+never colour alone, a classification relationship is never styled as an
+error, archived is quiet rather than warned, and no information is carried
+by transparency. Only the ground, the face and the accent changed.
+
+### 22.1 Typography — one face
+
+```text
+--font-ui       'Onest', ui-sans-serif, system-ui, …
+--font-display  var(--font-ui)      (no separate display family)
+--font-sans     var(--font-ui)
+```
+
+**Instrument Serif is removed from the application**, not demoted. There is
+no serif anywhere and therefore no serif/sans tension to manage — which
+also retired the previous pass's "pin list" that forced codes, tables,
+forms and buttons back to the UI face. Weights carry hierarchy instead:
+400 body, 500 navigation/labels, 600 headings and result labels, 700 rare.
+
+Onest is the only external visual dependency. A blocked font request costs
+the exact face and nothing else.
+
+### 22.2 Palette
+
+The Lumora tokens are declared once, in `ui-tokens.css`, and every other
+sheet reads them. Canvas `#ffffff`, text `#111111`, ink `#0a0a0a`, line
+`#e6e5e2`, surface `#f1f0ee`, accent `#b15f2c`.
+
+Ink is used **selectively** (§9 of the handoff): the verified classification
+card, the active navigation tab, primary buttons, the DT active page. The
+accent is used for focus, rails, markers, small icons and short labels —
+never as a large background.
+
+### 22.3 Contrast decisions that deviate from the reference
+
+The reference is a marketing site; this is a classification utility, and
+§24 of the handoff says not to copy low-opacity text that fails here. Three
+measured deviations:
+
+- `--lumora-muted` `#8d8d8d` is **3.1:1** on white. Functional secondary
+  text uses `--lumora-muted-text` `#5f5f5f` (**6.9:1**) instead.
+- app.css expresses secondary copy as `color-mix(--color-text N%,
+  transparent)`. Those N values were chosen against a near-black canvas;
+  on white, **50% = 3.54:1** and **55% = 4.17:1** both fail AA. Every such
+  rule carrying functional text is raised in `ui-tokens.css`.
+  `.rm-assistant-disclaimer` is the clearest case: its own app.css comment
+  records that 40% was raised to 55% to clear AA *on the dark theme*.
+- The large classification code is **ink, not accent**. In accent on the
+  warm surface it measured **4.06:1** — compliant for large text, and the
+  least legible treatment in the app applied to its most important datum.
+  Ink takes it to 16.58:1.
+
+### 22.4 `.psa-liquid-glass` is now a light SURFACE primitive
+
+The class name is kept although almost nothing is glassy, because it is
+**structural**: it appears in 14 markup sites and carries three contracts —
+`--flow` (`overflow: visible`, required wherever a selectize menu or bslib
+popover opens from inside the surface; omitting it reproduces UI-POST-04),
+`--quiet` (a flatter nested pane), and the `position: relative` + z-indexed
+child stack. Renaming it would churn every markup site and every accepted
+test to gain a nicer word.
+
+What changed is what it paints: white or warm-light fill, a masked 1px
+`#e6e5e2` ring that follows the radius, and a soft neutral shadow.
+
+### 22.5 Geometry and adaptive sizing
+
+`2rem` cards, `1.25rem` sub-cards, `.875rem` controls, pill actions — all
+**rem-based**. The reference's viewport-driven root-font scaling is
+deliberately NOT adopted (§22 of the handoff): it would destabilise
+DataTables, selectize and modals, and it breaks browser zoom and user text
+scaling. `clamp()` is used for large headings only.
+
+### 22.6 Codes and headers never break mid-word
+
+`psa-nowrap` is attached at the DT **column definition** — Code, Status,
+and for the correspondence grid From code / To code / Relationship /
+Confidence — so it follows the column rather than an index. A code split
+across two lines ("2220 / 5") reads as a different code, which is the one
+thing this application must never do. Table headers take `nowrap` too.
+
+### 22.7 What was NOT imported from the reference
+
+No Lenis, no cursor-reveal canvas, no fake `000 → 100` loader, no
+artificial minimum wait, no scroll locking, no remote hero imagery, no
+marketing information architecture, and no React/Tailwind/Vite/Framer
+migration. Motion is CSS only, on the reference's own
+`cubic-bezier(.22, 1, .36, 1)` curve, with hover transforms gated behind
+`(hover: hover) and (pointer: fine)`.

@@ -504,3 +504,167 @@
   .psa-col-tip { font-size: 11.5px; }
   .psa-sys-title { font-size: 11px; }
 }
+
+
+/* ==========================================================================
+   Compare Editions — filter region (follow-up addendum sections 3 and 10)
+   ==========================================================================
+
+   Replaces an inline flex row in which the Direction column carried only
+   `min-width: 260px` and no flex declaration, so it defaulted to
+   `flex: 0 1 auto` and never grew: measured at 1440px it sat at 263px
+   inside a 1382px row, leaving ~713px of the row empty while the longest
+   value was squeezed into 233px of text box with ellipsis already armed.
+
+   Direction now owns the wide column and fills it. The upper bound is
+   deliberate rather than absent: at 460px the longest value
+   ("2019 PSIC -> PSIC Revision 5 (2026)", measured at 233px) has roughly
+   2x the width it needs, so it cannot clip at any supported breakpoint,
+   while an unbounded column would stretch a two-option select across half
+   a 1440px viewport. That is filling the filter column, not compressing
+   the control to keep the row compact. */
+.psa-corr-filters {
+  display: grid;
+  grid-template-columns: minmax(300px, 460px) minmax(220px, 380px);
+  gap: 18px 24px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+
+/* min-width: 0 on both, so a long option can never push the grid — and
+   therefore the document — wider than the viewport. */
+.psa-corr-filter { min-width: 0; }
+
+.psa-corr-filter .form-group,
+.psa-corr-filter .shiny-input-container { margin-bottom: 0; width: 100%; }
+
+.psa-corr-filter .selectize-control,
+.psa-corr-filter .selectize-input,
+.psa-corr-filter input.form-control { width: 100%; }
+
+/* The selected direction is the whole point of the control: let it show in
+   full rather than ellipsising, now that there is room for it. */
+.psa-corr-filter--direction .selectize-input > .item {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+
+/* ==========================================================================
+   Compare Editions — simplified relationship facts (addendum sections 5-8)
+   ========================================================================== */
+
+.psa-corr-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Label and value on one line while there is room, wrapping rather than
+   truncating when there is not. */
+.psa-corr-fact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.psa-corr-fact-label {
+  font-size: 11px;
+  font-weight: var(--weight-semibold, 600);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  flex: 0 0 auto;
+}
+
+/* The derived note and the UN corroboration. Quiet by construction: they
+   are context for a decision, not a second metadata table. */
+.psa-corr-note {
+  border-left: 2px solid var(--border-hairline);
+  padding-left: 12px;
+}
+
+.psa-corr-note--corroboration { border-left-color: var(--color-primary-tint); }
+
+.psa-corr-note-title {
+  display: block;
+  font-size: 12px;
+  font-weight: var(--weight-semibold, 600);
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.psa-corr-note-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-mute);
+  overflow-wrap: anywhere;
+}
+
+
+/* ==========================================================================
+   Compare Editions — mobile (addendum sections 3, 9, 10, 11)
+   ========================================================================== */
+
+@media (max-width: 767.98px) {
+  /* One column, both controls full width, Direction first. */
+  .psa-corr-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .psa-corr-filter--direction,
+  .psa-corr-filter--query { width: 100%; max-width: 100%; }
+
+  /* The value may wrap onto a second line rather than being cut: at phone
+     width there is no width left to give it, and a readable two-line
+     direction beats a clipped one-line direction. */
+  .psa-corr-filter--direction .selectize-input {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .psa-corr-filter--direction .selectize-input > .item { white-space: normal; }
+
+  /* Actions stack instead of competing for a cramped row, and keep a
+     practical touch target. */
+  .psa-corr-askrm,
+  .psa-corr-inspector .psa-corr-askrm {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .psa-corr-inspector-close { min-height: 44px; min-width: 44px; }
+}
+
+@media (max-width: 359.98px) {
+  .psa-corr-fact { gap: 4px 8px; }
+  .psa-corr-note { padding-left: 10px; }
+}
+
+
+/* ==========================================================================
+   Release selector: touch target at phone width (addendum sections 9, 11)
+   ==========================================================================
+   The 40px row above is the accepted desktop density and stays. On a touch
+   screen the addendum asks for 44px where practical, and this is the one
+   control in the app a reader taps repeatedly (13 PSGC releases). Raised
+   only at phone width, so the desktop rhythm of the sidebar is untouched. */
+@media (max-width: 767.98px) {
+  .psa-edition-group .radio label { min-height: 44px; }
+
+  /* The Browse-hierarchy trigger goes full width rather than sitting as a
+     half-width button under a full-width filter stack. */
+  .psa-hierarchy-slot .psa-dialog-open {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+}

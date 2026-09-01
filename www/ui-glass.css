@@ -1,123 +1,125 @@
 /* =========================================================================
-   ui-glass.css — liquid-glass primitives and the surfaces built from them
+   ui-glass.css — the application SURFACE system (Lumora light)
    =========================================================================
 
-   Ownership: the `.psa-liquid-glass` primitive, its accessibility fallback,
-   and the application of glass to the app's MAJOR surfaces — floating
-   navbar, Search hero field, UI-01 filter sidebar, UI-02/03 dialogs, UI-04
-   correspondence inspector, UI-05 disclosure, RM Assistant surfaces and the
-   Sources card deck.
+   RESPONSIBILITY RENAMED, FILENAME AND CLASS NAMES KEPT.
 
-   Loaded AFTER ui-dialog.css and ui-filters.css so the glass treatment wins
-   over the flat surfaces those two sheets established, without either of
-   them having to be rewritten.
+   This sheet used to paint dark translucent "liquid glass". It now paints
+   the Lumora light surface system: white and warm-light panels, fine
+   #e6e5e2 lines, 2rem / 1.25rem / .875rem radii, ink cards used
+   selectively, and burnt orange as a restrained accent.
 
-   RULE OBSERVED THROUGHOUT: transparency is decorative. Every piece of
-   functional text on a glass surface takes its contrast from the token
-   layer against the near-black canvas, never from the glass. Removing the
-   blur (unsupported engine, forced-colors, screenshot) changes how the app
-   LOOKS and nothing about what it SAYS.
+   The name `.psa-liquid-glass` is deliberately retained even though almost
+   nothing is glassy any more, because the class is STRUCTURAL, not
+   decorative. Audited before this pass: it appears in 14 places in R
+   markup and carries three load-bearing contracts —
+
+     * `--flow`  = `overflow: visible`, REQUIRED on any surface that opens a
+                   selectize menu or a bslib popover from inside itself.
+                   Without it the primitive clips the overlay, which is the
+                   UI-POST-04 defect class.
+     * `--quiet` = a flatter, ringless pane for a surface nested inside
+                   another, so the app never shows a card inside a card.
+     * base      = `position: relative` + a z-indexed child stack.
+
+   Renaming it would churn every one of those markup sites and every
+   accepted structural test to gain a nicer word. The handoff (§3) asks for
+   the visual treatment to be replaced and the functional improvements to be
+   kept; that is exactly what this is.
+
+   Ownership: SURFACES. Tokens and the global canvas live in ui-tokens.css;
+   correspondence layout in ui-filters.css; the dialog behaviour contract in
+   ui-dialog.css; motion in ui-motion.css. Loaded after the two UI sheets so
+   surface treatment wins over their flat plates without rewriting them.
+
+   CONTRAST RULE OBSERVED THROUGHOUT: no functional text takes its legibility
+   from a translucent layer. Every text colour resolves against a known
+   opaque ground.
    ========================================================================= */
 
 /* -------------------------------------------------------------------------
-   The primitive (handoff §6)
+   The surface primitive
    ------------------------------------------------------------------------- */
 
 .psa-liquid-glass {
-  background: rgba(255, 255, 255, 0.02);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: #ffffff;
   border: none;
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.10),
-    0 18px 50px rgba(0, 0, 0, 0.20);
+  box-shadow: var(--elev-1);
   position: relative;
   overflow: hidden;
 }
 
-/* The fine luminous edge. A 1.4px gradient ring, masked to the border box
-   only, so it follows whatever radius the host surface carries. Bright at
-   top and bottom, absent through the middle — this is what reads as a lit
-   glass edge rather than a drawn border. */
+/* The fine line. A 1px ring masked to the border box only, so it follows
+   whatever radius the host surface carries — which a plain `border` cannot
+   do once a composition rule needs to remove it selectively. This is the
+   handoff's "quiet hairline border", and keeping it as `::before` also
+   keeps every dependent rule below (the --quiet reset, the full-screen
+   sheet resets) meaningful instead of silently inert. */
 .psa-liquid-glass::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.4px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.15) 20%,
-    rgba(255, 255, 255, 0) 40%,
-    rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.15) 80%,
-    rgba(255, 255, 255, 0.45) 100%
-  );
+  padding: 1px;
+  background: var(--lumora-line);
   -webkit-mask: linear-gradient(#fff 0 0) content-box,
                 linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
-  /* The ring is a decoration on top of the surface, never above its
-     content: a body that establishes its own stacking context (dialog
-     bodies, the chat viewport) must stay clickable. */
   z-index: 0;
 }
 
 .psa-liquid-glass > * { position: relative; z-index: 1; }
 
-/* Variant: a glass surface that must NOT clip its children.
+/* Variant: a surface that must NOT clip its children.
    The UI-01 sidebar hosts the System selectize menu, which opens downward
-   past the sidebar's own box. `overflow: hidden` on the primitive would
-   clip it — the exact class of defect UI-POST-04 was raised for. The masked
+   past the sidebar's own box; the dual panels and the UI-05 disclosures
+   host bslib popovers, which Bootstrap inserts as a SIBLING of the trigger.
+   `overflow: hidden` on the primitive would cut all of them off. The masked
    edge does not need overflow clipping to follow the radius, so dropping it
    here costs nothing visually. */
 .psa-liquid-glass--flow { overflow: visible; }
 
-/* Variant: a quieter, flatter pane for surfaces nested INSIDE another glass
-   surface. Avoids the boxed-card-inside-a-boxed-card the handoff warns
-   about in §10 while still separating the region. */
+/* Variant: a quieter pane for a surface nested INSIDE another surface.
+   Avoids the card-inside-a-card the handoff warns about, while still
+   separating the region. */
 .psa-liquid-glass--quiet {
-  background: rgba(255, 255, 255, 0.018);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: var(--lumora-surface);
+  box-shadow: none;
 }
 
 .psa-liquid-glass--quiet::before { display: none; }
 
-/* Accessibility / capability fallback (handoff §6.1).
-   Engines without backdrop-filter get an OPAQUE near-black plate instead of
-   a translucent one, so nothing behind the surface bleeds into small text.
-   Contrast of the content is unchanged either way. */
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+/* Capability fallback. The light system no longer depends on
+   backdrop-filter for anything, so this is now only a guard for engines
+   that also lack `mask-composite`: they get a real border instead of a
+   masked one and the surface still has a perceptible edge. */
+@supports not ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
   .psa-liquid-glass {
-    background: rgba(20, 20, 20, 0.96);
+    border: 1px solid var(--lumora-line);
   }
+  .psa-liquid-glass::before { display: none; }
 }
 
-/* Forced-colors (Windows high contrast) discards the glass entirely and
-   restores real borders, because in that mode the system — not this
-   stylesheet — owns contrast. */
+/* Forced-colors (Windows high contrast) hands contrast back to the system. */
 @media (forced-colors: active) {
   .psa-liquid-glass {
     background: Canvas;
     border: 1px solid CanvasText;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
   .psa-liquid-glass::before { display: none; }
 }
 
 /* -------------------------------------------------------------------------
-   Floating navigation (handoff §8)
+   Header / main navigation (handoff §6)
    -------------------------------------------------------------------------
    bslib's navset markup is untouched: same .navbar > .container-fluid >
    .navbar-brand + .navbar-collapse > .nav > .nav-link chain, same
    role="tablist"/role="tab"/aria-selected semantics, same `value=`
-   identities feeding input$main_nav. Only the shell's appearance changes,
-   so deep links, keyboard traversal and every req(input$main_nav == ...)
-   gate in app.R keep working exactly as before. */
+   identities feeding input$main_nav. Only appearance changes, so deep
+   links, keyboard traversal and every req(input$main_nav == ...) gate in
+   app.R keep working exactly as before. */
 
 .navbar {
   background: transparent !important;
@@ -128,63 +130,40 @@
   z-index: 1030;
 }
 
-/* The pill itself is the container, not the navbar, so it can be centred
-   and width-limited against the content column below it. */
+/* A light header card rather than a dark full-page glass pill (§6). */
 .navbar > .container-fluid {
   max-width: var(--container-max);
   margin-inline: auto;
   padding: 6px 8px 6px 18px;
-  border-radius: var(--psa-radius-pill);
+  border-radius: var(--lumora-radius-pill);
   gap: 10px;
-
-  background: rgba(255, 255, 255, 0.02);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.10),
-    0 18px 50px rgba(0, 0, 0, 0.45);
   position: relative;
+
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+          backdrop-filter: saturate(180%) blur(12px);
+  border: 1px solid var(--lumora-line);
+  box-shadow: var(--elev-1);
 }
 
-/* Same masked luminous edge as the primitive. Written out rather than
-   composed via the class because the element is emitted by bslib and this
-   sheet must not require markup it does not own. */
-.navbar > .container-fluid::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1.4px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.15) 20%,
-    rgba(255, 255, 255, 0) 40%,
-    rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.15) 80%,
-    rgba(255, 255, 255, 0.45) 100%
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box,
-                linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-  z-index: 0;
-}
+/* The header is the one place the handoff still allows a translucent
+   surface, so it is the only place a blur remains. Where the engine cannot
+   blur, the surface simply goes opaque — text contrast never depended on
+   it. */
+.navbar > .container-fluid::before { content: none; }
 
 .navbar > .container-fluid > * { position: relative; z-index: 1; }
 
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .navbar > .container-fluid { background: rgba(18, 18, 18, 0.97); }
+  .navbar > .container-fluid { background: #ffffff; }
 }
 
 .navbar-brand {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 20px;
-  letter-spacing: -0.005em;
-  color: var(--psa-text-solid) !important;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 1.0625rem;
+  letter-spacing: -0.015em;
+  color: var(--lumora-foreground) !important;
   padding-block: 8px;
   white-space: nowrap;
 }
@@ -192,31 +171,34 @@
 .navbar .nav-link {
   padding: 9px 16px;
   border-bottom: none;
-  border-radius: var(--psa-radius-pill);
-  color: var(--psa-text-muted-solid) !important;
-  transition: background-color 140ms ease, color 140ms ease;
+  border-radius: var(--lumora-radius-pill);
+  color: var(--lumora-muted-text) !important;
+  font-weight: var(--weight-medium);
+  transition: background-color 160ms cubic-bezier(.22, 1, .36, 1),
+              color 160ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .navbar .nav-link:hover {
-  color: var(--psa-text-solid) !important;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--lumora-foreground) !important;
+  background: var(--lumora-surface);
 }
 
-/* ACTIVE STATE IS NOT COLOUR-ALONE (handoff §8, §19).
-   Three simultaneous signals: a filled pill (a shape change), a weight
+/* ACTIVE STATE IS NOT COLOUR-ALONE (handoff §6, §24).
+   Three simultaneous signals: an ink fill (a shape change), a weight
    change, and the aria-selected/aria-current attributes bslib already
-   emits and this sheet never touches. */
-/* `:not(:empty)` is not decoration -- it matches Bootstrap's own
+   emits and this sheet never touches.
+
+   `:not(:empty)` is not decoration -- it matches Bootstrap's own
    `.nav-underline .nav-link:not(:empty).active` (four classes), which
    otherwise wins on specificity and pins the active tab back to weight 500.
    Measured in the browser before this was added. */
 .navbar .nav-link.active,
 .navbar .nav-link:not(:empty).active {
-  color: var(--psa-text-solid) !important;
-  background: rgba(255, 255, 255, 0.10) !important;
+  color: #ffffff !important;
+  background: var(--lumora-ink) !important;
   border-bottom-color: transparent;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
 }
 
 /* app.css underlines every `a:hover`. On a pill navbar that reads as a
@@ -230,49 +212,42 @@
    button holding three `.icon-bar` spans -- so Bootstrap 5's
    `.navbar-toggler` / `.navbar-toggler-icon` selectors match nothing in
    this app. app.css already sizes `.navbar-toggle` for touch; this is its
-   appearance on the dark ground. */
+   appearance on the light ground. */
 .navbar-toggle {
-  border: 1px solid var(--psa-line-strong);
-  border-radius: var(--psa-radius-sm);
-  background: transparent;
-  color: var(--psa-text-solid);
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-control);
+  background: #ffffff;
+  color: var(--lumora-foreground);
 }
 
-.navbar-toggle:hover { background: rgba(255, 255, 255, 0.08); }
+.navbar-toggle:hover { background: var(--lumora-surface); }
 
 .navbar-toggle:focus-visible {
-  outline: 2px solid var(--psa-focus);
+  outline: 2px solid var(--lumora-accent);
   outline-offset: 2px;
   box-shadow: none;
 }
 
-/* THE HAMBURGER GLYPH -- AND WHY THERE IS NO `filter` HERE.
+/* THE HAMBURGER GLYPH -- AND WHY THERE IS STILL NO `filter` HERE.
 
    The markup is Bootstrap 3's three `.icon-bar` spans; bslib's Bootstrap 5
    build ships a compatibility shim that hides the first two and repaints
-   the LAST one with the Bootstrap 5 hamburger data-URI:
-
-     .navbar-toggle > .icon-bar              { display: none }
-     .navbar-toggler-icon,
-     .navbar-toggle > .icon-bar:last-child   { display: inline-block;
-                                               background-image: <svg> }
-
-   That SVG was read out of the running page rather than assumed, and it
-   is ALREADY light -- `stroke='rgba(221,221,221,0.75)'` -- because
-   bs_theme() compiled it against the dark `fg`. Inverting it (or drawing
-   three replacement bars over it) makes it dark on a dark button, which is
-   the defect, not the fix. It is left alone; only the 0.75-alpha stroke is
+   the LAST one with the Bootstrap 5 hamburger data-URI. That SVG is
+   generated from the compiled `fg`, so it followed the theme from dark to
+   light on its own when bs_theme() changed. Inverting it -- or drawing
+   three replacement bars over it -- is what breaks it, which is how the
+   previous pass learned this. Left alone; only the shim's 0.75 alpha is
    lifted so the app's one mobile navigation control is unmistakable. */
 .navbar-toggle > .icon-bar:last-child { opacity: 0.9; }
 
 .navbar-toggle:hover > .icon-bar:last-child { opacity: 1; }
 
-/* Collapsed (mobile) menu: the pill becomes a rounded sheet so the stacked
+/* Collapsed (mobile) menu: the pill becomes a rounded card so the stacked
    links are not clipped by the pill radius, and the links get full-width
-   tap targets. No horizontal overflow is introduced at any width. */
+   44px tap targets. No horizontal overflow at any width. */
 @media (max-width: 991.98px) {
   .navbar > .container-fluid {
-    border-radius: var(--psa-radius-lg);
+    border-radius: var(--lumora-radius-card-sm);
     padding: 10px 14px;
   }
 
@@ -281,155 +256,154 @@
   .navbar .nav-link {
     width: 100%;
     min-height: 44px;
-    border-radius: var(--psa-radius-sm);
+    border-radius: var(--lumora-radius-control);
   }
 }
 
 /* -------------------------------------------------------------------------
-   Search hero (handoff §9)
-   ------------------------------------------------------------------------- */
+   Search hero (handoff §7)
+   -------------------------------------------------------------------------
+   A light utility hero: a vertical wash, an Onest heading, one large pill
+   field. No remote photo, no canvas reveal, no marketing watermark. */
 
 /* All three page-intro bands share .psa-hero. Only Search carries the
    --editorial modifier, so Compare Editions and Sources keep their compact
    left-aligned band and are not silently centred by this block. */
 .psa-hero {
   background: var(--mesh-band);
-  border-radius: var(--psa-radius-lg);
+  border-radius: var(--lumora-radius-card);
 }
 
 .psa-hero--editorial {
-  padding: 64px var(--space-huge) 44px;
+  padding: 4rem var(--space-huge) 2.75rem;
   text-align: center;
 }
 
 .psa-hero-eyebrow {
-  margin: 0 0 14px;
+  margin: 0 0 0.875rem;
   font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-accent-text);
 }
 
 .psa-hero-title {
-  margin: 0 0 26px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(34px, 5.2vw, 60px);
-  line-height: 1.04;
-  letter-spacing: -0.015em;
-  color: var(--psa-text-solid);
+  margin: 0 0 1.625rem;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: clamp(2rem, 4.6vw, 3.25rem);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: var(--lumora-foreground);
   max-width: 18ch;
   margin-inline: auto;
   text-wrap: balance;
 }
 
+/* Emphasis is the accent, not an italic serif — there is no serif left. */
 .psa-hero-title em {
-  font-style: italic;
-  color: var(--psa-plum-text);
+  font-style: normal;
+  color: var(--lumora-accent-text);
 }
 
-/* The field is the one large glass shell on the page. The <input> keeps its
+/* The one large pill field on the page. The <input> keeps its
    `classification_query` id, its real <label> (visually hidden, never
-   placeholder-only) and its full width contract. */
+   placeholder-only) and its full-width contract. */
 .psa-hero-field {
-  width: 820px;
+  width: 51.25rem;
   max-width: 100%;
   margin-inline: auto;
-  border-radius: var(--psa-radius-pill);
+  border-radius: var(--lumora-radius-pill);
 }
 
 .psa-hero-field input.form-control {
-  min-height: 64px;
-  padding: 0 58px 0 56px;
-  border-radius: var(--psa-radius-pill);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--psa-line);
-  color: var(--psa-text-solid);
-  font-size: 17px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  transition: border-color 160ms ease, background-color 160ms ease,
-              box-shadow 160ms ease;
+  min-height: 4rem;
+  padding: 0 3.625rem 0 3.5rem;
+  border-radius: var(--lumora-radius-pill);
+  background: #ffffff;
+  border: 1px solid var(--lumora-line);
+  color: var(--lumora-foreground);
+  font-size: 1.0625rem;
+  transition: border-color 200ms cubic-bezier(.22, 1, .36, 1),
+              box-shadow 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .psa-hero-field input.form-control::placeholder {
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
   opacity: 1;
 }
 
 .psa-hero-field input.form-control:hover {
-  background: rgba(255, 255, 255, 0.045);
-  border-color: var(--psa-line-strong);
+  border-color: var(--lumora-surface-2);
 }
 
 .psa-hero-field input.form-control:focus,
 .psa-hero-field input.form-control:focus-visible {
-  border-color: var(--psa-focus);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.10);
+  border-color: rgba(17, 17, 17, 0.30);
+  box-shadow: none;
   outline: none;
 }
 
 .psa-hero-field .lucide {
-  left: 24px;
-  color: var(--psa-text-muted-solid);
+  left: 1.5rem;
+  color: var(--lumora-muted-text);
   z-index: 4;
 }
 
 .psa-hero-help {
-  margin-top: 16px;
-  color: var(--psa-text-muted-solid);
+  margin-top: 1rem;
+  color: var(--lumora-muted-text);
 }
 
 /* app.css steps .psa-hero's padding down at 991.98px and again at 575.98px.
    .psa-hero--editorial carries the same specificity and loads later, so it
-   would otherwise keep the 64px desktop padding at every width. Each of
-   app.css's steps is therefore restated here for the editorial variant.
-   The hero must not eat the fold on a tablet or a phone (handoff §18). */
+   would otherwise keep the desktop padding at every width. Each of
+   app.css's steps is therefore restated for the editorial variant: the hero
+   must not eat the fold on a tablet or a phone (handoff §23). */
 @media (max-width: 991.98px) {
-  .psa-hero--editorial { padding: 40px 20px 30px; }
-  .psa-hero-title { font-size: clamp(30px, 5.6vw, 44px); }
+  .psa-hero--editorial { padding: 2.5rem 1.25rem 1.875rem; }
+  .psa-hero-title { font-size: clamp(1.875rem, 5.2vw, 2.75rem); }
 }
 
 @media (max-width: 767.98px) {
-  .psa-hero--editorial { padding: 28px 16px 24px; }
-  .psa-hero-title { font-size: clamp(26px, 8vw, 34px); margin-bottom: 18px; }
-  .psa-hero-eyebrow { margin-bottom: 10px; letter-spacing: 0.12em; }
+  .psa-hero--editorial { padding: 1.75rem 1rem 1.5rem; }
+  .psa-hero-title { font-size: clamp(1.625rem, 7.5vw, 2.125rem); margin-bottom: 1.125rem; }
+  .psa-hero-eyebrow { margin-bottom: 0.625rem; letter-spacing: 0.12em; }
   .psa-hero-field input.form-control {
-    min-height: 54px;
-    padding: 0 18px 0 46px;
-    font-size: 16px; /* 16px is the iOS zoom-on-focus floor */
+    min-height: 3.375rem;
+    padding: 0 1.125rem 0 2.875rem;
+    font-size: 1rem; /* 16px is the iOS zoom-on-focus floor */
   }
-  .psa-hero-field .lucide { left: 16px; }
+  .psa-hero-field .lucide { left: 1rem; }
 }
 
 /* -------------------------------------------------------------------------
-   UI-01 — filter sidebar
+   UI-01 — filter sidebar (handoff §8)
    -------------------------------------------------------------------------
    Every accepted UI-01 behaviour is owned by ui-filters.css and is left
-   untouched: the 300–320px desktop width, the acronym + full official title
-   option rendering, type-ahead across both, canonical release ordering, the
-   spelled-out CURRENT / ARCHIVED labels and long-title wrapping. This block
-   changes the sidebar's SURFACE only. */
+   untouched: the 312px desktop width, the acronym + full official title
+   option rendering, type-ahead across both, canonical current-first release
+   ordering, the spelled-out CURRENT / ARCHIVED labels and long-title
+   wrapping. This block changes the sidebar's SURFACE only. */
 
 .psa-sidebar {
-  border-radius: var(--psa-radius-lg);
-  padding: 22px 20px;
-  background: transparent;
+  border-radius: var(--lumora-radius-card-sm);
+  padding: 1.375rem 1.25rem;
+  background: var(--lumora-surface);
   border: none;
 }
 
 /* Section rhythm inside the sidebar is carried by a low-contrast rule and
-   spacing rather than by nesting another card in the card (handoff §10).
-   Only padding is added: .psa-sidebar is already a flex column with a
-   `gap`, so a margin here would double the separation it already has. */
+   spacing rather than by nesting another card in the card. Only padding is
+   added: .psa-sidebar is already a flex column with a `gap`, so a margin
+   here would double the separation it already has. */
 .psa-sidebar > .shiny-input-container,
 .psa-sidebar > .psa-system-field,
 .psa-sidebar > .psa-edition-group {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--psa-line);
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--lumora-line);
 }
 
 .psa-sidebar > *:last-child {
@@ -439,59 +413,70 @@
 
 .psa-sidebar label,
 .psa-sidebar .control-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-muted-text);
 }
 
-.psa-sys-acronym { color: var(--psa-text-solid); }
-.psa-sys-title { color: var(--psa-text-muted-solid); }
+.psa-sys-acronym { color: var(--lumora-foreground); font-weight: var(--weight-semibold); }
+.psa-sys-title { color: var(--lumora-muted-text); }
 
-.psa-edition-row { color: var(--psa-text-solid); }
-.psa-edition-name { color: var(--psa-text-solid); }
+.psa-edition-row { color: var(--lumora-foreground); }
+.psa-edition-name { color: var(--lumora-foreground); }
 
 /* -------------------------------------------------------------------------
-   UI-02 / UI-03 — dialog shell
+   UI-02 / UI-03 — dialog shell (handoff §14)
    -------------------------------------------------------------------------
    ui-dialog.css owns the shell's BEHAVIOUR contract (focus entry and
    restoration, Escape close, aria-modal/labelledby wiring, the mobile
    full-screen sheet, the scroll regions). Only the plate is restyled. */
 
-.psa-dialog__content {
-  border-radius: var(--psa-radius-lg);
+/* SPECIFICITY MATCHED ON PURPOSE. ui-dialog.css states the plate as
+   `.psa-dialog .psa-dialog__content` (0,2,0) and takes its radius from
+   `--radius-card`, which the token layer maps to the 1.25rem card scale --
+   right for a small card, but the handoff (section 14) asks for the 2rem
+   modal card here. A single-class rule would lose to it, so this matches
+   its selector, and the mobile full-screen override below matches it too
+   rather than sitting a specificity step underneath. */
+.psa-dialog .psa-dialog__content {
+  border-radius: var(--lumora-radius-card);
   border: none;
-  background: rgba(255, 255, 255, 0.025);
-  color: var(--psa-text-solid);
+  background: #ffffff;
+  color: var(--lumora-foreground);
 }
 
+/* A dark scrim under a light modal, so the page reads as sent to the back
+   without the dialog needing to be dark itself. */
 .psa-dialog .modal-backdrop,
 .modal-backdrop.show {
-  background: #000;
-  opacity: 0.72;
+  background: #111111;
+  opacity: 0.42;
 }
 
 .psa-dialog__header,
 .psa-dialog__footer {
-  border-color: var(--psa-line);
+  border-color: var(--lumora-line);
   background: transparent;
 }
 
 .psa-dialog__title {
-  color: var(--psa-text-solid);
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
 }
 
 .psa-dialog__eyebrow,
 .psa-eyebrow {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--psa-text-muted-solid);
+  color: var(--lumora-accent-text);
 }
 
-.psa-dialog__description { color: var(--psa-text-muted-solid); }
+.psa-dialog__description { color: var(--lumora-muted-text); }
 
 /* MEASURED IN THE BROWSER, not assumed. The dialog header computes to
    `justify-content: normal` in this Bootstrap build, so the close control
@@ -501,250 +486,279 @@
    given the free space instead; nothing else about the header moves. */
 .psa-dialog__header .psa-dialog__heading { flex: 1 1 auto; }
 
-/* NO FILTER HERE EITHER, for the same measured reason: bslib compiled
-   .btn-close's data-URI against the dark `fg`, so its glyph is already
-   `fill='#f5f5f5'`. Inverting it painted a black cross on a black plate.
-   The alpha stays with ui-dialog.css's own `opacity: 0.7` / `:hover 1`. */
+/* A light circular close control (§14). No `filter`: bslib generates
+   .btn-close's data-URI from the compiled `fg`, so it followed the theme to
+   dark-on-light by itself. Inverting it is what breaks it. The alpha stays
+   with ui-dialog.css's own `opacity: 0.7` / `:hover 1`. */
 .psa-dialog__close {
-  border-radius: var(--psa-radius-pill);
+  border-radius: var(--lumora-radius-pill);
+  background-color: var(--lumora-surface);
 }
 
+.psa-dialog__close:hover { background-color: var(--lumora-surface-2); }
+
 .psa-dialog__close:focus-visible {
-  outline: 2px solid var(--psa-focus);
+  outline: 2px solid var(--lumora-accent);
   outline-offset: 2px;
   box-shadow: none;
 }
 
-/* Mobile: the sheet is a full-screen dark surface. Square corners at the
-   viewport edge, so no canvas shows through beside it. */
+/* Mobile: a near-full-screen light sheet. Square corners at the viewport
+   edge, so no canvas shows through beside it, and no bleed-through from
+   page content (§14) -- the plate is opaque white. */
 @media (max-width: 768px) {
   /* 768px, not 767.98px: this must switch on exactly the same frame as
-     ui-dialog.css's full-screen sheet rules, or the luminous ring survives
-     one pixel of viewport width past the corners it was drawn for. */
-  .psa-dialog__content { border-radius: 0; }
+     ui-dialog.css's full-screen sheet rules, or the ring survives one pixel
+     of viewport width past the corners it was drawn for. */
+  .psa-dialog .psa-dialog__content { border-radius: 0; }
   .psa-dialog__content::before { display: none; }
 }
 
-/* Hierarchy tree (UI-02). Lazy expansion, ancestor reveal, aria-expanded,
-   "View in Search" and focus restoration are all owned elsewhere; this is
-   the node's resting/selected appearance only. */
-.psa-hier-node { border-radius: var(--psa-radius-sm); }
+/* Hierarchy tree (UI-02, handoff §13). Lazy expansion, ancestor reveal,
+   aria-expanded, "View in Search" and focus restoration are all owned
+   elsewhere; this is the node's resting/selected appearance only. */
+.psa-hier-node { border-radius: var(--lumora-radius-control); }
 
 .psa-hier-row {
-  border-radius: var(--psa-radius-sm);
-  transition: background-color 140ms ease;
+  border-radius: var(--lumora-radius-control);
+  transition: background-color 160ms cubic-bezier(.22, 1, .36, 1);
 }
 
-.psa-hier-row:hover { background: rgba(255, 255, 255, 0.05); }
+.psa-hier-row:hover { background: var(--lumora-surface); }
 
-/* Selected node: a filled plate PLUS a left rail PLUS a restrained plum
-   glow — shape and position, not colour alone. */
+/* Selected node: a warm light fill PLUS an orange left rail PLUS weight —
+   shape and position, never colour alone. */
 .psa-hier-node--selected > .psa-hier-row {
-  background: rgba(143, 102, 143, 0.16);
-  box-shadow:
-    inset 2px 0 0 var(--psa-plum-text),
-    0 0 18px var(--psa-plum-glow);
+  background: var(--lumora-accent-wash);
+  box-shadow: inset 3px 0 0 var(--lumora-accent);
+  font-weight: var(--weight-semibold);
 }
 
 .psa-hier-node--match > .psa-hier-row {
-  box-shadow: inset 0 0 0 1px var(--psa-line-strong);
+  box-shadow: inset 0 0 0 1px var(--lumora-surface-2);
 }
 
-.psa-hier-code { color: var(--psa-text-solid); }
-.psa-hier-label { color: var(--psa-text-solid); }
-.psa-hier-badge { color: var(--psa-text-muted-solid); }
+.psa-hier-code { color: var(--lumora-foreground); }
+.psa-hier-label { color: var(--lumora-foreground); }
+.psa-hier-badge { color: var(--lumora-muted-text); }
 
 .psa-hier-toggle {
-  color: var(--psa-text-muted-solid);
-  border-radius: var(--psa-radius-sm);
+  color: var(--lumora-muted-text);
+  border-radius: var(--lumora-radius-control);
 }
 
 .psa-hier-toggle:hover {
-  color: var(--psa-text-solid);
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--lumora-foreground);
+  background: var(--lumora-surface);
 }
 
+/* The left tree pane sits on the warm surface, the right detail pane on
+   white (§13). */
+.psa-hierarchy__tree { background: var(--lumora-surface); }
+
 /* -------------------------------------------------------------------------
-   UI-03 — PSOC + PSIC details and comparison
+   UI-03 — PSOC + PSIC details and comparison (handoff §12)
    ------------------------------------------------------------------------- */
 
 .psa-dual-panel {
-  border-radius: var(--psa-radius-lg);
+  border-radius: var(--lumora-radius-card-sm);
   border: none;
-  background: transparent;
+  background: #ffffff;
 }
 
-.psa-dual-panel-title { color: var(--psa-text-solid); }
+.psa-dual-panel-title {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
+
 .psa-dual-count,
 .psa-dual-state,
-.psa-dual-note { color: var(--psa-text-muted-solid); }
+.psa-dual-note { color: var(--lumora-muted-text); }
 
 .psa-compare-col {
-  border-radius: var(--psa-radius-md);
+  border-radius: var(--lumora-radius-card-sm);
   border: none;
 }
 
-.psa-detail-title { color: var(--psa-text-solid); }
-.psa-detail-meta { color: var(--psa-text-muted-solid); }
+.psa-detail-title {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
+
+.psa-detail-meta { color: var(--lumora-muted-text); }
 
 /* THE RELATIONSHIP SAFEGUARD IS NOT A FOOTNOTE (handoff §12).
-   Body-size type, full-strength text, its own plated surface and a plum
-   rail. It is the most prominent non-heading element in the comparison. */
+   Body-size type, full-strength ink, its own warm surface and an orange
+   rail — the handoff's own recipe, and explicitly not a dark glass warning.
+   It stays the most prominent non-heading element in the comparison. */
 .psa-compare-note,
 .psa-dual-note--safeguard {
-  color: var(--psa-text-solid);
-  background: rgba(143, 102, 143, 0.14);
-  border-left: 3px solid var(--psa-plum-text);
-  border-radius: var(--psa-radius-sm);
-  padding: 14px 16px;
-  font-size: 14px;
+  color: var(--lumora-foreground);
+  background: var(--lumora-surface);
+  border-left: 3px solid var(--lumora-accent);
+  border-radius: var(--lumora-radius-control);
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 /* -------------------------------------------------------------------------
-   UI-04 — Compare Editions inspector
+   UI-04 — Compare Editions inspector (handoff §16)
    -------------------------------------------------------------------------
-   Separated from the table by SPACING, not by a heavy border (handoff §13).
-   Query, pagination, direction, selection, scroll/review state, the
-   Split/Merged/Reclassified/Continued vocabulary, provenance, confidence,
-   the statistical-use safeguard and the Ask RM action are all owned by
+   An editorial information card, not a dense metadata table. Query,
+   pagination, direction, selection, scroll/review state, the
+   Split/Merged/Reclassified/Continued vocabulary, confidence, the
+   statistical-use safeguard and the Ask RM action are all owned by
    ui_correspondence.R / ui-filters.css and are untouched here. */
 
 /* CASCADE NOTE. ui-filters.css turns the inspector into a fixed right-hand
-   sheet below 992px and a full-screen sheet below 576px, using  rules
-   that carry NO extra specificity. Because ui-glass.css loads after it, a
+   sheet below 992px and a full-screen sheet below 576px, using @media rules
+   that carry NO extra specificity. Because this sheet loads after it, a
    plain .psa-corr-inspector rule here would beat those sheet rules at every
    width. The desktop plate is therefore scoped to the desktop, and the
-   sheet gets its own glass treatment below. */
+   sheet gets its own treatment below. */
 @media (min-width: 992px) {
   .psa-corr-inspector {
-    border-radius: var(--psa-radius-lg);
+    border-radius: var(--lumora-radius-card);
     border: none;
-    background: rgba(255, 255, 255, 0.025);
+    background: #ffffff;
   }
 }
 
 @media (max-width: 991.98px) {
-  /* Sheet: square, full-height, and edged on the side it slides from.
-     `inset` and `width` stay owned by ui-filters.css. */
+  /* Sheet: square, full-height, edged on the side it slides from, and
+     OPAQUE — below 992px this stops being an inline column and starts
+     floating over the results table it is describing. `inset` and `width`
+     stay owned by ui-filters.css. */
   .psa-corr-inspector {
     border-radius: 0;
     border: none;
-    border-inline-start: 1px solid var(--psa-line-strong);
-    /* Opaque for the same reason as the dialog plate: below 992px this
-       stops being an inline column and starts floating over the results
-       table it is describing. */
-    background: #0b0b0b;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+    border-inline-start: 1px solid var(--lumora-line);
+    background: #ffffff;
+    box-shadow: -12px 0 40px rgba(17, 17, 17, 0.12);
   }
 
   .psa-corr-inspector::before { display: none; }
 }
 
 .psa-corr-inspector-head {
-  border-bottom: 1px solid var(--psa-line);
+  border-bottom: 1px solid var(--lumora-line);
   background: transparent;
 }
 
-.psa-corr-inspector-title { color: var(--psa-text-solid); }
+.psa-corr-inspector-title {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
 
 .psa-corr-inspector-close {
-  color: var(--psa-text-muted-solid);
-  border-radius: var(--psa-radius-pill);
+  color: var(--lumora-muted-text);
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--lumora-line);
+  background: #ffffff;
 }
 
 .psa-corr-inspector-close:hover {
-  color: var(--psa-text-solid);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--lumora-foreground);
+  background: var(--lumora-surface);
 }
 
 .psa-corr-node {
-  border-radius: var(--psa-radius-md);
-  border: none;
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--lumora-line);
+  background: #ffffff;
 }
 
-.psa-corr-node-label { color: var(--psa-text-solid); }
+.psa-corr-node-label { color: var(--lumora-foreground); }
 .psa-corr-node-meta,
 .psa-corr-meta,
-.psa-corr-meta-gloss { color: var(--psa-text-muted-solid); }
+.psa-corr-meta-gloss { color: var(--lumora-muted-text); }
 
-.psa-corr-arrow { color: var(--psa-text-muted-solid); }
+.psa-corr-arrow { color: var(--lumora-accent); }
 
-/* Relationship badges stay NEUTRAL/PLUM (handoff §13). A Split or a Merge
-   is a fact about the revision, not an error, so nothing here borrows the
-   error ramp. */
+/* Relationship badges stay NEUTRAL (handoff §12). A Split or a Merge is a
+   fact about the revision, not an error, so nothing here borrows the error
+   ramp. A light chip with a real line, so it is a shape and not a wash. */
 .psa-tag {
-  border-radius: var(--psa-radius-pill);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--psa-text-solid);
-  box-shadow: inset 0 0 0 1px var(--psa-line);
+  border-radius: var(--lumora-radius-pill);
+  background: var(--lumora-surface);
+  color: var(--lumora-foreground);
+  box-shadow: inset 0 0 0 1px var(--lumora-line);
+  font-weight: var(--weight-medium);
 }
 
 .psa-tag-archived {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--psa-text-muted-solid);
+  background: #ffffff;
+  color: var(--lumora-muted-text);
 }
 
 .psa-stat-warning {
-  color: var(--psa-text-solid);
-  background: rgba(143, 102, 143, 0.14);
-  border-left: 3px solid var(--psa-plum-text);
-  border-radius: var(--psa-radius-sm);
+  color: var(--lumora-foreground);
+  background: var(--lumora-surface);
+  border-left: 3px solid var(--lumora-accent);
+  border-radius: var(--lumora-radius-control);
 }
 
-.psa-no-counterpart { color: var(--psa-text-muted-solid); }
+.psa-no-counterpart { color: var(--lumora-muted-text); }
 
 /* -------------------------------------------------------------------------
-   UI-05 — correspondence terminology help
+   UI-05 — correspondence terminology help (handoff §17)
    -------------------------------------------------------------------------
-   A compact glass disclosure. Muted body copy, strong term hierarchy; the
+   A light disclosure. Muted body copy, strong term hierarchy; the
    confidence wording and the redistribution warning are owned by
    ui_correspondence.R and are not restated here. */
 
 .psa-term-help,
 .psa-col-tips,
 .psa-howto-panel-inner {
-  border-radius: var(--psa-radius-md);
+  border-radius: var(--lumora-radius-card-sm);
   border: none;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--lumora-surface);
 }
 
 .psa-term-help-trigger,
 .psa-howto-toggle {
-  color: var(--psa-text-solid);
-  background: transparent;
-  border: 1px solid var(--psa-line);
-  border-radius: var(--psa-radius-pill);
-  transition: background-color 140ms ease, border-color 140ms ease;
+  color: var(--lumora-foreground);
+  background: #ffffff;
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-pill);
+  font-weight: var(--weight-medium);
+  transition: background-color 160ms cubic-bezier(.22, 1, .36, 1),
+              border-color 160ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .psa-term-help-trigger:hover,
 .psa-howto-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--psa-line-strong);
+  background: var(--lumora-surface);
+  border-color: var(--lumora-surface-2);
 }
 
 .psa-term-help-term,
 .psa-col-tip-term,
-.psa-col-legend-title { color: var(--psa-text-solid); font-weight: 600; }
+.psa-col-legend-title {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
 
 .psa-term-help-body,
 .psa-term-help-intro,
-.psa-col-tip { color: var(--psa-text-muted-solid); }
+.psa-col-tip { color: var(--lumora-muted-text); }
 
 .psa-disclosure {
-  border-radius: var(--psa-radius-md);
-  border: 1px solid var(--psa-line);
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--lumora-line);
+  background: #ffffff;
 }
 
-.psa-disclosure > summary { color: var(--psa-text-solid); }
-.psa-disclosure-body { color: var(--psa-text-muted-solid); }
+.psa-disclosure > summary {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-medium);
+}
+
+.psa-disclosure-body { color: var(--lumora-muted-text); }
 
 /* -------------------------------------------------------------------------
-   RM Assistant — SURFACE ONLY (handoff §15)
+   RM Assistant — SURFACE ONLY (handoff §18)
    -------------------------------------------------------------------------
    Nothing in this block can reach assistant_handle_turn(), the
    clarification lifecycle, the render suppression in assistant_render.R or
@@ -754,254 +768,301 @@
    visible. */
 
 .rm-assistant-card {
-  border-radius: var(--psa-radius-lg);
+  border-radius: var(--lumora-radius-card);
   border: none;
-  background: rgba(255, 255, 255, 0.022);
+  background: #ffffff;
 }
 
 .rm-assistant-card > .card-header,
 .rm-assistant-card > .card-body {
   background: transparent;
-  border-color: var(--psa-line);
+  border-color: var(--lumora-line);
 }
 
-.rm-assistant-header h2 { color: var(--psa-text-solid); }
-.rm-assistant-disclaimer { color: var(--psa-text-muted-solid); }
+.rm-assistant-header h2 {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
+
+.rm-assistant-disclaimer { color: var(--lumora-muted-text); }
 
 .rm-assistant-new-chat {
-  border-radius: var(--psa-radius-pill);
-  border: 1px solid var(--psa-line-strong);
-  color: var(--psa-text-solid);
-  background: transparent;
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--lumora-line);
+  color: var(--lumora-foreground);
+  background: #ffffff;
 }
 
 .rm-assistant-new-chat:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--psa-text-solid);
-  border-color: var(--psa-focus);
+  background: var(--lumora-surface);
+  color: var(--lumora-foreground);
+  border-color: var(--lumora-surface-2);
 }
 
-/* shinychat's own custom elements. Restyled through their host elements —
+/* shinychat's own custom elements. Restyled through their host elements --
    no internal shadow-DOM assumptions, so a shinychat upgrade degrades to
    the component's own styling rather than breaking. */
 shiny-chat-container,
 shiny-chat-messages {
   background: transparent;
-  color: var(--psa-text-solid);
+  color: var(--lumora-foreground);
 }
 
 shiny-chat-message,
 shiny-user-message {
-  color: var(--psa-text-solid);
+  color: var(--lumora-foreground);
 }
 
-/* User turn: a filled quiet pill. Assistant turn: bare canvas, so the
-   verified classification cards inside it are the only plated things in the
-   transcript and therefore read as the answer. */
+/* User turn: the warm surface (§18). Assistant turn: bare white, so the
+   verified classification card inside it is the only plated thing in the
+   transcript and therefore reads as the answer. */
 shiny-user-message {
   display: block;
-  background: rgba(255, 255, 255, 0.055);
-  border-radius: var(--psa-radius-md);
-  padding: 12px 16px;
+  background: var(--lumora-surface);
+  border-radius: var(--lumora-radius-card-sm);
+  padding: 0.75rem 1rem;
 }
 
 shiny-chat-input textarea,
 shiny-chat-input .form-control {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--psa-line);
-  border-radius: var(--psa-radius-md);
-  color: var(--psa-text-solid);
+  background: #ffffff;
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-control);
+  color: var(--lumora-foreground);
 }
 
 shiny-chat-input textarea:focus {
-  border-color: var(--psa-focus);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
-  outline: none;
+  border-color: rgba(17, 17, 17, 0.30);
+  outline: 2px solid var(--lumora-accent);
+  outline-offset: 1px;
+  box-shadow: none;
 }
 
-/* The verified classification block. One component, shared with Search's
+/* THE VERIFIED CLASSIFICATION CARD IS THE INK CARD (handoff §9, §18).
+   This is the one surface the reference's black-card treatment is exactly
+   right for: it is the answer, on a light page, and it should read as the
+   most emphatic thing on screen. One component, shared with Search's
    selected-entry panel, so RM can never look more authoritative than the
    deterministic table it read from. */
 .psa-verified-card {
-  border-radius: var(--psa-radius-md);
+  border-radius: var(--lumora-radius-card-sm);
   border: none;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 0 0 1px var(--psa-line);
+  background: var(--lumora-ink);
+  color: #ffffff;
+  box-shadow: var(--elev-2);
 }
 
-.psa-rm-badge-row .psa-tag { background: rgba(255, 255, 255, 0.06); }
+/* Everything inside inverts with it. Stated explicitly rather than relying
+   on inheritance, because several descendants set their own colour. */
+.psa-verified-card .psa-verified-code,
+.psa-verified-card .mono { color: #ffffff; }
+
+.psa-verified-card .psa-eyebrow { color: var(--lumora-accent-from); }
+
+.psa-verified-card .lucide { color: var(--lumora-accent-from); }
+
+/* Secondary copy on ink, at the handoff's recommended weight but raised to
+   a measured 8.6:1 rather than its .55 alpha, which lands under AA. */
+.psa-verified-card .psa-detail-meta,
+.psa-verified-card .text-muted { color: var(--lumora-muted-on-dark) !important; }
+
+.psa-verified-card .psa-tag {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.psa-rm-badge-row .psa-tag { background: var(--lumora-surface); }
 
 .psa-rm-failure,
 .psa-rm-unavailable {
-  border-radius: var(--psa-radius-md);
-  border: 1px solid var(--psa-line);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--psa-text-solid);
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--lumora-line);
+  background: var(--lumora-surface);
+  color: var(--lumora-foreground);
 }
 
 /* -------------------------------------------------------------------------
-   Sources (handoff §16)
+   Sources (handoff §19)
    ------------------------------------------------------------------------- */
 
 .psa-source-card {
-  border-radius: var(--psa-radius-lg);
+  border-radius: var(--lumora-radius-card);
   border: none;
-  background: rgba(255, 255, 255, 0.025);
-  padding: 24px;
+  background: #ffffff;
+  padding: 1.5rem;
 }
 
 @media (max-width: 575.98px) {
-  /* app.css sets a flat 18px here and never steps it; the editorial 24px
-     needs its own floor so a single-column deck does not lose a third of
-     a 320px viewport to card padding. */
-  .psa-source-card { padding: 16px; }
+  /* app.css sets a flat 18px here and never steps it; the editorial padding
+     needs its own floor so a single-column deck does not lose a third of a
+     320px viewport to card padding. */
+  .psa-source-card { padding: 1rem; }
 }
 
 .psa-source-card-name {
-  color: var(--psa-text-solid);
-  font-size: 18px;
-  font-weight: 600;
+  color: var(--lumora-foreground);
+  font-size: 1.125rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
 }
 
-.psa-source-card h4 { color: var(--psa-text-solid); }
+.psa-source-card h4 { color: var(--lumora-foreground); }
 
 .psa-card-dl dt,
 .psa-provenance-dl dt {
-  color: var(--psa-text-muted-solid);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--lumora-muted-text);
+  font-size: 0.6875rem;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .psa-card-dl dd,
-.psa-provenance-dl dd { color: var(--psa-text-solid); }
+.psa-provenance-dl dd { color: var(--lumora-foreground); }
 
 .psa-sources-note,
 .psa-sources-prose,
-.psa-section-note { color: var(--psa-text-muted-solid); }
+.psa-section-note { color: var(--lumora-muted-text); }
 
-.psa-card-link { color: var(--blue); }
-.psa-card-link:hover { color: var(--blue-hover); }
+.psa-card-link { color: var(--lumora-accent-text); font-weight: var(--weight-medium); }
+.psa-card-link:hover { color: var(--lumora-accent-to); }
 
 .psa-sources-section table.table {
-  --bs-table-color: var(--psa-text-solid);
+  --bs-table-color: var(--lumora-foreground);
   --bs-table-bg: transparent;
-  --bs-table-border-color: var(--psa-line);
-  color: var(--psa-text-solid);
+  --bs-table-border-color: var(--lumora-line);
+  color: var(--lumora-foreground);
 }
 
 /* -------------------------------------------------------------------------
-   Buttons
-   ------------------------------------------------------------------------- */
+   Buttons (handoff §10)
+   -------------------------------------------------------------------------
+   Primary = ink pill, white text. Secondary = white, fine line, ink text.
+   Hover is a spring-like lift, and it is disabled on touch, where a moving
+   tap target is a usability defect rather than a delight. */
 
 .btn {
-  border-radius: var(--psa-radius-pill);
-  transition: background-color 140ms ease, border-color 140ms ease,
-              color 140ms ease;
+  border-radius: var(--lumora-radius-pill);
+  font-weight: var(--weight-medium);
+  transition: background-color 180ms cubic-bezier(.22, 1, .36, 1),
+              border-color 180ms cubic-bezier(.22, 1, .36, 1),
+              color 180ms cubic-bezier(.22, 1, .36, 1),
+              transform 180ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .btn-primary,
 .psa-dialog__btn--primary {
-  background: var(--psa-text-solid);
-  border-color: var(--psa-text-solid);
-  color: #0a0a0a;
+  background: var(--lumora-ink);
+  border-color: var(--lumora-ink);
+  color: #ffffff;
+  font-weight: var(--weight-semibold);
 }
 
 .btn-primary:hover,
 .psa-dialog__btn--primary:hover {
-  background: #ffffff;
-  border-color: #ffffff;
-  color: #0a0a0a;
+  background: #000000;
+  border-color: #000000;
+  color: #ffffff;
 }
 
 .btn-outline-secondary,
 .btn-secondary,
 .psa-dialog-open,
 .psa-dialog__btn--ghost {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--psa-line-strong);
-  color: var(--psa-text-solid);
+  background: #ffffff;
+  border: 1px solid var(--lumora-line);
+  color: var(--lumora-foreground);
 }
 
 .btn-outline-secondary:hover,
 .btn-secondary:hover,
 .psa-dialog-open:hover,
 .psa-dialog__btn--ghost:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: var(--psa-focus);
-  color: var(--psa-text-solid);
+  background: var(--lumora-surface);
+  border-color: var(--lumora-surface-2);
+  color: var(--lumora-foreground);
 }
 
 .psa-dialog-open--quiet {
   background: transparent;
-  border-color: var(--psa-line);
+  border-color: var(--lumora-line);
 }
 
 .psa-corr-askrm {
-  border-radius: var(--psa-radius-pill);
-  border: 1px solid var(--psa-line-strong);
-  color: var(--psa-text-solid);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--lumora-line);
+  color: var(--lumora-foreground);
+  background: #ffffff;
+}
+
+/* Spring-like hover, within the handoff's budget (§20): scale <= 1.03,
+   translate <= 2px. Pointer devices only. */
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover,
+  .psa-dialog__btn--primary:hover,
+  .psa-corr-askrm:hover {
+    transform: translateY(-2px);
+  }
 }
 
 /* -------------------------------------------------------------------------
    Popovers, tooltips and other floating Bootstrap surfaces
    -------------------------------------------------------------------------
    These render at the end of <body>, outside every panel, so they inherit
-   nothing from the surfaces above and must state their own dark ground —
-   the same class of defect UI-POST-04 recorded for the selectize menu. */
+   nothing from the surfaces above and must state their own ground -- the
+   same class of defect UI-POST-04 recorded for the selectize menu, where a
+   surface matched the page exactly and had no perceptible edge. */
 
 .popover,
 .tooltip-inner,
 .dropdown-menu {
-  background: #0d0d0d;
-  color: var(--psa-text-solid);
-  border: 1px solid var(--psa-line-strong);
-  border-radius: var(--psa-radius-md);
+  background: #ffffff;
+  color: var(--lumora-foreground);
+  border: 1px solid var(--lumora-line);
+  border-radius: var(--lumora-radius-control);
   box-shadow: var(--elev-1);
 }
 
 .popover .popover-header {
   background: transparent;
-  color: var(--psa-text-solid);
-  border-bottom-color: var(--psa-line);
+  color: var(--lumora-foreground);
+  border-bottom-color: var(--lumora-line);
+  font-weight: var(--weight-semibold);
 }
 
-.popover .popover-body { color: var(--psa-text-muted-solid); }
+.popover .popover-body { color: var(--lumora-muted-text); }
 
-.popover .popover-arrow::after { border-top-color: #0d0d0d; }
+.popover .popover-arrow::after { border-top-color: #ffffff; }
 
 .modal-content {
-  background: #0b0b0b;
-  color: var(--psa-text-solid);
-  border: 1px solid var(--psa-line-strong);
+  background: #ffffff;
+  color: var(--lumora-foreground);
+  border: 1px solid var(--lumora-line);
 }
 
 /* -------------------------------------------------------------------------
-   Composition fixes for surfaces that now carry .psa-liquid-glass in markup
+   Composition fixes for surfaces that carry .psa-liquid-glass in markup
    -------------------------------------------------------------------------
-   Each of these exists because the glass shell and a pre-existing edge
+   Each of these exists because the surface shell and a pre-existing edge
    would otherwise draw TWO borders around the same box. In every case the
-   glass ring wins and the older edge is dropped — never the reverse, so a
-   surface can never end up with no perceptible edge at all (the UI-POST-04
-   failure mode). */
+   shell's masked ring wins and the older edge is dropped -- never the
+   reverse, so a surface can never end up with no perceptible edge at all
+   (the UI-POST-04 failure mode). */
 
-/* Hero field: the shell owns the edge, so the input inside it goes
-   edgeless and transparent. Focus is raised on the SHELL via :focus-within,
-   which keeps the ring around the whole control the user perceives rather
-   than around an invisible inner box. */
+/* Hero field: the shell owns the edge, so the input inside it goes edgeless
+   and transparent. Focus is raised on the SHELL via :focus-within, which
+   keeps the ring around the whole control the user actually perceives
+   rather than around an invisible inner box. */
 .psa-hero-field.psa-liquid-glass {
-  background: rgba(255, 255, 255, 0.03);
-  transition: box-shadow 160ms ease, background-color 160ms ease;
+  background: #ffffff;
+  transition: box-shadow 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .psa-hero-field.psa-liquid-glass input.form-control {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .psa-hero-field.psa-liquid-glass input.form-control:hover,
@@ -1014,16 +1075,11 @@ shiny-chat-input textarea:focus {
 }
 
 .psa-hero-field.psa-liquid-glass:focus-within {
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.10),
-    0 18px 50px rgba(0, 0, 0, 0.20),
-    0 0 0 2px var(--psa-focus),
-    0 0 0 6px rgba(255, 255, 255, 0.10);
+  box-shadow: var(--elev-1), 0 0 0 2px var(--lumora-accent);
 }
 
-/* Sidebar / dual panel / inspector / cards: drop the flat 1px border those
-   sheets set, because the glass ring is now the edge. */
+/* Sidebar / dual panel / cards: drop the flat 1px border those sheets set,
+   because the shell's ring is now the edge. */
 .psa-sidebar.psa-liquid-glass,
 .psa-dual-panel.psa-liquid-glass,
 .psa-source-card.psa-liquid-glass,
@@ -1035,64 +1091,51 @@ shiny-chat-input textarea:focus {
 }
 
 /* bslib's card paints its own --bs-card-bg plate; left in place it would
-   sit opaque on top of the glass. */
+   sit on top of the surface. */
 .rm-assistant-card.psa-liquid-glass {
   --bs-card-bg: transparent;
   --bs-card-border-color: transparent;
   --bs-card-border-width: 0;
 }
 
-/* THE DIALOG PLATE IS OPAQUE, AND THAT IS DELIBERATE.
+/* THE DIALOG PLATE IS OPAQUE, AND THAT REMAINS DELIBERATE.
 
-   This surface is the one that floats over arbitrary page content. It was
-   first built as glass at 0.88 alpha over a 0.72 backdrop and blurred at
-   22px, which arithmetically leaves ~3% of the page showing through. In the
-   browser that was not what happened: the Search hero's display heading and
-   its helper line were both plainly readable THROUGH the open hierarchy
-   dialog. Measured, not predicted -- an opaque plate rendered the same
-   dialog cleanly.
-
-   Handoff section 6.1 ("do not depend on transparency for text contrast")
-   and section 19 ("no information conveyed only through blur or
-   transparency") both point the same way, so readability wins here and the
-   glass character is carried by the luminous ring, the radius and the
-   elevation instead. Dropping backdrop-filter with it also removes the most
-   expensive blur in the app, which section 20 asks for anyway. */
+   This surface is the one that floats over arbitrary page content. In the
+   dark pass it was first built translucent, and the Search hero's heading
+   was plainly readable THROUGH the open hierarchy dialog -- measured, not
+   predicted. The light system keeps the lesson: white, opaque, elevated.
+   Handoff §14 asks for exactly that ("no bleed-through from page content"),
+   and §24 forbids text whose contrast depends on a transparent background. */
 .psa-dialog__content.psa-liquid-glass {
-  background: #0b0b0b;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: #ffffff;
+  box-shadow: var(--elev-2);
 }
 
-/* The comparison columns are glass INSIDE the dialog's glass. --quiet
-   already removes their ring; this keeps them from re-blurring an already
-   blurred ground, which measurably costs paint time for no visible gain. */
+/* The comparison columns are surfaces INSIDE the dialog's surface. --quiet
+   already removes their ring; this keeps their radius consistent with the
+   card scale. */
 .psa-compare-col.psa-liquid-glass {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   border: none;
-  border-radius: var(--psa-radius-md);
+  border-radius: var(--lumora-radius-card-sm);
 }
 
 /* -------------------------------------------------------------------------
-   UI-04 layout: separation by spacing (handoff §13)
+   UI-04 layout: separation by spacing
    ------------------------------------------------------------------------- */
 
 /* The table column and the inspector are told apart by the gap between
    them, not by a heavy rule. ui-filters.css keeps ownership of the column
    widths, the sticky behaviour and the max-height. */
-.psa-corr-workspace { gap: var(--space-6, 32px); }
+.psa-corr-workspace { gap: var(--space-6, 2rem); }
 
-/* The sticky offset was tuned against the old flat navbar. The floating
-   pill is taller (its own padding plus the shell's), so the inspector's
-   resting top and its height budget both move down by the difference —
-   otherwise the inspector's header scrolls under the pill. Desktop only:
-   below 992px the inspector is `position: fixed` with `inset: 0 0 0 auto`,
-   and a stray `top` here would knock it out of that sheet geometry. */
+/* The sticky offset is tuned against the header card's real height, so the
+   inspector's own header never scrolls under it. Desktop only: below 992px
+   the inspector is `position: fixed` with `inset: 0 0 0 auto`, and a stray
+   `top` here would knock it out of that sheet geometry. */
 @media (min-width: 992px) {
   .psa-corr-inspector {
-    top: 96px;
-    max-height: calc(100vh - 120px);
+    top: 6rem;
+    max-height: calc(100vh - 7.5rem);
   }
 }
 
@@ -1107,38 +1150,168 @@ shiny-chat-input textarea:focus {
        box-shadow: inset 0 0 0 9999px rgb(var(--dt-row-selected));
      }
 
-   -- a 9999px inset shadow, not a background -- so app.css's intended
-   14%-tint-plus-left-rail treatment is drawn UNDER an effectively opaque
-   plum flood and never seen. Measured on a selected correspondence row:
-   `rgba(143, 102, 143, 0.976)`.
+   -- a 9999px inset shadow, not a background -- so any intended tint is
+   drawn UNDER an effectively opaque flood and never seen. Measured in the
+   dark pass as `rgba(143, 102, 143, 0.976)` on a selected row.
 
-   The same technique is used back, at the same specificity, with the tint
-   dropped to a restrained level and the rail restated on the first cell so
-   selection is still carried by SHAPE and not by colour alone. `!important`
-   is load-bearing here: cascade order cannot be won against a sheet the
-   widget appends after ours. */
+   The same technique is used back, at the same specificity, with the warm
+   surface fill the handoff asks for and an orange rail on the first cell,
+   so selection is carried by SHAPE and not by colour alone. `!important` is
+   load-bearing: cascade order cannot be won against a sheet the widget
+   appends after ours. */
 table.dataTable > tbody > tr.selected > *,
 table.dataTable.table-hover > tbody > tr.selected:hover > * {
-  box-shadow: inset 0 0 0 9999px rgba(143, 102, 143, 0.20) !important;
-  color: var(--psa-text-solid) !important;
+  box-shadow: inset 0 0 0 9999px var(--lumora-surface) !important;
+  color: var(--lumora-foreground) !important;
+  font-weight: var(--weight-medium);
 }
 
 table.dataTable > tbody > tr.selected > *:first-child,
 table.dataTable.table-hover > tbody > tr.selected:hover > *:first-child {
   box-shadow:
-    inset 0 0 0 9999px rgba(143, 102, 143, 0.20),
-    inset 3px 0 0 var(--psa-plum-text) !important;
+    inset 0 0 0 9999px var(--lumora-surface),
+    inset 3px 0 0 var(--lumora-accent) !important;
 }
 
-/* Row hover: DT's own hover flood is keyed to --dt-row-hover, which resolves
-   to a light-theme value. Restated as a quiet white wash. */
+/* Row hover: DT's own hover flood is keyed to --dt-row-hover. Restated as a
+   very quiet warm wash so hover and selection stay distinguishable. */
 table.dataTable.table-hover > tbody > tr:hover > * {
-  box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.045) !important;
+  box-shadow: inset 0 0 0 9999px rgba(241, 240, 238, 0.55) !important;
 }
 
 /* Keep any remaining DT chrome that reads these variables on-palette. */
 :root {
-  --dt-row-selected: 143, 102, 143;
-  --dt-row-selected-text: 245, 245, 245;
-  --dt-row-hover: 255, 255, 255;
+  --dt-row-selected: 241, 240, 238;
+  --dt-row-selected-text: 17, 17, 17;
+  --dt-row-hover: 241, 240, 238;
+}
+
+/* -------------------------------------------------------------------------
+   Compare Editions relationship facts (handoff §15, §16)
+   -------------------------------------------------------------------------
+   ui-filters.css owns the correspondence LAYOUT; this sheet owns how it
+   looks. The narrative notes read as editorial copy rather than as a second
+   metadata table. */
+
+.psa-corr-fact-label { color: var(--lumora-muted-text); }
+
+.psa-corr-note {
+  border-left-color: var(--lumora-line);
+  background: var(--lumora-surface);
+  border-radius: 0 var(--lumora-radius-control) var(--lumora-radius-control) 0;
+  padding: 0.625rem 0.875rem;
+}
+
+.psa-corr-note--corroboration {
+  border-left-color: var(--lumora-accent);
+  background: var(--lumora-accent-wash);
+}
+
+.psa-corr-note-title {
+  color: var(--lumora-foreground);
+  font-weight: var(--weight-semibold);
+}
+
+.psa-corr-note-text { color: var(--lumora-muted-text); }
+
+/* The Direction control is the widest select in the app, so it takes the
+   same control language as every other field rather than inheriting a
+   default plate at an unusual size. */
+.psa-corr-filter .selectize-input,
+.psa-corr-filter input.form-control {
+  background-color: #ffffff;
+  border-color: var(--lumora-line);
+  color: var(--lumora-foreground);
+}
+
+.psa-corr-filter .selectize-input.focus,
+.psa-corr-filter .selectize-input.input-active,
+.psa-corr-filter input.form-control:focus {
+  border-color: rgba(17, 17, 17, 0.30);
+  outline: 2px solid var(--lumora-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.psa-corr-filter label,
+.psa-corr-filter .control-label {
+  font-size: 0.6875rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lumora-muted-text);
+}
+
+/* The safeguard renders on EVERY relationship, so it must read as a
+   standing methodological note rather than an alarm. Warm surface and
+   orange rail only -- never the error ramp. */
+.psa-corr-inspector .psa-stat-warning {
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.psa-corr-inspector .psa-stat-warning strong { color: var(--lumora-foreground); }
+
+/* Primary action sits with the content it affects and does not compete with
+   the close control. */
+.psa-corr-askrm { margin-top: 1rem; }
+
+/* -------------------------------------------------------------------------
+   Inspector positioning: the primitive must not out-rank the component
+   -------------------------------------------------------------------------
+   MEASURED DEFECT, carried forward from the previous pass because the cause
+   is structural and survives the repaint.
+
+   `.psa-liquid-glass` sets `position: relative` so its masked edge and its
+   z-indexed children work. `.psa-corr-inspector` is the one surface that
+   positions ITSELF: ui-filters.css makes it `position: sticky` beside the
+   table on desktop and `position: fixed` as a slide-over sheet below 992px.
+   Both selectors are a single class (0,1,0), this sheet loads after
+   ui-filters.css, and a @media block adds no specificity -- so the
+   primitive silently won at every width. Measured at 768px: computed
+   `position: relative` with `inset: 0` inert, i.e. the mobile sheet was an
+   ordinary in-flow block, and on desktop the inspector no longer stuck.
+
+   Restated here rather than by weakening the primitive: every other surface
+   genuinely wants `relative`, and this is the only component that owns its
+   own positioning. */
+@media (min-width: 992px) {
+  .psa-corr-inspector.psa-liquid-glass { position: sticky; }
+}
+
+@media (max-width: 991.98px) {
+  /* POSITION ONLY -- deliberately not `inset`, and this distinction has
+     already mattered twice. ui-filters.css owns the sheet geometry and
+     steps it: `inset: 0 0 0 auto` with a bounded width below 992px, then
+     `inset: 0; width: 100vw` below 576px. Restating `inset` here
+     out-specifies (0,2,0 vs 0,1,0) the 576px step and pins the phone sheet
+     to the tablet geometry -- measured at 375px as a sheet that started
+     half-way down the page with its heading clipped. Only the property the
+     primitive actually broke is restated. */
+  .psa-corr-inspector.psa-liquid-glass { position: fixed; }
+}
+
+/* -------------------------------------------------------------------------
+   The classification code is INK, not accent
+   -------------------------------------------------------------------------
+   app.css paints `.psa-detail-code` in `--color-primary`, which the token
+   layer now maps to burnt orange. Measured in the comparison dialog at
+   320px: `rgb(177, 95, 44)` on the `#f1f0ee` column, 32px / weight 600 =
+   4.06:1. That is compliant -- WCAG treats >=24px, or >=18.7px bold, as
+   large text at a 3:1 threshold -- but it is the least legible treatment in
+   the app applied to the single most important datum in it.
+
+   The handoff scopes the accent to "focus, active markers, small icons,
+   accent rails, selected relationships" (§2) and reserves ink for
+   high-emphasis surfaces. A 32px headline code is not a marker. Ink takes
+   it to 16.58:1 and leaves the accent doing the job it was given. */
+.psa-detail-code,
+.psa-verified-code {
+  color: var(--lumora-foreground);
+}
+
+/* Inside the ink card the same code inverts with its surface. */
+.psa-verified-card .psa-verified-code,
+.psa-verified-card .psa-detail-code {
+  color: #ffffff;
 }

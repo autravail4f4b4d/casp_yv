@@ -48,32 +48,40 @@ nav_label <- function(icon, text) {
 
 ui <- bslib::page_navbar(
   title = "PSA Statistical Classifications",
-  # Dark editorial "liquid glass" theme (UI_REFINEMENT_LIQUID_GLASS_HANDOFF
-  # sections 3-7), which supersedes the "Subtle Gradient" light system.
+  # Lumora light editorial theme (UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF
+  # sections 1-3), which supersedes the dark liquid-glass system.
   #
   # Setting bg/fg/primary on bs_theme rather than overriding Bootstrap in
   # CSS is what makes every Bootstrap component -- form controls, cards,
   # tables, DT -- inherit the palette coherently. It is also why the
-  # light-to-dark inversion has to happen HERE and not only in the CSS: a
+  # dark-to-light inversion has to happen HERE and not only in the CSS: a
   # stylesheet override alone would leave DT, selectize and the navbar
-  # rendering light chrome under dark content.
+  # rendering dark chrome under light content. It is also what regenerates
+  # the .btn-close and hamburger data-URI glyphs, which are compiled from
+  # `fg` -- two passes have now learned that inverting them by hand in CSS
+  # is what breaks them.
   theme = bslib::bs_theme(
     version = 5,
-    bg = "#050505",
-    fg = "#f5f5f5",
-    primary = "#8f668f",
-    "body-bg" = "#050505",
-    "card-bg" = "rgba(255, 255, 255, 0.035)",
-    "border-color" = "rgba(255, 255, 255, 0.10)",
-    "link-color" = "#8fc0f0",
-    "link-hover-color" = "#b8d8f8",
-    # UI face: still a system stack, still NO webfont download. "Inter" is
-    # named first so a machine that already has it uses it, and every other
-    # machine falls through to the same system stack as before -- so there is
-    # still no third-party runtime dependency and no first-paint swap here.
-    # (The display serif is a separate, optional import in ui-tokens.css.)
+    bg = "#ffffff",
+    fg = "#111111",
+    primary = "#b15f2c",
+    "body-bg" = "#ffffff",
+    "card-bg" = "#ffffff",
+    "border-color" = "#e6e5e2",
+    "link-color" = "#1f5c99",
+    "link-hover-color" = "#17456f",
+    # UI face: Onest, named first so Bootstrap's own compiled rules use the
+    # same family as the stylesheets. The webfont itself is imported once in
+    # ui-tokens.css; naming it here downloads nothing extra. Every machine
+    # where that request fails falls through to the same system stack the
+    # app used before any of this, so a blocked font costs the exact face
+    # and nothing else.
+    #
+    # There is NO serif in this stack, deliberately: the previous pass's
+    # Instrument Serif display face is removed from the application rather
+    # than demoted (handoff section 1).
     base_font = bslib::font_collection(
-      "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI",
+      "Onest", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI",
       "sans-serif"
     )
   ),
@@ -489,7 +497,13 @@ server <- function(input, output, session) {
       # encode the column layout of three different tables.
       options = list(
         pageLength = 15, dom = "tip", order = list(),
-        columnDefs = list(list(className = "psa-nowrap", targets = 3))
+        # targets 0 AND 3: the Code column joins Status. A classification
+        # CODE must never be split across two lines -- "22205" rendered as
+        # "2220 / 5" reads as a different code, which is the one thing this
+        # application must never do. Measured in the PSOC + PSIC panels,
+        # where the narrower two-card layout compressed the column enough
+        # for the browser to break the number.
+        columnDefs = list(list(className = "psa-nowrap", targets = c(0, 3)))
       ),
       class = "stripe hover"
     )
@@ -647,7 +661,9 @@ server <- function(input, output, session) {
         # Status column ~52px wide.
         options = list(
           pageLength = 10, dom = "tip", order = list(),
-          columnDefs = list(list(className = "psa-nowrap", targets = 3))
+          # Code and Status. THIS is the table the code-wrapping was
+          # measured on.
+          columnDefs = list(list(className = "psa-nowrap", targets = c(0, 3)))
         ),
         class = "stripe hover"
       )
@@ -720,8 +736,14 @@ server <- function(input, output, session) {
   output$correspondence_results <- DT::renderDT({
     req(input$main_nav == "correspondence")
     d <- correspondence_results()
-    display <- d[, c("from_code", "from_label", "to_code", "to_label", "relation_type", "provenance", "confidence")]
-    names(display) <- c("From code", "From label", "To code", "To label", "Relationship", "Provenance", "Confidence")
+    # No Provenance column (follow-up addendum section 4). Every shipped
+    # mapping is `derived` or `suggested` and none is `official`, so a
+    # per-row Provenance cell repeated the same word down the table without
+    # helping anyone choose a code. The field is untouched in the data --
+    # `correspondence_selected()`, the inspector, the Ask-RM context and the
+    # provenance tests all still read it.
+    display <- d[, c("from_code", "from_label", "to_code", "to_label", "relation_type", "confidence")]
+    names(display) <- c("From code", "From label", "To code", "To label", "Relationship", "Confidence")
     DT::datatable(
       display, selection = "single", rownames = FALSE,
       # Relationship / Provenance / Confidence are the same kind of short
@@ -729,7 +751,9 @@ server <- function(input, output, session) {
       # so they are the most compressed of the three grids at 320px.
       options = list(
         pageLength = 10, dom = "tip",
-        columnDefs = list(list(className = "psa-nowrap", targets = c(4, 5, 6)))
+        # From code (0) and To code (2) join Relationship and Confidence:
+        # same rule, a code is never split.
+        columnDefs = list(list(className = "psa-nowrap", targets = c(0, 2, 4, 5)))
       ),
       class = "stripe hover"
     )

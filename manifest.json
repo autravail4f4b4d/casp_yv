@@ -2742,13 +2742,13 @@
   },
   "files": {
     ".Rprofile": {
-      "checksum": "0b4613c34da027ffd662e20ad63a087e"
+      "checksum": "2dbb42d4b35ed9a90c8ed7037293e3ee"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "b969155a7d163ad41810594fab604107"
     },
     "app.R": {
-      "checksum": "c0e2735d177b03ccddfc562b85ca2b34"
+      "checksum": "906a6af33bb4014770f8ed4fa0821120"
     },
     "CLAUDE.md": {
       "checksum": "61b18f3c01513f13cbe1d770ebfb3e95"
@@ -2889,7 +2889,7 @@
       "checksum": "13add4bb00585f440a6b4747771b73b4"
     },
     "docs/UI_CONTRACT.md": {
-      "checksum": "73fb423b9c5268262ed42c8e0a45e366"
+      "checksum": "c3d9ac705b601c950c6d8288f8009ed8"
     },
     "HANDOFF-CLAUDE-CODE.md": {
       "checksum": "1ed8296dd28e58ac39f2f4aa23898d76"
@@ -2898,7 +2898,7 @@
       "checksum": "bbf4ac83fb00360b3133772569107242"
     },
     "IMPLEMENTATION_STATUS.md": {
-      "checksum": "b464333a485eab5f6227d02a12b32d04"
+      "checksum": "f05cb42fcbac52d2f6116347ab06f1ff"
     },
     "LIVE_RM_EXECUTION_HARDENING_AND_SEMANTIC_SHADOW_RETRIEVAL.md": {
       "checksum": "00a695d5abd84f02406677ce082f302c"
@@ -3090,7 +3090,7 @@
       "checksum": "54c73be13f00b0249f211aa55bfc4e8a"
     },
     "R/ui/ui_correspondence.R": {
-      "checksum": "aa9f525dc405d572d194e766d80362c5"
+      "checksum": "adbff1e87f7b2e16dc3a18e98bbb2649"
     },
     "R/ui/ui_details.R": {
       "checksum": "5522896f3e9a5a155bb834c2e5e63ee4"
@@ -3371,6 +3371,9 @@
     "tests/testthat/test-semantic-shadow.R": {
       "checksum": "6e867e7f92971a3b959235460b8e173f"
     },
+    "tests/testthat/test-ui-compare-editions-followup.R": {
+      "checksum": "8760a30733581aad00225c8931d35965"
+    },
     "tests/testthat/test-ui-details.R": {
       "checksum": "3debe8dbd0342c1c44872f2c9b1d426e"
     },
@@ -3384,10 +3387,16 @@
       "checksum": "6816920b18f01c7398dca46580398bf3"
     },
     "tests/testthat/test-ui-liquid-glass.R": {
-      "checksum": "501afdac99a379937ad4f7f3c72ced05"
+      "checksum": "7afff61cf582e33978ff6c0636677392"
     },
     "tests/testthat/test-ui-release-order-and-focus.R": {
       "checksum": "5b8a809f39f36515e8871ec32f3e4b56"
+    },
+    "UI_COMPARE_EDITIONS_AND_MOBILE_FOLLOWUP_ADDENDUM.md": {
+      "checksum": "bd77a94690960861b3ddd9cd8dc3ad43"
+    },
+    "UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF.md": {
+      "checksum": "f097ac3384b014ecffdca391edde5d42"
     },
     "UI_REFINEMENT_HANDOFF_UI01_UI05.md": {
       "checksum": "ddf3329dbdc29d5d58fc92a34c8f1c70"
@@ -3408,16 +3417,16 @@
       "checksum": "f96a3e26ae9df86e0fc601a17070986d"
     },
     "www/ui-filters.css": {
-      "checksum": "457ad94bf5fc2d80438ac4c0d25f204e"
+      "checksum": "12d997c1924920a20451996ab200dff9"
     },
     "www/ui-glass.css": {
-      "checksum": "e36507497d807e5741e30c368ae5c958"
+      "checksum": "369957e09395006cff865e5265c1bc08"
     },
     "www/ui-motion.css": {
-      "checksum": "8de72774feebe5a37b239b44f787243f"
+      "checksum": "0c89e7f4220e4e1ee6041cf8ec9a763c"
     },
     "www/ui-tokens.css": {
-      "checksum": "72554a36af16693acef3aeeb5cf03f62"
+      "checksum": "9092a4e7ff3ee1b1259485dbd8cf8645"
     }
   },
   "users": null

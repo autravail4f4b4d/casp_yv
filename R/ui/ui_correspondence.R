@@ -81,7 +81,12 @@
 
 .CORRESPONDENCE_CONFIDENCE_GLOSS <- list(
   high     = list(label = "High",     text = "the evidence for this mapping is strong."),
-  moderate = list(label = "Moderate", text = "the evidence is partial; check it before relying on it."),
+  # "Medium", not "Moderate" (addendum section 7). The STORED value stays
+  # `moderate` -- it is schema vocabulary asserted by
+  # tests/testthat/test-correspondence-schema.R and nothing in the data
+  # model moves. This `label` is the single source of display truth, so the
+  # badge and this glossary can never disagree about the word.
+  moderate = list(label = "Medium", text = "the evidence is partial; check it before relying on it."),
   low      = list(label = "Low",      text = "the evidence is weak; verify against the source classifications.")
 )
 
@@ -259,11 +264,11 @@ correspondence_column_legend <- function() {
           .corr_vocab("CORRESPONDENCE_RELATION_TYPES"),
           "What changed between editions."
         ),
-        .correspondence_column_tip(
-          "Provenance", .CORRESPONDENCE_PROVENANCE_GLOSS,
-          .corr_vocab("CORRESPONDENCE_PROVENANCE_VALUES"),
-          "Where this mapping came from."
-        ),
+        # No Provenance column tip: Provenance is no longer a column in
+        # this table (addendum section 4), and a column tip for a column
+        # that does not exist is worse than none. The concept is still
+        # documented in the expanded "How to read this table" panel below,
+        # and the field is still carried in the data model.
         .correspondence_column_tip(
           "Confidence", .CORRESPONDENCE_CONFIDENCE_GLOSS,
           .corr_vocab("CORRESPONDENCE_CONFIDENCE_VALUES"),
@@ -300,10 +305,28 @@ correspondence_ui <- function() {
       )
     ),
 
+    # FILTER REGION (follow-up addendum sections 3 and 10).
+    #
+    # MEASURED DEFECT, not a preference. This region used to be an inline
+    # flex row in which the Direction column was a bare
+    # `<div style="min-width: 260px;">` with NO flex declaration, so it
+    # defaulted to `flex: 0 1 auto` and never grew. Measured at 1440px:
+    # the Direction control sat at 263px and the search field at 380px
+    # inside a 1382px row -- roughly 713px of the row was empty while the
+    # longest value, "2019 PSIC -> PSIC Revision 5 (2026)", was squeezed
+    # into 233px of text box with ~28px of slack and `text-overflow:
+    # ellipsis` already armed. At 375px the same wrapper stayed pinned at
+    # 263px instead of going full width.
+    #
+    # It is now a real grid with named classes rather than inline styles,
+    # so the layout is a testable hook and the breakpoints live in CSS
+    # beside every other responsive rule. Direction takes the wide column;
+    # both controls go full width when the grid collapses to one column.
+    # Input ids and the values they yield are untouched.
     shiny::tags$div(
-      style = "display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; margin-bottom: 22px;",
+      class = "psa-corr-filters",
       shiny::tags$div(
-        style = "min-width: 260px;",
+        class = "psa-corr-filter psa-corr-filter--direction",
         shiny::selectInput(
           "correspondence_direction", "Direction",
           choices = c(
@@ -314,7 +337,7 @@ correspondence_ui <- function() {
         )
       ),
       shiny::tags$div(
-        style = "flex: 1 1 auto; max-width: 380px;",
+        class = "psa-corr-filter psa-corr-filter--query",
         shiny::textInput(
           "correspondence_query", "Search a code or title",
           placeholder = "e.g. a PSIC code, or part of a title",
@@ -639,6 +662,120 @@ correspondence_relationship_group <- function(row, data_path = NULL) {
   shiny::tags$dd(class = "psa-corr-meta-gloss", entry$text)
 }
 
+# ---- User-facing evidence summary (follow-up addendum sections 5-8) -------
+
+# Marker that the verified evidence string actually cites the UN ISIC
+# Rev.4 -> Rev.5 correspondence. Matched as a literal, and deliberately
+# narrow: corroboration is only ever CLAIMED when the artifact itself
+# recorded it. Measured against the shipped artifact, 948 of 2000
+# relationships carry it and 1052 do not, so this genuinely discriminates.
+.CORR_UN_ISIC_MARKER <- "UN ISIC"
+
+#' Summarise one relationship's evidence for a reader, not for an engineer.
+#'
+#' PRESENTATION ONLY, and deliberately a pure function of the row so the
+#' wording can be tested without a session or a browser.
+#'
+#' The stored `evidence` string is an engineering artifact. It reads, in
+#' full, like this:
+#'
+#'   "2019 section A corresponds to 2026 section A. Identical letters were
+#'    verified against the section graph, not assumed. Code '01196' ->
+#'    '01191' (same class). Label evidence supporting only
+#'    (normalized-token similarity 0.25). Search method:
+#'    class_prefix_continuity."
+#'
+#' That is a debugging trace: section-graph terminology, similarity scores
+#' and internal search-method names. The addendum forbids all of it on the
+#' user-facing surface, so this function does not reformat the string -- it
+#' REPLACES it with the two facts a statistician can act on: that the
+#' mapping is derived rather than PSA-published, and whether the UN
+#' correspondence independently supports it.
+#'
+#' Nothing is invented. `corroboration` is NULL unless the row's own
+#' evidence cites the UN correspondence, which is what keeps the stronger
+#' sentence honest.
+#'
+#' @param row A one-row correspondence tibble.
+#'
+#' @return list(derived = character(1), corroboration = character(1) or NULL,
+#'   has_un = logical(1)).
+correspondence_evidence_summary <- function(row) {
+  ev <- if (is.null(row) || !("evidence" %in% names(row))) NA_character_
+        else as.character(row$evidence[[1]])
+
+  has_un <- !is.na(ev) && grepl(.CORR_UN_ISIC_MARKER, ev, fixed = TRUE)
+
+  list(
+    derived = paste(
+      "This relationship was derived from verified classification",
+      "correspondence evidence."
+    ),
+    corroboration = if (has_un) {
+      paste(
+        "Supported by the official UN ISIC Rev.4 to Rev.5 correspondence."
+      )
+    } else {
+      NULL
+    },
+    has_un = has_un
+  )
+}
+
+#' The relationship facts block shared by BOTH inspector renderers.
+#'
+#' One implementation on purpose. The previous pass shipped two renderers
+#' for this surface -- `correspondence_detail_ui()` (the one app.R actually
+#' mounts) and `correspondence_inspector_ui()` -- and they had already
+#' drifted apart. Simplifying only the mounted one would have left the other
+#' still showing a standalone Provenance row and a raw evidence dump for
+#' whoever wired it next.
+#'
+#' Shows Relationship, Confidence, the derived note and -- only where the
+#' evidence records it -- the UN corroboration. Provenance is deliberately
+#' NOT a row here: it is still carried in the data model, still validated,
+#' still available to `correspondence_ask_rm_context()`, and still explained
+#' in the terminology help. It is simply not a per-row field the reader has
+#' to step over on the way to a decision (addendum section 4).
+correspondence_relationship_facts_ui <- function(row) {
+  rt <- as.character(row$relation_type[[1]])
+  conf <- as.character(row$confidence[[1]])
+  summary <- correspondence_evidence_summary(row)
+
+  shiny::tags$div(
+    class = "psa-corr-facts",
+
+    shiny::tags$div(
+      class = "psa-corr-fact",
+      shiny::tags$span(class = "psa-corr-fact-label", "Relationship"),
+      shiny::tags$span(
+        class = "psa-tag psa-tag-neutral psa-corr-fact-value",
+        tools::toTitleCase(rt)
+      )
+    ),
+
+    shiny::tags$div(
+      class = "psa-corr-fact",
+      shiny::tags$span(class = "psa-corr-fact-label", "Confidence"),
+      confidence_badge(conf, with_label = FALSE)
+    ),
+
+    shiny::tags$div(
+      class = "psa-corr-note",
+      shiny::tags$span(class = "psa-corr-note-title", "Derived correspondence"),
+      shiny::tags$p(class = "psa-corr-note-text", summary$derived)
+    ),
+
+    if (!is.null(summary$corroboration)) {
+      shiny::tags$div(
+        class = "psa-corr-note psa-corr-note--corroboration",
+        shiny::tags$span(class = "psa-corr-note-title", "Corroboration"),
+        shiny::tags$p(class = "psa-corr-note-text", summary$corroboration)
+      )
+    }
+  )
+}
+
 #' Render the selected relationship into the inspector.
 #'
 #' @param row A one-row tibble in the `search_psic_correspondence()` shape,
@@ -654,35 +791,14 @@ correspondence_inspector_ui <- function(row, group = NULL) {
     ))
   }
 
-  rt <- as.character(row$relation_type[[1]])
-  prov <- as.character(row$provenance[[1]])
-  conf <- as.character(row$confidence[[1]])
-
   shiny::tagList(
     .correspondence_structure_ui(row, group),
 
-    shiny::tags$dl(
-      class = "psa-corr-meta",
-      shiny::tags$dt("Relationship"),
-      shiny::tags$dd(shiny::tags$span(
-        class = "psa-tag psa-tag-neutral", tools::toTitleCase(rt)
-      )),
-      .corr_inline_gloss(.CORRESPONDENCE_RELATION_GLOSS, rt),
-
-      shiny::tags$dt("Provenance"),
-      shiny::tags$dd(provenance_badge(prov)),
-      .corr_inline_gloss(.CORRESPONDENCE_PROVENANCE_GLOSS, prov),
-
-      shiny::tags$dt("Confidence"),
-      shiny::tags$dd(confidence_badge(conf)),
-      .corr_inline_gloss(.CORRESPONDENCE_CONFIDENCE_GLOSS, conf)
-    ),
-
-    shiny::tags$div(
-      class = "psa-source-line",
-      shiny::tags$strong("Evidence: "),
-      if (is.na(row$evidence[[1]])) shiny::tags$em("Not recorded") else row$evidence[[1]]
-    ),
+    # Relationship / Confidence / derived note / corroboration -- one shared
+    # block, no standalone Provenance row and no raw evidence dump. See
+    # `correspondence_relationship_facts_ui()` for why both renderers share
+    # it rather than each formatting the row themselves.
+    correspondence_relationship_facts_ui(row),
 
     # Always shown in the inspector, not only for split/merge: the reader is
     # here precisely because they are about to act on a mapping.
@@ -722,6 +838,18 @@ correspondence_ask_rm_context <- function(row) {
 #'
 #' As of this build no mapping in the shipped artifact is `official`; that
 #' is a data fact enforced by tests, not a presentation choice.
+#'
+#' NO LONGER RENDERED on the Compare Editions surface (follow-up addendum
+#' section 4): provenance is not a per-row field the reader has to step over
+#' on the way to a decision, and every shipped mapping is `derived` or
+#' `suggested`, so the badge repeated the same word down the whole table.
+#' Kept rather than deleted because section 13 of that addendum is explicit
+#' that this pass simplifies PRESENTATION only -- the `provenance` field is
+#' still in the canonical schema, still validated by
+#' tests/testthat/test-correspondence-provenance.R, still carried into
+#' `correspondence_ask_rm_context()`, and still explained in the "How to
+#' read this table" glossary. If a diagnostic view is ever added, this is
+#' the renderer it should use.
 provenance_badge <- function(p) {
   cls <- switch(p,
     official  = "psa-tag psa-tag-current",
@@ -733,14 +861,29 @@ provenance_badge <- function(p) {
 }
 
 #' Qualitative confidence badge. Ordinal, never a probability.
-confidence_badge <- function(c) {
+#' @param with_label When TRUE (the default, and what every pre-existing
+#'   caller relies on) the badge reads "Confidence: High". The simplified
+#'   relationship facts block already prints its own CONFIDENCE label above
+#'   the badge, so it passes FALSE and gets just the ordinal word -- the
+#'   alternative rendered as "CONFIDENCE / Confidence: High", which is the
+#'   kind of duplicated metadata this pass exists to remove.
+confidence_badge <- function(c, with_label = TRUE) {
   cls <- switch(c,
     high     = "psa-tag psa-tag-current",
     moderate = "psa-tag psa-tag-neutral",
     low      = "psa-tag psa-tag-archived",
     "psa-tag psa-tag-neutral"
   )
-  shiny::tags$span(class = cls, paste("Confidence:", tools::toTitleCase(c)))
+  # Label comes from the glossary, not from title-casing the stored value,
+  # so `moderate` renders as "Medium" in exactly one place. Ordinal words
+  # only -- never a percentage, because the source defines no probability
+  # (addendum section 7).
+  entry <- .CORRESPONDENCE_CONFIDENCE_GLOSS[[as.character(c)]]
+  label <- if (is.null(entry)) tools::toTitleCase(as.character(c)) else entry$label
+  shiny::tags$span(
+    class = cls,
+    if (isTRUE(with_label)) paste("Confidence:", label) else label
+  )
 }
 
 #' One side of a relationship (source or target).
@@ -812,41 +955,30 @@ correspondence_detail_ui <- function(row) {
       )
     ),
 
+    # Relationship / Confidence / derived note / corroboration. Shared with
+    # `correspondence_inspector_ui()` so the two can never drift again.
+    correspondence_relationship_facts_ui(row),
+
+    # STATISTICAL-USE SAFEGUARD.
+    #
+    # Now shown for EVERY relationship, not only split / merged / complex.
+    # The reader reaches this panel precisely because they are about to act
+    # on a mapping, and the follow-up addendum requires the safeguard to
+    # survive the evidence simplification. Widening it is the conservative
+    # direction: no relationship that used to carry the notice loses it.
+    #
+    # A split, merge or complex relationship is a NORMAL classification
+    # outcome, not an error, so this keeps the neutral/plum treatment and
+    # the relationship glyph. triangle-alert and every red/ochre/amber
+    # value remain forbidden here.
     shiny::tags$div(
-      style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center;",
+      class = "psa-stat-warning",
+      role = "note",
+      lucide_icon(if (needs_statistical_warning) arrow_icon else "info", 17),
       shiny::tags$span(
-        class = "psa-tag psa-tag-neutral",
-        paste("Relationship:", tools::toTitleCase(row$relation_type))
-      ),
-      # Provenance and confidence are always shown together, never one
-      # without the other (docs/UI_CONTRACT.md §15).
-      provenance_badge(row$provenance),
-      confidence_badge(row$confidence)
-    ),
-
-    shiny::tags$div(
-      class = "psa-source-line",
-      shiny::tags$strong("Evidence: "),
-      if (is.na(row$evidence)) shiny::tags$em("Not recorded") else row$evidence
-    ),
-
-    # Mandatory presentation, not optional styling: the verbatim
-    # statistical-safety warning for every split / merged / complex
-    # relationship.
-    if (needs_statistical_warning) {
-      # Handoff §12.3, and this is a requirement rather than a preference:
-      # a split, merge or complex relationship is a NORMAL, expected
-      # classification outcome, not an error. The notice is a
-      # methodological instruction to a statistician, not a failure report,
-      # so it takes the neutral/plum treatment and reuses the relationship
-      # glyph. triangle-alert and every red/ochre/amber value are
-      # explicitly forbidden here.
-      shiny::tags$div(
-        class = "psa-stat-warning",
-        role = "note",
-        lucide_icon(arrow_icon, 17),
+        shiny::tags$strong("Statistical-use note "),
         CORRESPONDENCE_STATISTICAL_WARNING
       )
-    }
+    )
   )
 }
