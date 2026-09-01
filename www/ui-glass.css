@@ -1,0 +1,1144 @@
+/* =========================================================================
+   ui-glass.css — liquid-glass primitives and the surfaces built from them
+   =========================================================================
+
+   Ownership: the `.psa-liquid-glass` primitive, its accessibility fallback,
+   and the application of glass to the app's MAJOR surfaces — floating
+   navbar, Search hero field, UI-01 filter sidebar, UI-02/03 dialogs, UI-04
+   correspondence inspector, UI-05 disclosure, RM Assistant surfaces and the
+   Sources card deck.
+
+   Loaded AFTER ui-dialog.css and ui-filters.css so the glass treatment wins
+   over the flat surfaces those two sheets established, without either of
+   them having to be rewritten.
+
+   RULE OBSERVED THROUGHOUT: transparency is decorative. Every piece of
+   functional text on a glass surface takes its contrast from the token
+   layer against the near-black canvas, never from the glass. Removing the
+   blur (unsupported engine, forced-colors, screenshot) changes how the app
+   LOOKS and nothing about what it SAYS.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   The primitive (handoff §6)
+   ------------------------------------------------------------------------- */
+
+.psa-liquid-glass {
+  background: rgba(255, 255, 255, 0.02);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.10),
+    0 18px 50px rgba(0, 0, 0, 0.20);
+  position: relative;
+  overflow: hidden;
+}
+
+/* The fine luminous edge. A 1.4px gradient ring, masked to the border box
+   only, so it follows whatever radius the host surface carries. Bright at
+   top and bottom, absent through the middle — this is what reads as a lit
+   glass edge rather than a drawn border. */
+.psa-liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+                linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  /* The ring is a decoration on top of the surface, never above its
+     content: a body that establishes its own stacking context (dialog
+     bodies, the chat viewport) must stay clickable. */
+  z-index: 0;
+}
+
+.psa-liquid-glass > * { position: relative; z-index: 1; }
+
+/* Variant: a glass surface that must NOT clip its children.
+   The UI-01 sidebar hosts the System selectize menu, which opens downward
+   past the sidebar's own box. `overflow: hidden` on the primitive would
+   clip it — the exact class of defect UI-POST-04 was raised for. The masked
+   edge does not need overflow clipping to follow the radius, so dropping it
+   here costs nothing visually. */
+.psa-liquid-glass--flow { overflow: visible; }
+
+/* Variant: a quieter, flatter pane for surfaces nested INSIDE another glass
+   surface. Avoids the boxed-card-inside-a-boxed-card the handoff warns
+   about in §10 while still separating the region. */
+.psa-liquid-glass--quiet {
+  background: rgba(255, 255, 255, 0.018);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.psa-liquid-glass--quiet::before { display: none; }
+
+/* Accessibility / capability fallback (handoff §6.1).
+   Engines without backdrop-filter get an OPAQUE near-black plate instead of
+   a translucent one, so nothing behind the surface bleeds into small text.
+   Contrast of the content is unchanged either way. */
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .psa-liquid-glass {
+    background: rgba(20, 20, 20, 0.96);
+  }
+}
+
+/* Forced-colors (Windows high contrast) discards the glass entirely and
+   restores real borders, because in that mode the system — not this
+   stylesheet — owns contrast. */
+@media (forced-colors: active) {
+  .psa-liquid-glass {
+    background: Canvas;
+    border: 1px solid CanvasText;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .psa-liquid-glass::before { display: none; }
+}
+
+/* -------------------------------------------------------------------------
+   Floating navigation (handoff §8)
+   -------------------------------------------------------------------------
+   bslib's navset markup is untouched: same .navbar > .container-fluid >
+   .navbar-brand + .navbar-collapse > .nav > .nav-link chain, same
+   role="tablist"/role="tab"/aria-selected semantics, same `value=`
+   identities feeding input$main_nav. Only the shell's appearance changes,
+   so deep links, keyboard traversal and every req(input$main_nav == ...)
+   gate in app.R keep working exactly as before. */
+
+.navbar {
+  background: transparent !important;
+  border-bottom: none !important;
+  padding-block: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+}
+
+/* The pill itself is the container, not the navbar, so it can be centred
+   and width-limited against the content column below it. */
+.navbar > .container-fluid {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: 6px 8px 6px 18px;
+  border-radius: var(--psa-radius-pill);
+  gap: 10px;
+
+  background: rgba(255, 255, 255, 0.02);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.10),
+    0 18px 50px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+
+/* Same masked luminous edge as the primitive. Written out rather than
+   composed via the class because the element is emitted by bslib and this
+   sheet must not require markup it does not own. */
+.navbar > .container-fluid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+                linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.navbar > .container-fluid > * { position: relative; z-index: 1; }
+
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .navbar > .container-fluid { background: rgba(18, 18, 18, 0.97); }
+}
+
+.navbar-brand {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: -0.005em;
+  color: var(--psa-text-solid) !important;
+  padding-block: 8px;
+  white-space: nowrap;
+}
+
+.navbar .nav-link {
+  padding: 9px 16px;
+  border-bottom: none;
+  border-radius: var(--psa-radius-pill);
+  color: var(--psa-text-muted-solid) !important;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.navbar .nav-link:hover {
+  color: var(--psa-text-solid) !important;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ACTIVE STATE IS NOT COLOUR-ALONE (handoff §8, §19).
+   Three simultaneous signals: a filled pill (a shape change), a weight
+   change, and the aria-selected/aria-current attributes bslib already
+   emits and this sheet never touches. */
+/* `:not(:empty)` is not decoration -- it matches Bootstrap's own
+   `.nav-underline .nav-link:not(:empty).active` (four classes), which
+   otherwise wins on specificity and pins the active tab back to weight 500.
+   Measured in the browser before this was added. */
+.navbar .nav-link.active,
+.navbar .nav-link:not(:empty).active {
+  color: var(--psa-text-solid) !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border-bottom-color: transparent;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+/* app.css underlines every `a:hover`. On a pill navbar that reads as a
+   stray text link crossing the pill, so the pill's own hover fill is the
+   only hover signal here. */
+.navbar .nav-link:hover,
+.navbar .navbar-brand:hover { text-decoration: none; }
+
+/* THE TOGGLER IS `.navbar-toggle`, NOT `.navbar-toggler`.
+   bslib emits the Bootstrap-3-compatible markup here -- a `.navbar-toggle`
+   button holding three `.icon-bar` spans -- so Bootstrap 5's
+   `.navbar-toggler` / `.navbar-toggler-icon` selectors match nothing in
+   this app. app.css already sizes `.navbar-toggle` for touch; this is its
+   appearance on the dark ground. */
+.navbar-toggle {
+  border: 1px solid var(--psa-line-strong);
+  border-radius: var(--psa-radius-sm);
+  background: transparent;
+  color: var(--psa-text-solid);
+}
+
+.navbar-toggle:hover { background: rgba(255, 255, 255, 0.08); }
+
+.navbar-toggle:focus-visible {
+  outline: 2px solid var(--psa-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* THE HAMBURGER GLYPH -- AND WHY THERE IS NO `filter` HERE.
+
+   The markup is Bootstrap 3's three `.icon-bar` spans; bslib's Bootstrap 5
+   build ships a compatibility shim that hides the first two and repaints
+   the LAST one with the Bootstrap 5 hamburger data-URI:
+
+     .navbar-toggle > .icon-bar              { display: none }
+     .navbar-toggler-icon,
+     .navbar-toggle > .icon-bar:last-child   { display: inline-block;
+                                               background-image: <svg> }
+
+   That SVG was read out of the running page rather than assumed, and it
+   is ALREADY light -- `stroke='rgba(221,221,221,0.75)'` -- because
+   bs_theme() compiled it against the dark `fg`. Inverting it (or drawing
+   three replacement bars over it) makes it dark on a dark button, which is
+   the defect, not the fix. It is left alone; only the 0.75-alpha stroke is
+   lifted so the app's one mobile navigation control is unmistakable. */
+.navbar-toggle > .icon-bar:last-child { opacity: 0.9; }
+
+.navbar-toggle:hover > .icon-bar:last-child { opacity: 1; }
+
+/* Collapsed (mobile) menu: the pill becomes a rounded sheet so the stacked
+   links are not clipped by the pill radius, and the links get full-width
+   tap targets. No horizontal overflow is introduced at any width. */
+@media (max-width: 991.98px) {
+  .navbar > .container-fluid {
+    border-radius: var(--psa-radius-lg);
+    padding: 10px 14px;
+  }
+
+  .navbar-collapse { width: 100%; }
+
+  .navbar .nav-link {
+    width: 100%;
+    min-height: 44px;
+    border-radius: var(--psa-radius-sm);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Search hero (handoff §9)
+   ------------------------------------------------------------------------- */
+
+/* All three page-intro bands share .psa-hero. Only Search carries the
+   --editorial modifier, so Compare Editions and Sources keep their compact
+   left-aligned band and are not silently centred by this block. */
+.psa-hero {
+  background: var(--mesh-band);
+  border-radius: var(--psa-radius-lg);
+}
+
+.psa-hero--editorial {
+  padding: 64px var(--space-huge) 44px;
+  text-align: center;
+}
+
+.psa-hero-eyebrow {
+  margin: 0 0 14px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--psa-text-muted-solid);
+}
+
+.psa-hero-title {
+  margin: 0 0 26px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(34px, 5.2vw, 60px);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  color: var(--psa-text-solid);
+  max-width: 18ch;
+  margin-inline: auto;
+  text-wrap: balance;
+}
+
+.psa-hero-title em {
+  font-style: italic;
+  color: var(--psa-plum-text);
+}
+
+/* The field is the one large glass shell on the page. The <input> keeps its
+   `classification_query` id, its real <label> (visually hidden, never
+   placeholder-only) and its full width contract. */
+.psa-hero-field {
+  width: 820px;
+  max-width: 100%;
+  margin-inline: auto;
+  border-radius: var(--psa-radius-pill);
+}
+
+.psa-hero-field input.form-control {
+  min-height: 64px;
+  padding: 0 58px 0 56px;
+  border-radius: var(--psa-radius-pill);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--psa-line);
+  color: var(--psa-text-solid);
+  font-size: 17px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color 160ms ease, background-color 160ms ease,
+              box-shadow 160ms ease;
+}
+
+.psa-hero-field input.form-control::placeholder {
+  color: var(--psa-text-muted-solid);
+  opacity: 1;
+}
+
+.psa-hero-field input.form-control:hover {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--psa-line-strong);
+}
+
+.psa-hero-field input.form-control:focus,
+.psa-hero-field input.form-control:focus-visible {
+  border-color: var(--psa-focus);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.10);
+  outline: none;
+}
+
+.psa-hero-field .lucide {
+  left: 24px;
+  color: var(--psa-text-muted-solid);
+  z-index: 4;
+}
+
+.psa-hero-help {
+  margin-top: 16px;
+  color: var(--psa-text-muted-solid);
+}
+
+/* app.css steps .psa-hero's padding down at 991.98px and again at 575.98px.
+   .psa-hero--editorial carries the same specificity and loads later, so it
+   would otherwise keep the 64px desktop padding at every width. Each of
+   app.css's steps is therefore restated here for the editorial variant.
+   The hero must not eat the fold on a tablet or a phone (handoff §18). */
+@media (max-width: 991.98px) {
+  .psa-hero--editorial { padding: 40px 20px 30px; }
+  .psa-hero-title { font-size: clamp(30px, 5.6vw, 44px); }
+}
+
+@media (max-width: 767.98px) {
+  .psa-hero--editorial { padding: 28px 16px 24px; }
+  .psa-hero-title { font-size: clamp(26px, 8vw, 34px); margin-bottom: 18px; }
+  .psa-hero-eyebrow { margin-bottom: 10px; letter-spacing: 0.12em; }
+  .psa-hero-field input.form-control {
+    min-height: 54px;
+    padding: 0 18px 0 46px;
+    font-size: 16px; /* 16px is the iOS zoom-on-focus floor */
+  }
+  .psa-hero-field .lucide { left: 16px; }
+}
+
+/* -------------------------------------------------------------------------
+   UI-01 — filter sidebar
+   -------------------------------------------------------------------------
+   Every accepted UI-01 behaviour is owned by ui-filters.css and is left
+   untouched: the 300–320px desktop width, the acronym + full official title
+   option rendering, type-ahead across both, canonical release ordering, the
+   spelled-out CURRENT / ARCHIVED labels and long-title wrapping. This block
+   changes the sidebar's SURFACE only. */
+
+.psa-sidebar {
+  border-radius: var(--psa-radius-lg);
+  padding: 22px 20px;
+  background: transparent;
+  border: none;
+}
+
+/* Section rhythm inside the sidebar is carried by a low-contrast rule and
+   spacing rather than by nesting another card in the card (handoff §10).
+   Only padding is added: .psa-sidebar is already a flex column with a
+   `gap`, so a margin here would double the separation it already has. */
+.psa-sidebar > .shiny-input-container,
+.psa-sidebar > .psa-system-field,
+.psa-sidebar > .psa-edition-group {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--psa-line);
+}
+
+.psa-sidebar > *:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.psa-sidebar label,
+.psa-sidebar .control-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--psa-text-muted-solid);
+}
+
+.psa-sys-acronym { color: var(--psa-text-solid); }
+.psa-sys-title { color: var(--psa-text-muted-solid); }
+
+.psa-edition-row { color: var(--psa-text-solid); }
+.psa-edition-name { color: var(--psa-text-solid); }
+
+/* -------------------------------------------------------------------------
+   UI-02 / UI-03 — dialog shell
+   -------------------------------------------------------------------------
+   ui-dialog.css owns the shell's BEHAVIOUR contract (focus entry and
+   restoration, Escape close, aria-modal/labelledby wiring, the mobile
+   full-screen sheet, the scroll regions). Only the plate is restyled. */
+
+.psa-dialog__content {
+  border-radius: var(--psa-radius-lg);
+  border: none;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--psa-text-solid);
+}
+
+.psa-dialog .modal-backdrop,
+.modal-backdrop.show {
+  background: #000;
+  opacity: 0.72;
+}
+
+.psa-dialog__header,
+.psa-dialog__footer {
+  border-color: var(--psa-line);
+  background: transparent;
+}
+
+.psa-dialog__title {
+  color: var(--psa-text-solid);
+}
+
+.psa-dialog__eyebrow,
+.psa-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--psa-text-muted-solid);
+}
+
+.psa-dialog__description { color: var(--psa-text-muted-solid); }
+
+/* MEASURED IN THE BROWSER, not assumed. The dialog header computes to
+   `justify-content: normal` in this Bootstrap build, so the close control
+   was laid out immediately after the title text -- floating mid-header on
+   a wide dialog (measured at x=603 in a header spanning 48..1188) rather
+   than sitting at the trailing edge where a close belongs. The heading is
+   given the free space instead; nothing else about the header moves. */
+.psa-dialog__header .psa-dialog__heading { flex: 1 1 auto; }
+
+/* NO FILTER HERE EITHER, for the same measured reason: bslib compiled
+   .btn-close's data-URI against the dark `fg`, so its glyph is already
+   `fill='#f5f5f5'`. Inverting it painted a black cross on a black plate.
+   The alpha stays with ui-dialog.css's own `opacity: 0.7` / `:hover 1`. */
+.psa-dialog__close {
+  border-radius: var(--psa-radius-pill);
+}
+
+.psa-dialog__close:focus-visible {
+  outline: 2px solid var(--psa-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Mobile: the sheet is a full-screen dark surface. Square corners at the
+   viewport edge, so no canvas shows through beside it. */
+@media (max-width: 768px) {
+  /* 768px, not 767.98px: this must switch on exactly the same frame as
+     ui-dialog.css's full-screen sheet rules, or the luminous ring survives
+     one pixel of viewport width past the corners it was drawn for. */
+  .psa-dialog__content { border-radius: 0; }
+  .psa-dialog__content::before { display: none; }
+}
+
+/* Hierarchy tree (UI-02). Lazy expansion, ancestor reveal, aria-expanded,
+   "View in Search" and focus restoration are all owned elsewhere; this is
+   the node's resting/selected appearance only. */
+.psa-hier-node { border-radius: var(--psa-radius-sm); }
+
+.psa-hier-row {
+  border-radius: var(--psa-radius-sm);
+  transition: background-color 140ms ease;
+}
+
+.psa-hier-row:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* Selected node: a filled plate PLUS a left rail PLUS a restrained plum
+   glow — shape and position, not colour alone. */
+.psa-hier-node--selected > .psa-hier-row {
+  background: rgba(143, 102, 143, 0.16);
+  box-shadow:
+    inset 2px 0 0 var(--psa-plum-text),
+    0 0 18px var(--psa-plum-glow);
+}
+
+.psa-hier-node--match > .psa-hier-row {
+  box-shadow: inset 0 0 0 1px var(--psa-line-strong);
+}
+
+.psa-hier-code { color: var(--psa-text-solid); }
+.psa-hier-label { color: var(--psa-text-solid); }
+.psa-hier-badge { color: var(--psa-text-muted-solid); }
+
+.psa-hier-toggle {
+  color: var(--psa-text-muted-solid);
+  border-radius: var(--psa-radius-sm);
+}
+
+.psa-hier-toggle:hover {
+  color: var(--psa-text-solid);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* -------------------------------------------------------------------------
+   UI-03 — PSOC + PSIC details and comparison
+   ------------------------------------------------------------------------- */
+
+.psa-dual-panel {
+  border-radius: var(--psa-radius-lg);
+  border: none;
+  background: transparent;
+}
+
+.psa-dual-panel-title { color: var(--psa-text-solid); }
+.psa-dual-count,
+.psa-dual-state,
+.psa-dual-note { color: var(--psa-text-muted-solid); }
+
+.psa-compare-col {
+  border-radius: var(--psa-radius-md);
+  border: none;
+}
+
+.psa-detail-title { color: var(--psa-text-solid); }
+.psa-detail-meta { color: var(--psa-text-muted-solid); }
+
+/* THE RELATIONSHIP SAFEGUARD IS NOT A FOOTNOTE (handoff §12).
+   Body-size type, full-strength text, its own plated surface and a plum
+   rail. It is the most prominent non-heading element in the comparison. */
+.psa-compare-note,
+.psa-dual-note--safeguard {
+  color: var(--psa-text-solid);
+  background: rgba(143, 102, 143, 0.14);
+  border-left: 3px solid var(--psa-plum-text);
+  border-radius: var(--psa-radius-sm);
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------------------
+   UI-04 — Compare Editions inspector
+   -------------------------------------------------------------------------
+   Separated from the table by SPACING, not by a heavy border (handoff §13).
+   Query, pagination, direction, selection, scroll/review state, the
+   Split/Merged/Reclassified/Continued vocabulary, provenance, confidence,
+   the statistical-use safeguard and the Ask RM action are all owned by
+   ui_correspondence.R / ui-filters.css and are untouched here. */
+
+/* CASCADE NOTE. ui-filters.css turns the inspector into a fixed right-hand
+   sheet below 992px and a full-screen sheet below 576px, using  rules
+   that carry NO extra specificity. Because ui-glass.css loads after it, a
+   plain .psa-corr-inspector rule here would beat those sheet rules at every
+   width. The desktop plate is therefore scoped to the desktop, and the
+   sheet gets its own glass treatment below. */
+@media (min-width: 992px) {
+  .psa-corr-inspector {
+    border-radius: var(--psa-radius-lg);
+    border: none;
+    background: rgba(255, 255, 255, 0.025);
+  }
+}
+
+@media (max-width: 991.98px) {
+  /* Sheet: square, full-height, and edged on the side it slides from.
+     `inset` and `width` stay owned by ui-filters.css. */
+  .psa-corr-inspector {
+    border-radius: 0;
+    border: none;
+    border-inline-start: 1px solid var(--psa-line-strong);
+    /* Opaque for the same reason as the dialog plate: below 992px this
+       stops being an inline column and starts floating over the results
+       table it is describing. */
+    background: #0b0b0b;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+  }
+
+  .psa-corr-inspector::before { display: none; }
+}
+
+.psa-corr-inspector-head {
+  border-bottom: 1px solid var(--psa-line);
+  background: transparent;
+}
+
+.psa-corr-inspector-title { color: var(--psa-text-solid); }
+
+.psa-corr-inspector-close {
+  color: var(--psa-text-muted-solid);
+  border-radius: var(--psa-radius-pill);
+}
+
+.psa-corr-inspector-close:hover {
+  color: var(--psa-text-solid);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.psa-corr-node {
+  border-radius: var(--psa-radius-md);
+  border: none;
+}
+
+.psa-corr-node-label { color: var(--psa-text-solid); }
+.psa-corr-node-meta,
+.psa-corr-meta,
+.psa-corr-meta-gloss { color: var(--psa-text-muted-solid); }
+
+.psa-corr-arrow { color: var(--psa-text-muted-solid); }
+
+/* Relationship badges stay NEUTRAL/PLUM (handoff §13). A Split or a Merge
+   is a fact about the revision, not an error, so nothing here borrows the
+   error ramp. */
+.psa-tag {
+  border-radius: var(--psa-radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--psa-text-solid);
+  box-shadow: inset 0 0 0 1px var(--psa-line);
+}
+
+.psa-tag-archived {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--psa-text-muted-solid);
+}
+
+.psa-stat-warning {
+  color: var(--psa-text-solid);
+  background: rgba(143, 102, 143, 0.14);
+  border-left: 3px solid var(--psa-plum-text);
+  border-radius: var(--psa-radius-sm);
+}
+
+.psa-no-counterpart { color: var(--psa-text-muted-solid); }
+
+/* -------------------------------------------------------------------------
+   UI-05 — correspondence terminology help
+   -------------------------------------------------------------------------
+   A compact glass disclosure. Muted body copy, strong term hierarchy; the
+   confidence wording and the redistribution warning are owned by
+   ui_correspondence.R and are not restated here. */
+
+.psa-term-help,
+.psa-col-tips,
+.psa-howto-panel-inner {
+  border-radius: var(--psa-radius-md);
+  border: none;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.psa-term-help-trigger,
+.psa-howto-toggle {
+  color: var(--psa-text-solid);
+  background: transparent;
+  border: 1px solid var(--psa-line);
+  border-radius: var(--psa-radius-pill);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.psa-term-help-trigger:hover,
+.psa-howto-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--psa-line-strong);
+}
+
+.psa-term-help-term,
+.psa-col-tip-term,
+.psa-col-legend-title { color: var(--psa-text-solid); font-weight: 600; }
+
+.psa-term-help-body,
+.psa-term-help-intro,
+.psa-col-tip { color: var(--psa-text-muted-solid); }
+
+.psa-disclosure {
+  border-radius: var(--psa-radius-md);
+  border: 1px solid var(--psa-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.psa-disclosure > summary { color: var(--psa-text-solid); }
+.psa-disclosure-body { color: var(--psa-text-muted-solid); }
+
+/* -------------------------------------------------------------------------
+   RM Assistant — SURFACE ONLY (handoff §15)
+   -------------------------------------------------------------------------
+   Nothing in this block can reach assistant_handle_turn(), the
+   clarification lifecycle, the render suppression in assistant_render.R or
+   the turn state. There are no display:none rules on transcript content
+   here: hiding a rendered message would be a behaviour change wearing a
+   stylesheet, and the deterministic rendering is exactly what must remain
+   visible. */
+
+.rm-assistant-card {
+  border-radius: var(--psa-radius-lg);
+  border: none;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.rm-assistant-card > .card-header,
+.rm-assistant-card > .card-body {
+  background: transparent;
+  border-color: var(--psa-line);
+}
+
+.rm-assistant-header h2 { color: var(--psa-text-solid); }
+.rm-assistant-disclaimer { color: var(--psa-text-muted-solid); }
+
+.rm-assistant-new-chat {
+  border-radius: var(--psa-radius-pill);
+  border: 1px solid var(--psa-line-strong);
+  color: var(--psa-text-solid);
+  background: transparent;
+}
+
+.rm-assistant-new-chat:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--psa-text-solid);
+  border-color: var(--psa-focus);
+}
+
+/* shinychat's own custom elements. Restyled through their host elements —
+   no internal shadow-DOM assumptions, so a shinychat upgrade degrades to
+   the component's own styling rather than breaking. */
+shiny-chat-container,
+shiny-chat-messages {
+  background: transparent;
+  color: var(--psa-text-solid);
+}
+
+shiny-chat-message,
+shiny-user-message {
+  color: var(--psa-text-solid);
+}
+
+/* User turn: a filled quiet pill. Assistant turn: bare canvas, so the
+   verified classification cards inside it are the only plated things in the
+   transcript and therefore read as the answer. */
+shiny-user-message {
+  display: block;
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: var(--psa-radius-md);
+  padding: 12px 16px;
+}
+
+shiny-chat-input textarea,
+shiny-chat-input .form-control {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--psa-line);
+  border-radius: var(--psa-radius-md);
+  color: var(--psa-text-solid);
+}
+
+shiny-chat-input textarea:focus {
+  border-color: var(--psa-focus);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+  outline: none;
+}
+
+/* The verified classification block. One component, shared with Search's
+   selected-entry panel, so RM can never look more authoritative than the
+   deterministic table it read from. */
+.psa-verified-card {
+  border-radius: var(--psa-radius-md);
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--psa-line);
+}
+
+.psa-rm-badge-row .psa-tag { background: rgba(255, 255, 255, 0.06); }
+
+.psa-rm-failure,
+.psa-rm-unavailable {
+  border-radius: var(--psa-radius-md);
+  border: 1px solid var(--psa-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--psa-text-solid);
+}
+
+/* -------------------------------------------------------------------------
+   Sources (handoff §16)
+   ------------------------------------------------------------------------- */
+
+.psa-source-card {
+  border-radius: var(--psa-radius-lg);
+  border: none;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 24px;
+}
+
+@media (max-width: 575.98px) {
+  /* app.css sets a flat 18px here and never steps it; the editorial 24px
+     needs its own floor so a single-column deck does not lose a third of
+     a 320px viewport to card padding. */
+  .psa-source-card { padding: 16px; }
+}
+
+.psa-source-card-name {
+  color: var(--psa-text-solid);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.psa-source-card h4 { color: var(--psa-text-solid); }
+
+.psa-card-dl dt,
+.psa-provenance-dl dt {
+  color: var(--psa-text-muted-solid);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.psa-card-dl dd,
+.psa-provenance-dl dd { color: var(--psa-text-solid); }
+
+.psa-sources-note,
+.psa-sources-prose,
+.psa-section-note { color: var(--psa-text-muted-solid); }
+
+.psa-card-link { color: var(--blue); }
+.psa-card-link:hover { color: var(--blue-hover); }
+
+.psa-sources-section table.table {
+  --bs-table-color: var(--psa-text-solid);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--psa-line);
+  color: var(--psa-text-solid);
+}
+
+/* -------------------------------------------------------------------------
+   Buttons
+   ------------------------------------------------------------------------- */
+
+.btn {
+  border-radius: var(--psa-radius-pill);
+  transition: background-color 140ms ease, border-color 140ms ease,
+              color 140ms ease;
+}
+
+.btn-primary,
+.psa-dialog__btn--primary {
+  background: var(--psa-text-solid);
+  border-color: var(--psa-text-solid);
+  color: #0a0a0a;
+}
+
+.btn-primary:hover,
+.psa-dialog__btn--primary:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #0a0a0a;
+}
+
+.btn-outline-secondary,
+.btn-secondary,
+.psa-dialog-open,
+.psa-dialog__btn--ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--psa-line-strong);
+  color: var(--psa-text-solid);
+}
+
+.btn-outline-secondary:hover,
+.btn-secondary:hover,
+.psa-dialog-open:hover,
+.psa-dialog__btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: var(--psa-focus);
+  color: var(--psa-text-solid);
+}
+
+.psa-dialog-open--quiet {
+  background: transparent;
+  border-color: var(--psa-line);
+}
+
+.psa-corr-askrm {
+  border-radius: var(--psa-radius-pill);
+  border: 1px solid var(--psa-line-strong);
+  color: var(--psa-text-solid);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* -------------------------------------------------------------------------
+   Popovers, tooltips and other floating Bootstrap surfaces
+   -------------------------------------------------------------------------
+   These render at the end of <body>, outside every panel, so they inherit
+   nothing from the surfaces above and must state their own dark ground —
+   the same class of defect UI-POST-04 recorded for the selectize menu. */
+
+.popover,
+.tooltip-inner,
+.dropdown-menu {
+  background: #0d0d0d;
+  color: var(--psa-text-solid);
+  border: 1px solid var(--psa-line-strong);
+  border-radius: var(--psa-radius-md);
+  box-shadow: var(--elev-1);
+}
+
+.popover .popover-header {
+  background: transparent;
+  color: var(--psa-text-solid);
+  border-bottom-color: var(--psa-line);
+}
+
+.popover .popover-body { color: var(--psa-text-muted-solid); }
+
+.popover .popover-arrow::after { border-top-color: #0d0d0d; }
+
+.modal-content {
+  background: #0b0b0b;
+  color: var(--psa-text-solid);
+  border: 1px solid var(--psa-line-strong);
+}
+
+/* -------------------------------------------------------------------------
+   Composition fixes for surfaces that now carry .psa-liquid-glass in markup
+   -------------------------------------------------------------------------
+   Each of these exists because the glass shell and a pre-existing edge
+   would otherwise draw TWO borders around the same box. In every case the
+   glass ring wins and the older edge is dropped — never the reverse, so a
+   surface can never end up with no perceptible edge at all (the UI-POST-04
+   failure mode). */
+
+/* Hero field: the shell owns the edge, so the input inside it goes
+   edgeless and transparent. Focus is raised on the SHELL via :focus-within,
+   which keeps the ring around the whole control the user perceives rather
+   than around an invisible inner box. */
+.psa-hero-field.psa-liquid-glass {
+  background: rgba(255, 255, 255, 0.03);
+  transition: box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.psa-hero-field.psa-liquid-glass input.form-control {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.psa-hero-field.psa-liquid-glass input.form-control:hover,
+.psa-hero-field.psa-liquid-glass input.form-control:focus,
+.psa-hero-field.psa-liquid-glass input.form-control:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.psa-hero-field.psa-liquid-glass:focus-within {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.10),
+    0 18px 50px rgba(0, 0, 0, 0.20),
+    0 0 0 2px var(--psa-focus),
+    0 0 0 6px rgba(255, 255, 255, 0.10);
+}
+
+/* Sidebar / dual panel / inspector / cards: drop the flat 1px border those
+   sheets set, because the glass ring is now the edge. */
+.psa-sidebar.psa-liquid-glass,
+.psa-dual-panel.psa-liquid-glass,
+.psa-source-card.psa-liquid-glass,
+.psa-term-help.psa-liquid-glass,
+.psa-howto-panel-inner.psa-liquid-glass,
+.rm-assistant-card.psa-liquid-glass,
+.psa-dialog__content.psa-liquid-glass {
+  border: none;
+}
+
+/* bslib's card paints its own --bs-card-bg plate; left in place it would
+   sit opaque on top of the glass. */
+.rm-assistant-card.psa-liquid-glass {
+  --bs-card-bg: transparent;
+  --bs-card-border-color: transparent;
+  --bs-card-border-width: 0;
+}
+
+/* THE DIALOG PLATE IS OPAQUE, AND THAT IS DELIBERATE.
+
+   This surface is the one that floats over arbitrary page content. It was
+   first built as glass at 0.88 alpha over a 0.72 backdrop and blurred at
+   22px, which arithmetically leaves ~3% of the page showing through. In the
+   browser that was not what happened: the Search hero's display heading and
+   its helper line were both plainly readable THROUGH the open hierarchy
+   dialog. Measured, not predicted -- an opaque plate rendered the same
+   dialog cleanly.
+
+   Handoff section 6.1 ("do not depend on transparency for text contrast")
+   and section 19 ("no information conveyed only through blur or
+   transparency") both point the same way, so readability wins here and the
+   glass character is carried by the luminous ring, the radius and the
+   elevation instead. Dropping backdrop-filter with it also removes the most
+   expensive blur in the app, which section 20 asks for anyway. */
+.psa-dialog__content.psa-liquid-glass {
+  background: #0b0b0b;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The comparison columns are glass INSIDE the dialog's glass. --quiet
+   already removes their ring; this keeps them from re-blurring an already
+   blurred ground, which measurably costs paint time for no visible gain. */
+.psa-compare-col.psa-liquid-glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: var(--psa-radius-md);
+}
+
+/* -------------------------------------------------------------------------
+   UI-04 layout: separation by spacing (handoff §13)
+   ------------------------------------------------------------------------- */
+
+/* The table column and the inspector are told apart by the gap between
+   them, not by a heavy rule. ui-filters.css keeps ownership of the column
+   widths, the sticky behaviour and the max-height. */
+.psa-corr-workspace { gap: var(--space-6, 32px); }
+
+/* The sticky offset was tuned against the old flat navbar. The floating
+   pill is taller (its own padding plus the shell's), so the inspector's
+   resting top and its height budget both move down by the difference —
+   otherwise the inspector's header scrolls under the pill. Desktop only:
+   below 992px the inspector is `position: fixed` with `inset: 0 0 0 auto`,
+   and a stray `top` here would knock it out of that sheet geometry. */
+@media (min-width: 992px) {
+  .psa-corr-inspector {
+    top: 96px;
+    max-height: calc(100vh - 120px);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   DataTables row selection
+   -------------------------------------------------------------------------
+   `dataTables.bootstrap5.min.css` is injected by the DT htmlwidget and
+   therefore loads AFTER every stylesheet this app controls. Its Select
+   integration paints the selected row with
+
+     table.dataTable > tbody > tr.selected > * {
+       box-shadow: inset 0 0 0 9999px rgb(var(--dt-row-selected));
+     }
+
+   -- a 9999px inset shadow, not a background -- so app.css's intended
+   14%-tint-plus-left-rail treatment is drawn UNDER an effectively opaque
+   plum flood and never seen. Measured on a selected correspondence row:
+   `rgba(143, 102, 143, 0.976)`.
+
+   The same technique is used back, at the same specificity, with the tint
+   dropped to a restrained level and the rail restated on the first cell so
+   selection is still carried by SHAPE and not by colour alone. `!important`
+   is load-bearing here: cascade order cannot be won against a sheet the
+   widget appends after ours. */
+table.dataTable > tbody > tr.selected > *,
+table.dataTable.table-hover > tbody > tr.selected:hover > * {
+  box-shadow: inset 0 0 0 9999px rgba(143, 102, 143, 0.20) !important;
+  color: var(--psa-text-solid) !important;
+}
+
+table.dataTable > tbody > tr.selected > *:first-child,
+table.dataTable.table-hover > tbody > tr.selected:hover > *:first-child {
+  box-shadow:
+    inset 0 0 0 9999px rgba(143, 102, 143, 0.20),
+    inset 3px 0 0 var(--psa-plum-text) !important;
+}
+
+/* Row hover: DT's own hover flood is keyed to --dt-row-hover, which resolves
+   to a light-theme value. Restated as a quiet white wash. */
+table.dataTable.table-hover > tbody > tr:hover > * {
+  box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.045) !important;
+}
+
+/* Keep any remaining DT chrome that reads these variables on-palette. */
+:root {
+  --dt-row-selected: 143, 102, 143;
+  --dt-row-selected-text: 245, 245, 245;
+  --dt-row-hover: 255, 255, 255;
+}

@@ -1319,3 +1319,206 @@ git diff --check  clean
 - **The `svg` fix was not re-observed in a browser.** Both mechanisms are
   proven in R, but this worktree has no provider credential, so no live
   session could be driven. Browser UAT remains outstanding for this phase.
+
+---
+
+# UI refinement — dark editorial "liquid glass" interface
+
+Governing specification: `UI_REFINEMENT_LIQUID_GLASS_HANDOFF.md`.
+Status: **implemented, verified, left uncommitted for review** (the
+specification's §28 stop boundary forbids commit / push / tag / merge /
+republish / deploy).
+
+## Starting gate
+
+| | |
+|---|---|
+| Worktree | `D:\dev\historical_phclassif-ui` |
+| Branch created | `feature/ui-refinement-liquid-glass` |
+| Created from | `pre-staging-v10.1` → `79193fb6cd3f96f8733153a928f5026ee708f8e8` |
+| UI checkpoint brought forward | `257c67a3e1351a8662f2a0baa494da7151a886d4` |
+| Method | `git cherry-pick`, then `--quit` so nothing is committed |
+| Reconciliation gate | `FAIL 0 | WARN 0 | SKIP 0 | PASS 6636` |
+
+`merge-base(79193fb, 257c67a)` is `16ce9a7`, so the two lines of work are
+siblings: two RM commits on one side, one UI commit on the other. Their
+`app.R` hunks fall in disjoint regions (UI at the `page_navbar` header and
+the server's UI wiring; RM inside the assistant turn handler), so `app.R`
+auto-merged and `app.R` vs. `79193fb` contains **only** UI wiring — no RM
+line was removed or reordered.
+
+`manifest.json` was the only conflict. Per the handoff's §23 protocol it
+was resolved to the v10.1 side as an interim and then **regenerated from
+scratch** through the canonical `rsconnect::writeManifest()` workflow once
+the runtime file inventory was final.
+
+## Approach: retarget the token layer, do not fork the stylesheets
+
+`www/app.css`'s rule body resolves **200 `var()` references against 6 raw
+colour literals**, and `ui-dialog.css` / `ui-filters.css` are fully
+tokenised. The dark system is therefore implemented by retargeting that
+existing token layer, not by rewriting 60 KB of working rules — so every
+UI-01…UI-05 rule keeps working unmodified. See `docs/UI_CONTRACT.md` §20
+for the full contract.
+
+New runtime assets (no dependency added):
+
+```text
+www/ui-tokens.css   dark token layer, typography, global canvas
+www/ui-glass.css    .psa-liquid-glass primitive + major-surface application
+www/ui-motion.css   transitions + the reduced-motion escape (loaded last)
+```
+
+## Defects found in the browser and fixed
+
+Each of these was measured in a running app, not predicted:
+
+1. **Dialog plate was see-through.** At 0.88 alpha over a 0.72 backdrop the
+   Search hero's heading was readable *through* an open hierarchy dialog.
+   The plate is now opaque; §6.1/§19 of the handoff both point that way.
+2. **The mobile hamburger had no glyph.** bslib ships Bootstrap-3 markup
+   with a BS5 shim that repaints the last `.icon-bar` with a *dark* data-URI
+   SVG — invisible on black. The glyph's polarity is now inverted.
+3. **Dialog close control floated mid-header.** The header computes to
+   `justify-content: normal` in this Bootstrap build; the heading now takes
+   the free space.
+4. **Active nav tab lost its weight.** Bootstrap's
+   `.nav-underline .nav-link:not(:empty).active` out-specifies a
+   three-class selector and pinned it back to 500.
+5. **Native chrome stayed light.** `color-scheme: dark` plus explicit
+   scrollbar colours; a light bar had been painting down every scroll
+   region.
+
+## Verification
+
+```text
+Rscript scripts/run_tests.R      FAIL 0 | WARN 0 | SKIP 0 | PASS 6778
+Rscript -e "renv::status()"      No issues found
+rsconnect::writeManifest()       225 files, 83 packages, R 4.6.1
+git diff --check                 no findings in any code file
+```
+
+`tests/testthat/test-ui-liquid-glass.R` (142 assertions) covers stylesheet
+loading and cascade order, glass-class presence on every intended surface,
+the `--flow` requirement for surfaces hosting an overlay, preservation of
+every nav/search/hierarchy/details/inspector/RM identifier, the
+accessibility hooks, the reduced-motion escape, the typography rules, and
+the responsive-restatement contract. It asserts no pixel values.
+
+RM non-regression matrix (handoff §24), run through `assistant_handle_turn()`
+with the canonical v10.1 fixture phrasings — all pass, no `svg`, no empty
+render on any handled turn:
+
+```text
+mayor                      1111 / 84113
+teacher                    2330 / 8531   -> latter -> 85314
+  then statistician at PSA 2122 / 8411
+carpenter                  7115, PSIC asked; "residential" stays unresolved
+outsourced janitor         wage-payer asked first; "agency pays" -> 78200
+palay                      asks; "upland" -> 6111 / 01123
+corn                       6112 / 01130
+six-item batch             6 items, 6 distinct codes, not collapsed
+  then angkas driver       8323, no batch contamination
+```
+
+Browser UAT performed at 1440 / 1366 / 1024 / 992 / 991 / 768 / 375 / 320.
+No page-level horizontal scrolling at any width; wide tables scroll inside
+their own container. Navbar collapse measured at exactly 992px, which the
+stylesheet's `991.98px` breakpoint matches.
+
+## Known limitations
+
+- **The RM chat transcript was not visually reviewed in a browser.** This
+  worktree has no provider credential, so the assistant renders its
+  unavailable state (which *was* reviewed, and is clean). RM styling is
+  CSS-only and touches no behaviour, but the live transcript surface —
+  message bubbles, verified classification cards, clarification options,
+  streaming and cancel — still needs a browser pass on a deployment that
+  has a key.
+- **Incognito and second-browser review not performed.**
+
+
+- The three new stylesheets are LF in the working tree while the older ones
+  are CRLF. `core.autocrlf` is `true` and there is no `.gitattributes`, so
+  git stores LF for all of them and a fresh checkout produces CRLF for all
+  of them — the committed content is uniform either way.
+
+## Acceptance fixes after review (still uncommitted)
+
+Three items from the browser UAT above were raised as acceptance failures
+and are now fixed and re-verified in the browser.
+
+### 1. UI-01 release order (blocker)
+
+`app.R`'s edition observer composed its own `choiceNames` and passed
+`versions` through in repository order, so PSGC opened on "Q1 2023
+ARCHIVED" with the current release last. `edition_choice_spec()` — which
+implements the current-first contract and was unit-tested the whole time —
+was never called by the running app.
+
+Fixed by calling the canonical helper instead of duplicating its logic.
+Live browser result:
+
+```text
+Q2 2026 Current, Q1 2026, Q4 2025, Q3 2025, July 2025, Q2 2025, Q1 2025,
+Q4 2024, Q3 2024, Q2 2024, April 2024, Q4 2023, Q1 2023   (all Archived)
+```
+
+### 2. Shared dialog focus restoration (blocker)
+
+Root cause, instrumented in the running app rather than inferred: with
+native listeners on all four modal lifecycle events, `show`, `shown` and
+`hide` all reached `document`; **`hidden.bs.modal` never did** — only
+jQuery saw it. `shiny::showModal()` wraps the dialog in `#shiny-modal` and
+Shiny removes that wrapper as the modal hides, so Bootstrap dispatches the
+native `hidden` event on an already-detached node that cannot bubble to
+`document`. The restore was bound to exactly that event.
+
+Two further faults surfaced while fixing it, each caught by measurement:
+focusing at `hide` time is overwritten when the node is removed moments
+later (so the restore is retried on a bounded schedule), and a
+`requestAnimationFrame`-only scheduler never runs in a background tab (so
+`setTimeout` is primary). One shared implementation in
+`psa_dialog_deps()`; no per-dialog code.
+
+### 3. UI-03 detail dialogs were unreachable (found while fixing 2)
+
+`dual_selection_summary_ui()` — the component that renders each side's
+"View details" button — was defined and unit-tested but never rendered by
+any output, so the buttons were absent from the DOM and the
+`view_details` observers could never fire. Same defect family as item 1.
+Mounted in the dual detail renderer.
+
+### 4. Mobile status wrapping (polish)
+
+Status broke as "curre / nt" in the dual panels at ≤375px: DataTables had
+compressed the table to fit rather than letting it scroll, and the browser
+broke the word as a last resort. Tagged `psa-nowrap` at the DT column
+definition, with local `overflow-x: auto` on the grid.
+
+### Verification of the fixes
+
+```text
+Rscript scripts/run_tests.R          FAIL 0 | WARN 0 | SKIP 0 | PASS 6840
+tests/testthat/test-ui-release-order-and-focus.R   62 assertions
+```
+
+The new test file drives app.R's real observer through
+`shiny::testServer()` rather than testing the helper in isolation, and was
+negative-controlled: reverting `app.R` to the pre-fix version makes it
+fail.
+
+Browser acceptance, all measured via `window.__psaDialogFocus`:
+
+```text
+dialog                     Escape    close button
+hierarchy Browse           restored  restored
+PSOC details               restored  restored
+PSIC details               restored  restored
+PSOC + PSIC comparison     restored  restored
+```
+
+Responsive sweep at 1440 / 1366 / 1024 / 992 / 991 / 768 / 375 / 320: no
+page-level horizontal overflow at any width, Status renders on one line at
+every width, and each result grid keeps its overflow contained locally
+(at 320px the dual grid scrolls internally at 230px inside a 228px box).

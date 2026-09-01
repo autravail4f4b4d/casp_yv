@@ -641,3 +641,188 @@ systems the underlying classification is part of the record's meaning.
 Canonical consumers index by name and ignore extras, so this is an
 extension rather than a relaxation — the ten canonical columns must still
 all be present, in order, first.
+
+## 20. Visual system — dark editorial "liquid glass" (UI refinement milestone)
+
+Supersedes the palette and surface treatment described in §17 and in the
+"Subtle Gradient" light pass that followed it. **Everything §17 says about
+which meanings carry a treatment still holds** — status is never colour
+alone, a classification relationship is never styled as an error, archived
+is quiet rather than warned. Only the ground and the surfaces changed.
+
+### 20.1 Stylesheet architecture and load order
+
+Order is the architecture, not a preference: the whole system is built on
+later-sheet-wins, so reordering these links silently restores light
+surfaces or drops the motion opt-out.
+
+```text
+www/app.css        base rules — almost entirely token-driven
+www/ui-tokens.css  RETARGETS app.css's tokens to the dark palette; display
+                   and UI faces; global canvas; Bootstrap/DT ground
+www/ui-dialog.css  shared dialog/drawer shell (UI-02/03/04/05)
+www/ui-filters.css search sidebar + correspondence guidance (UI-01/04/05)
+www/ui-glass.css   the .psa-liquid-glass primitive and its application to
+                   the app's major surfaces; loaded after the two UI
+                   sheets so it outranks their flat plates
+www/ui-motion.css  transitions, and the reduced-motion escape LAST, so no
+                   later sheet can re-enable animation
+```
+
+The dark palette is set on `bslib::bs_theme()` in `app.R`
+(`bg`/`fg`/`primary`/`body-bg`/`card-bg`/`border-color`/link colours) for
+the same reason §17 gives: Bootstrap, DT and selectize inherit the palette
+rather than needing per-component overrides. `ui-tokens.css` re-asserts the
+same values as CSS custom properties so a cached or partially recompiled
+bundle can never leave a light plate behind a dark panel.
+
+**Why no rewrite was needed.** `app.css`'s body resolves 200 `var()`
+references against 6 raw colour literals, and `ui-dialog.css` /
+`ui-filters.css` are fully tokenised. Retargeting the token layer therefore
+re-themes the app without touching the UI-01…UI-05 rules.
+
+### 20.2 Typography
+
+```text
+--font-display  'Instrument Serif', Georgia, 'Times New Roman', serif
+--font-ui       Inter, ui-sans-serif, system-ui, -apple-system,
+                BlinkMacSystemFont, 'Segoe UI', sans-serif
+```
+
+`Instrument Serif` is imported from Google Fonts and is the **only**
+external visual dependency in the app. It is display/accent only — page
+hero, major section headings, the navbar wordmark, italic emphasis. The
+app must remain fully usable when that request is blocked, so the UI face
+is never the imported one and every display use falls through to Georgia.
+
+Classification **data** is never set in the display serif: codes, result
+tables, filters, forms, buttons, RM transcript body copy and record
+metadata stay in `--font-ui`. Because `app.css` routes its `--type-heading-*`
+tokens through `--font-display`, those data surfaces are pinned back
+explicitly in `ui-tokens.css`; a regression test asserts the pin list.
+
+### 20.3 The liquid-glass primitive
+
+`.psa-liquid-glass` — translucent fill, 4px backdrop blur, a masked 1.4px
+luminous gradient ring in place of a drawn border, and a deep ambient drop
+shadow. Two variants:
+
+- `.psa-liquid-glass--flow` — `overflow: visible`. **Required** on any glass
+  surface that opens a selectize menu or a bslib popover from inside
+  itself, because the primitive clips. Omitting it reproduces the
+  UI-POST-04 defect class (an overlay cut off at its container's edge).
+- `.psa-liquid-glass--quiet` — flatter, ringless pane for glass nested
+  inside glass, so the app never shows a boxed card inside a boxed card.
+
+**Transparency is decorative and never load-bearing.** Functional text
+takes its contrast from the token layer against the near-black canvas, so
+removing the blur changes how the app looks and nothing about what it says.
+Two fallbacks make that literal:
+
+```css
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px)))
+@media (forced-colors: active)
+```
+
+Surfaces carrying the class: Search hero field, UI-01 filter sidebar,
+shared dialog shell (UI-02/UI-03), UI-03 dual panels and comparison
+columns, UI-04 correspondence inspector, UI-05 terminology disclosure, the
+RM Assistant card, and the Sources card deck. The floating navbar shell
+restates the same treatment inline, because its element is emitted by
+`bslib` and this layer must not require markup it does not own.
+
+### 20.4 Contrast
+
+Every functional-text token clears WCAG AA (4.5:1) against `--psa-bg`
+`#050505`, and the measured ratio is recorded beside each token in
+`ui-tokens.css`. Two consequences worth stating, because both are easy to
+undo by eye:
+
+- `--psa-text-subtle` (`rgba(255,255,255,.40)`) measures **3.7:1** — AA for
+  large text and non-text only. Functional copy uses `--psa-text-muted`
+  (7.8:1). Rules, glyph strokes and decorative marks may use subtle.
+- `--psa-plum` `#8f668f` measures **4.3:1**, just under AA, so it is a
+  border/fill/glow value. Plum **text** uses `--psa-plum-text` `#c9a9c9`
+  (9.7:1).
+
+### 20.5 Motion
+
+CSS only — no animation framework, no canvas, no WebGL, no video. Section
+reveals are fade + ≤16px rise; dialogs are opacity plus a 0.98→1 scale;
+large surfaces hover at ≤1.01; controls animate background alpha only.
+Every reveal is declared with `both` fill, so honouring
+`prefers-reduced-motion` lands on the visible frame and can never leave
+content hidden.
+
+### 20.6 Cascade hazard for future edits
+
+`ui-glass.css` loads after `app.css` and `ui-filters.css`, and **a `@media`
+block adds no specificity**. A plain rule in `ui-glass.css` therefore beats
+an `app.css` mobile rule at every width. Any surface whose desktop plate is
+restyled must restate its own responsive steps — the Search hero, the
+Sources card padding and the UI-04 inspector all do, and a test asserts the
+inspector's desktop plate stays scoped to `min-width: 992px` so the mobile
+sheet geometry owned by `ui-filters.css` survives.
+
+### 20.7 Release-order ownership (UI-01)
+
+The edition/release radio group is built by `edition_choice_spec()`
+(`R/ui/ui_search.R`) and **must not** be composed inline in `app.R`. Order
+comes from `release_newest_first()` → `.release_effective_key()`, which
+derives a numeric `year * 100 + month` key from the canonical release
+identifier. It is not a lexical sort of display labels, and identifiers that
+carry no recognisable year keep their repository position rather than being
+guessed at.
+
+Contract: **current first, then descending canonical release order**, with
+CURRENT / ARCHIVED spelled out on every row. `choiceValues` stay raw
+identifiers and `selected` stays the registry's current version, so the
+ordering is presentation only and no search or retrieval semantics move
+with it.
+
+Two systems ship releases that share an effective period — `Q3_2025` and
+`July_2025` both key to 202507, as do `Q2_2024` and `April_2024`. Ties are
+broken by repository order. Tests therefore assert *non-increasing* keys
+overall and *strictly decreasing* across distinct keys.
+
+### 20.8 Dialog focus restoration (shared shell)
+
+`psa_dialog_deps()` in `R/ui/ui_dialog.R` owns the ONLY focus-restoration
+implementation in the app. Every dialog — hierarchy browse, PSOC details,
+PSIC details, PSOC + PSIC comparison — is built by `psa_dialog_ui()` and
+inherits it; per-dialog focus code is forbidden and a test fails if any
+appears.
+
+**Restoration is driven from `hide.bs.modal`, not `hidden.bs.modal`.**
+`shiny::showModal()` wraps the dialog in `#shiny-modal` and Shiny removes
+that wrapper as the modal hides, so Bootstrap dispatches the native
+`hidden.bs.modal` on an already-detached element and it never bubbles to
+`document` — instrumented in the browser, where `show`/`shown`/`hide` all
+reached a native document listener and `hidden` reached only jQuery.
+
+Two further properties are load-bearing and were each established by
+measurement:
+
+- The `focus()` call is **retried on a bounded schedule** (~1.2s, 40ms
+  steps, stopping as soon as focus sticks). `hide.bs.modal` fires at the
+  *start* of the hide transition, so a single synchronous call is
+  overwritten moments later when the node is removed and focus drops to
+  `<body>`.
+- The scheduler is **`setTimeout`-primary**, with `requestAnimationFrame`
+  only as an accelerator. rAF is paused in background tabs, and a
+  rAF-only schedule left focus stranded there.
+
+The shell publishes `window.__psaDialogFocus` (`event`, `hadOrigin`,
+`restored`, `attempts`) so browser acceptance can assert the behaviour
+instead of eyeballing a cursor. It carries no user content.
+
+### 20.9 Short status vocabulary must not break inside a word
+
+Status (`current` / `archived`), Relationship, Provenance and Confidence
+are tagged `psa-nowrap` at the DT **column definition** in `app.R`, not by
+a positional `nth-child` rule, so the class follows the column. `nowrap`
+raises the column's min-content width; the grid then asks its container for
+the width it needs and the container scrolls locally, instead of the
+browser hyphen-free-breaking "current" into "curre / nt" to fit a squeezed
+column. Every result grid keeps its own `overflow-x: auto`; page-level
+horizontal overflow stays prohibited at every width.

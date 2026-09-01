@@ -1,0 +1,580 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+
+/* =========================================================================
+   ui-tokens.css — dark editorial token layer, typography and global canvas
+   =========================================================================
+
+   WHY THIS FILE EXISTS, AND WHY IT IS SMALL.
+
+   app.css already routes essentially every colour through a semantic token
+   (200 var() references against 6 raw literals in its body). ui-dialog.css
+   and ui-filters.css are 100% tokenised. So the dark "liquid glass"
+   direction is implemented by RETARGETING that existing token layer here,
+   loaded after app.css, rather than by forking or rewriting 60 KB of
+   working rules.
+
+   That choice is deliberate and load-bearing:
+
+     * every UI-01..UI-05 rule keeps working, unmodified;
+     * a future design pass changes values here, not rules everywhere;
+     * the classification/RM contracts are untouched — this file has no
+       knowledge of codes, editions, correspondence or assistant state.
+
+   Ownership: this file owns TOKENS, TYPOGRAPHY and the GLOBAL CANVAS
+   (body, ambient background, Bootstrap/DT ground reskin). Glass surfaces
+   live in ui-glass.css; motion lives in ui-motion.css.
+
+   CONTRAST. Every functional-text token below was chosen to clear WCAG AA
+   (4.5:1) against --psa-bg #050505; the measured ratio is recorded beside
+   each one. Transparency is decorative here — no information is carried by
+   blur or alpha alone (see §19 of the handoff).
+   ========================================================================= */
+
+:root {
+  /* ---- New liquid-glass tokens (handoff §5) ---------------------------- */
+  --psa-bg: #050505;
+  --psa-bg-elevated: rgba(255, 255, 255, 0.025);
+  --psa-panel: rgba(255, 255, 255, 0.035);
+  --psa-panel-strong: rgba(255, 255, 255, 0.055);
+  --psa-text: rgba(255, 255, 255, 0.96);
+  --psa-text-muted: rgba(255, 255, 255, 0.62);
+  --psa-text-subtle: rgba(255, 255, 255, 0.40);
+  --psa-line: rgba(255, 255, 255, 0.10);
+  --psa-line-strong: rgba(255, 255, 255, 0.18);
+  --psa-focus: rgba(255, 255, 255, 0.88);
+  --psa-plum: #8f668f;
+  --psa-radius-sm: 12px;
+  --psa-radius-md: 18px;
+  --psa-radius-lg: 26px;
+  --psa-radius-pill: 999px;
+
+  /* Solid companions to the alpha tokens above.
+     --psa-text-subtle measures 3.7:1 on --psa-bg, which is AA for large
+     text and non-text only. Anything that must be READ as functional copy
+     uses --psa-text-muted (7.8:1) instead; the subtle step is reserved for
+     rules, glyph strokes and decorative marks. */
+  --psa-text-solid: #f5f5f5;         /* 18.4:1 */
+  --psa-text-muted-solid: #a0a0a0;   /*  7.8:1 */
+
+  /* A plum light enough to be READ on black. #8f668f measures 4.3:1 — just
+     under AA — so it stays a border/fill/glow value and this lighter step
+     carries any plum TEXT. */
+  --psa-plum-text: #c9a9c9;          /*  9.7:1 */
+  --psa-plum-deep: #6f4d6f;
+  --psa-plum-glow: rgba(143, 102, 143, 0.28);
+
+  /* ---- Typography (handoff §4) ----------------------------------------- */
+  /* Instrument Serif is DISPLAY ONLY. The stack degrades to Georgia and
+     then to the generic serif, so a blocked Google Fonts request costs the
+     app nothing but the exact face. */
+  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+             'Segoe UI', sans-serif;
+  --font-sans: var(--font-ui);
+
+  /* ---- Retargeted app.css base ramps ----------------------------------- */
+  /* Plum on a near-black ground: the light-theme ramp (#54436b and darker)
+     is invisible here, so each step moves up the scale while keeping its
+     ROLE — primary, deep, press, tint — intact. */
+  --plum: #8f668f;
+  --plum-deep: #6f4d6f;
+  --plum-press: #a87ea8;
+  --plum-tint: #c9a9c9;
+
+  --ink: #f5f5f5;
+  --ink-mute: #a0a0a0;
+  --white: #ffffff;
+
+  /* "cream" and "lavender" keep their NAMES (dozens of rules reference
+     them) but become the two quiet elevated darks they now mean. */
+  --cream: #0c0c0c;
+  --lavender: #131016;
+
+  --hairline: rgba(255, 255, 255, 0.10);
+  --hairline-strong: rgba(255, 255, 255, 0.30);
+
+  --blue: #8fc0f0;                   /* 10.6:1 */
+  --blue-hover: #b8d8f8;             /* 14.1:1 */
+
+  --red: #ff9182;                    /*  9.3:1 */
+  --green: #6fd8b0;                  /* 11.7:1 */
+
+  /* ---- Retargeted app.css semantic layer -------------------------------- */
+  --color-primary: var(--plum);
+  --color-primary-deep: var(--plum-deep);
+  --color-primary-press: var(--plum-press);
+  --color-primary-tint: var(--plum-tint);
+  --color-on-primary: #0a0a0a;
+
+  --text-body: var(--psa-text-solid);
+  --text-mute: var(--psa-text-muted-solid);
+  --text-on-primary: #0a0a0a;
+  --text-on-primary-mute: rgba(10, 10, 10, 0.72);
+  --text-link: var(--blue);
+  --text-link-hover: var(--blue-hover);
+
+  --surface-canvas: var(--psa-bg);
+  --surface-card: var(--psa-panel);
+  --surface-cream: var(--psa-bg-elevated);
+  --surface-lavender: rgba(143, 102, 143, 0.14);
+  --surface-plum: var(--plum-deep);
+
+  --border-hairline: var(--psa-line);
+  --border-strong: var(--psa-line-strong);
+  --border-on-plum: rgba(255, 255, 255, 0.22);
+
+  --status-error: var(--red);
+  --status-success: var(--green);
+
+  /* The mesh band was the one warm gradient in the light system and marked
+     Search as the default destination. It keeps that job, restated as the
+     handoff's ambient glow: white at the top-centre, a muted plum low and
+     right. No animation, no raster. */
+  --mesh-band:
+    radial-gradient(ellipse 120% 90% at 50% -20%, rgba(255, 255, 255, 0.070), transparent 62%),
+    radial-gradient(ellipse 80% 70% at 88% 118%, rgba(143, 102, 143, 0.10), transparent 58%),
+    var(--psa-bg);
+  --mesh-soft:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.045) 0%, rgba(143, 102, 143, 0.05) 100%),
+    #0a0a0a;
+
+  /* Elevation on black is carried by a luminous inner top edge plus a deep
+     ambient drop, not by a grey shadow (which is invisible here). */
+  --elev-0: none;
+  --elev-1: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --elev-2: 0 28px 80px rgba(0, 0, 0, 0.62);
+  --elev-3: 0 10px 30px rgba(0, 0, 0, 0.50);
+  --elev-4: rgba(255, 255, 255, 0.18) 0 0 0 1px inset;
+  --ring-plum-inset: 0 0 0 1px var(--psa-focus) inset,
+                     0 0 0 4px rgba(255, 255, 255, 0.10);
+
+  /* ---- Geometry: larger, softer, per handoff §3 ------------------------- */
+  --radius-lg: var(--psa-radius-sm);
+  --radius-xl: var(--psa-radius-md);
+  --radius-xxl: var(--psa-radius-lg);
+  --radius-pill: var(--psa-radius-pill);
+  --radius-card: var(--psa-radius-lg);
+  --radius-input: var(--psa-radius-sm);
+  --radius-button: var(--psa-radius-pill);
+
+  /* ---- Bootstrap ground ------------------------------------------------- */
+  /* bs_theme() in app.R already compiles Bootstrap against the dark
+     palette. These re-assert the same values at runtime so a cached or
+     partially-recompiled bundle can never leave a white plate behind a
+     dark panel. */
+  --bs-body-bg: var(--psa-bg);
+  --bs-body-color: var(--psa-text-solid);
+  --bs-emphasis-color: var(--psa-text-solid);
+  --bs-secondary-color: var(--psa-text-muted-solid);
+  --bs-tertiary-color: var(--psa-text-muted-solid);
+  --bs-border-color: var(--psa-line);
+  --bs-secondary-bg: var(--psa-panel);
+  --bs-tertiary-bg: var(--psa-bg-elevated);
+  --bs-link-color: var(--blue);
+  --bs-link-hover-color: var(--blue-hover);
+  --bs-heading-color: var(--psa-text-solid);
+}
+
+/* =========================================================================
+   Global canvas
+   ========================================================================= */
+
+html {
+  /* Tells the engine this document is dark, so NATIVE chrome follows:
+     scrollbars, form-control defaults, spellcheck underlines and the
+     rubber-band overscroll. Without it a light scrollbar track paints a
+     bright strip down the edge of every scroll region on the page. */
+  color-scheme: dark;
+  background: var(--psa-bg);
+  /* The ambient layer is fixed to the viewport, so no horizontal overflow
+     can be introduced by it at any breakpoint (handoff §18). */
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--psa-bg);
+  color: var(--psa-text-solid);
+  font-family: var(--font-ui);
+  overflow-x: hidden;
+}
+
+/* Ambient background (handoff §7). Static gradients — no video, no canvas,
+   no raster, no animation to reduce. pointer-events:none and z-index:-1
+   keep it strictly decorative and out of every hit test. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.055), transparent 46%),
+    radial-gradient(ellipse at 85% 70%, rgba(143, 102, 143, 0.05), transparent 42%);
+}
+
+::selection {
+  background: rgba(143, 102, 143, 0.40);
+  color: var(--psa-text-solid);
+}
+
+/* =========================================================================
+   Display typography (handoff §4)
+   =========================================================================
+   The serif is applied by an OPT-IN class and to the few genuinely
+   editorial headings. It is never inherited into a data surface, because
+   the handoff forbids it for codes, tables, filters, forms, buttons, RM
+   transcript copy and metadata. */
+
+.psa-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.06;
+  color: var(--psa-text-solid);
+}
+
+.psa-display em,
+.psa-display i {
+  font-style: italic;
+  color: var(--psa-plum-text);
+}
+
+/* Editorial headings: the page-intro band on every secondary tab, and the
+   Sources section headings. These sit at the top of a READING surface, not
+   inside a data workspace, so they take the display face.
+
+   The size is raised with them. The light system set these at 15-20px in a
+   600-weight sans; Instrument Serif is a 400-weight face with a smaller
+   apparent x-height, so at 15px it read as quieter than the body copy under
+   it -- the opposite of a heading's job. Where the size is pinned by an
+   inline `style` in the R markup (the Sources and Compare Editions heroes),
+   only the family is changed here; those two are left at their authored
+   size rather than fighting an inline declaration from a stylesheet. */
+.psa-sources-section > h3,
+.psa-dual-title,
+.psa-corr-workspace > h3,
+.psa-hero > h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+.psa-sources-section > h3 { font-size: 21px; }
+
+/* PINNED BACK TO THE UI FACE.
+   --font-display now resolves to the serif, and app.css routes
+   --type-heading-* through it. These surfaces name classification labels,
+   codes and record metadata, which the handoff explicitly excludes from the
+   display face — so they are restated in the UI stack here. */
+.psa-detail-title,
+.psa-dual-detail-head,
+.psa-hier-label,
+.psa-hier-code,
+.psa-corr-node-label,
+.psa-source-card-name,
+.psa-verified-card,
+.psa-verified-card *,
+table.dataTable,
+table.dataTable *,
+.form-control,
+.form-select,
+.btn,
+label,
+.psa-tag,
+.psa-dialog__title {
+  font-family: var(--font-ui);
+}
+
+/* An official classification CODE is data. It reads as data: tabular
+   figures, slight positive tracking, never the display serif. */
+.psa-hier-code,
+.psa-dual-field code,
+.psa-corr-node-label code,
+code.psa-code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* =========================================================================
+   Form controls on black
+   =========================================================================
+   Dark translucent fill, quiet resting border, unmistakable focus ring
+   (handoff §10, §19). Contrast of the VALUE text never depends on the
+   translucency: the text token is the solid near-white. */
+
+.form-control,
+.form-select,
+.selectize-input,
+textarea.form-control {
+  background-color: var(--psa-bg-elevated);
+  color: var(--psa-text-solid);
+  border: 1px solid var(--psa-line);
+  border-radius: var(--radius-input);
+}
+
+.form-control::placeholder,
+textarea.form-control::placeholder {
+  /* Placeholders are hints, not content; still kept at the AA muted step
+     rather than the subtle one, because a search field's placeholder is
+     the only affordance telling a first-time user what to type. */
+  color: var(--psa-text-muted-solid);
+  opacity: 1;
+}
+
+.form-control:focus,
+.form-select:focus,
+.selectize-input.focus,
+.selectize-input.input-active {
+  background-color: var(--psa-panel);
+  color: var(--psa-text-solid);
+  border-color: var(--psa-focus);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+.form-label,
+.control-label,
+.shiny-input-container > label,
+.form-check-label {
+  color: var(--psa-text-muted-solid);
+}
+
+/* Selectize renders its own dropdown outside the field, so it needs the
+   dark ground stated explicitly or it falls back to Bootstrap white. */
+.selectize-dropdown,
+.selectize-dropdown-content {
+  background: #0d0d0d;
+  color: var(--psa-text-solid);
+  border: 1px solid var(--psa-line-strong);
+  border-radius: var(--radius-input);
+  box-shadow: var(--elev-1);
+}
+
+.selectize-dropdown .active,
+.selectize-dropdown .option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--psa-text-solid);
+}
+
+.selectize-input > .item { color: var(--psa-text-solid); }
+
+.form-check-input {
+  background-color: var(--psa-bg-elevated);
+  border-color: var(--psa-line-strong);
+}
+
+.form-check-input:checked {
+  background-color: var(--plum);
+  border-color: var(--plum);
+}
+
+.form-check-input:focus-visible {
+  border-color: var(--psa-focus);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+}
+
+/* =========================================================================
+   DT result tables on black
+   =========================================================================
+   DataTables ships its own light stylesheet. Its chrome — header, paging,
+   the "Showing x to y" info line, the filter box — is restated here so a
+   result table never opens a white hole in the canvas. Row semantics
+   (hover, .selected) are already defined in app.css against tokens and are
+   therefore left alone. */
+
+.dataTables_wrapper,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+table.dataTable {
+  color: var(--psa-text-solid);
+}
+
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_length label,
+.dataTables_wrapper .dataTables_filter label {
+  color: var(--psa-text-muted-solid);
+}
+
+table.dataTable,
+table.dataTable tbody tr,
+table.dataTable tbody td {
+  background-color: transparent;
+  border-color: var(--psa-line);
+}
+
+table.dataTable thead th,
+table.dataTable thead td {
+  color: var(--psa-text-muted-solid);
+  background-color: transparent;
+  border-bottom-color: var(--psa-line-strong);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+table.dataTable.stripe tbody tr.odd,
+table.dataTable.display tbody tr.odd {
+  background-color: rgba(255, 255, 255, 0.018);
+}
+
+/* PAGINATION.
+   DT is rendered through its Bootstrap 5 integration, so each page control
+   is `li.paginate_button.page-item > a.page-link` and the current page is
+   `.active`, NOT DataTables' own `.current`. The visible box is the inner
+   `.page-link`, which is why the `li` is the wrong element to shape. Read
+   out of the running page; styling the `li` alone left Bootstrap's default
+   squared boxes and a flooded plum `.active` chip. */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border: none;
+  background: transparent;
+}
+
+.dataTables_wrapper .dataTables_paginate .page-link {
+  color: var(--psa-text-muted-solid);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--psa-radius-pill);
+  margin-inline: 2px;
+  min-width: 38px;
+  text-align: center;
+}
+
+.dataTables_wrapper .dataTables_paginate .page-link:hover {
+  color: var(--psa-text-solid);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--psa-line);
+}
+
+/* Current page: a quiet plum wash plus a ring and a weight change, rather
+   than Bootstrap's solid primary fill -- same restraint as the selected
+   table row, and still not colour-alone (Bootstrap emits aria-current).
+
+   Done through Bootstrap's OWN pagination variables rather than by
+   overriding its properties: `dataTables.bootstrap5.min.css` is appended by
+   the widget after every sheet this app controls, so a property override
+   here loses the cascade (measured -- the active chip stayed a solid
+   `rgb(143, 102, 143)` with `rgb(5, 5, 5)` text). Variables inherit, so
+   setting them on the container settles it with no specificity fight. */
+.dataTables_wrapper .dataTables_paginate,
+.dataTables_wrapper .dataTables_paginate .pagination {
+  --bs-pagination-color: var(--psa-text-muted-solid);
+  --bs-pagination-bg: transparent;
+  --bs-pagination-border-color: transparent;
+  --bs-pagination-hover-color: var(--psa-text-solid);
+  --bs-pagination-hover-bg: rgba(255, 255, 255, 0.07);
+  --bs-pagination-hover-border-color: var(--psa-line);
+  --bs-pagination-focus-color: var(--psa-text-solid);
+  --bs-pagination-focus-bg: rgba(255, 255, 255, 0.10);
+  --bs-pagination-focus-box-shadow: none;
+  --bs-pagination-active-color: var(--psa-text-solid);
+  --bs-pagination-active-bg: rgba(143, 102, 143, 0.28);
+  --bs-pagination-active-border-color: var(--psa-plum-text);
+  --bs-pagination-disabled-color: var(--psa-text-subtle);
+  --bs-pagination-disabled-bg: transparent;
+  --bs-pagination-disabled-border-color: transparent;
+}
+
+.dataTables_wrapper .dataTables_paginate .page-item.active .page-link {
+  font-weight: 600;
+}
+
+.dataTables_wrapper .dataTables_paginate .page-link:focus-visible {
+  outline: 2px solid var(--psa-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* =========================================================================
+   Global footer
+   ========================================================================= */
+
+body > .container-fluid > footer,
+footer.border-top {
+  border-top-color: var(--psa-line) !important;
+  color: var(--psa-text-muted-solid) !important;
+  background: transparent;
+}
+
+/* Bootstrap's .text-muted resolves to a light-theme grey that measures
+   under 3:1 on black. Restated at the AA muted step. */
+.text-muted { color: var(--psa-text-muted-solid) !important; }
+
+hr { border-color: var(--psa-line); opacity: 1; }
+
+/* =========================================================================
+   Focus visibility (handoff §19)
+   =========================================================================
+   A white ring on a near-black ground, offset so it reads on both bare
+   canvas and glass. Never removed, never colour-only: it is a ring, i.e. a
+   shape change. */
+
+:focus-visible {
+  outline: 2px solid var(--psa-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--psa-focus);
+  outline-offset: 3px;
+}
+
+/* =========================================================================
+   Scroll regions
+   =========================================================================
+   `color-scheme: dark` above already asks the engine for dark native
+   scrollbars, but it is advisory: engines that ignore it, and any embedded
+   or screenshot renderer that paints host-styled chrome, still put a light
+   bar down the edge of every scroll region -- the hierarchy tree, the
+   edition list and the inspector body all have one. These state the colours
+   outright so the result does not depend on the host honouring the hint.
+
+   scrollbar-width: thin, not none: a scroll region must stay visibly
+   scrollable. Hiding the bar would remove an affordance to gain a look. */
+* {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: var(--psa-radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.30); background-clip: content-box; }
+
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Short single-word cell vocabulary: Status ("current" / "archived"),
+   Relationship, Provenance, Confidence.
+   ------------------------------------------------------------------------
+   The class is attached at the DT column definition in app.R, not by a
+   positional selector here, so it follows the column rather than its index.
+   `nowrap` raises the column min-content width, which is the point: the
+   table then asks its container for the width it needs and the container
+   scrolls, instead of the browser breaking "current" into "curre / nt" to
+   fit a 52px column. The local scroll containers are unchanged, and no
+   page-level overflow is introduced -- both verified at 375 and 320. */
+table.dataTable td.psa-nowrap,
+table.dataTable th.psa-nowrap {
+  white-space: nowrap;
+}
+
+/* Every result grid keeps its own horizontal scroll, so a table that is now
+   allowed to be wider than its panel scrolls INSIDE that panel. app.css
+   already does this for the Search split and the dual results region; the
+   correspondence grid is stated here for the same reason. */
+.psa-dual-results .dataTables_wrapper,
+.psa-corr-table-col .dataTables_wrapper {
+  overflow-x: auto;
+}

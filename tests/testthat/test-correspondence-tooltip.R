@@ -93,9 +93,30 @@ test_that("each trigger is a natively focusable summary with an accessible name"
     )
   }
 
-  # No hand-written aria-expanded: the native element owns that state, a
-  # static attribute would immediately go stale.
-  expect_false(grepl("aria-expanded", html, fixed = TRUE))
+  # No hand-written aria-expanded ON THE DISCLOSURES: a native
+  # <details>/<summary> publishes its own state, and a static attribute
+  # would immediately go stale.
+  #
+  # Scoped to the <details> elements rather than the whole fragment,
+  # because UI-05 wraps these three disclosures in one collapsed "How to
+  # read this table" panel whose trigger IS a Bootstrap collapse button --
+  # and on a button `aria-expanded` is the correct ARIA, kept in sync by
+  # Bootstrap rather than hand-written and stale. Asserting over the whole
+  # fragment would forbid the correct attribute along with the wrong one.
+  details <- regmatches(html, gregexpr("<details.*?</details>", html))[[1L]]
+  expect_gt(length(details), 0L)
+  for (d in details) {
+    expect_false(grepl("aria-expanded", d, fixed = TRUE))
+  }
+})
+
+test_that("the UI-05 help panel trigger carries correct collapse semantics", {
+  html <- .corr_help_html()
+  # One compact control, not three page-expanding blocks.
+  expect_match(html, 'class="psa-howto-toggle"', fixed = TRUE)
+  expect_match(html, 'data-bs-toggle="collapse"', fixed = TRUE)
+  # Starts collapsed, so the review workflow is not pushed down the page.
+  expect_match(html, 'aria-expanded="false"', fixed = TRUE)
 })
 
 test_that("help content is programmatically associated with its trigger", {

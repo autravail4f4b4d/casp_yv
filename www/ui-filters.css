@@ -1,0 +1,506 @@
+/* ==========================================================================
+   ui-filters.css — UI-01 (search filters), UI-04 (relationship inspector),
+   UI-05 (correspondence terminology). Owned by UI-B.
+
+   Loaded AFTER app.css, so every rule here is a deliberate refinement of a
+   Subtle Gradient base rule, never a re-statement of one. No new colour is
+   introduced: everything resolves through the existing tokens.
+
+   NOTE ON CASCADE ORDER. Because this file loads last, a plain rule here
+   outranks a rule inside a @media block in app.css (media queries add no
+   specificity). Anything this file overrides at desktop width therefore has
+   to restate its own responsive behaviour below, which is why the breakpoint
+   list mirrors app.css's exactly: 1199.98 / 991.98 / 767.98 / 575.98 /
+   359.98.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   UI-01 — Search filter sidebar
+   ========================================================================== */
+
+/* 312px sits inside the 300–320px target and is the smallest width at which
+   the longest official title (PCOICOP's) wraps to three comfortable lines
+   rather than four. The results/detail split is untouched. */
+.psa-search-body {
+  grid-template-columns: 312px minmax(0, 1fr);
+}
+
+/* ---- System selector: acronym over full official title ------------------ */
+
+/* Wrapping, not ellipsis. app.css clips the selectize control's text to stop
+   the widest option widening the page; with a two-line item the control can
+   grow vertically instead, so the full title stays readable at desktop
+   widths and the page still cannot be pushed sideways (min-width: 0 plus
+   overflow-wrap do that job together). */
+.psa-system-field .selectize-input,
+.psa-system-field .selectize-dropdown-content .option {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  height: auto;
+}
+
+.psa-system-field .selectize-input {
+  padding-block: 7px;
+  line-height: 1.25;
+}
+
+.psa-system-field .selectize-input > .item {
+  max-width: 100%;
+}
+
+.psa-sys-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.psa-sys-acronym {
+  font-weight: var(--weight-semibold, 600);
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  letter-spacing: 0.01em;
+}
+
+.psa-sys-title {
+  font-size: 12px;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--color-text) 64%, transparent);
+  /* The long titles are the whole point of this control: let them wrap and
+     break rather than truncate or overflow. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The selected item inside the closed control gets slightly tighter type
+   than a dropdown option: it is on screen permanently. */
+.psa-sys-item .psa-sys-title {
+  font-size: 11.5px;
+}
+
+.psa-system-field .selectize-dropdown-content .option {
+  padding-block: 8px;
+  border-bottom: 0;
+}
+
+.psa-system-field .selectize-dropdown-content .option.active .psa-sys-title {
+  color: inherit;
+}
+
+/* ---- PSGC / edition release list ---------------------------------------- */
+
+/* UI-01: no per-row horizontal rules at all. app.css still draws a hairline
+   between rows; separation is now carried entirely by row spacing, hover,
+   the selected-row fill and the radio itself. */
+.psa-edition-group .radio + .radio::before,
+.psa-edition-group .radio::before {
+  content: none;
+  background: transparent;
+}
+
+.psa-edition-group .shiny-options-group {
+  gap: 2px;
+  padding: 4px;
+  /* Thirteen PSGC releases at ~40px would run away with the sidebar, so the
+     list scrolls; the current release is the first row, so it is visible
+     without scrolling. */
+  max-height: 268px;
+}
+
+.psa-edition-group .radio label {
+  min-height: 40px;
+  gap: 8px;
+}
+
+.psa-edition-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.psa-edition-row .psa-edition-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Current/Archived is always a WORD (status_badge writes it out); this only
+   keeps that word off a second line. */
+.psa-edition-row .psa-tag {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.psa-edition-row-current .psa-edition-name {
+  font-weight: var(--weight-semibold, 600);
+}
+
+
+/* ==========================================================================
+   UI-05 — Correspondence terminology and guidance
+   ========================================================================== */
+
+.psa-col-legend {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.psa-col-legend-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+}
+
+/* One compact control in place of three stacked disclosures. */
+.psa-howto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px 4px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-pill, 90px);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.psa-howto-toggle:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: var(--color-accent);
+}
+
+.psa-howto-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.psa-howto-toggle[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.psa-howto-panel-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 20px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+}
+
+/* Inside the panel the three term disclosures are sections of one document,
+   so they drop the standalone pill chrome app.css gives them. */
+.psa-howto-panel-inner .psa-term-help {
+  flex: 1 1 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.psa-howto-panel-inner .psa-safeguard-note {
+  grid-column: 1 / -1;
+}
+
+/* ---- Per-column info buttons -------------------------------------------- */
+
+.psa-col-tips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+}
+
+.psa-col-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 32px keeps the touch target usable while the visible chrome stays
+     small; the padding does that, not the font size. */
+  min-height: 32px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text) 66%, transparent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.psa-col-tip:hover { color: var(--color-accent); }
+
+.psa-col-tip:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.psa-col-tip-term { font-weight: var(--weight-semibold, 600); }
+
+/* ---- Statistical safeguard ---------------------------------------------- */
+
+/* Informational, never an error. Inherits .psa-stat-warning's neutral/plum
+   treatment from app.css and only adjusts density. */
+.psa-safeguard-note {
+  align-items: flex-start;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+
+/* ==========================================================================
+   UI-04 — Compare Editions relationship inspector
+   ========================================================================== */
+
+/* Desktop: table and inspector side by side; the table stays visible. */
+.psa-corr-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 408px;
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.psa-corr-table-col { min-width: 0; }
+
+.psa-corr-inspector {
+  position: sticky;
+  /* Clears the navbar so the panel is never scrolled under it. */
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 108px);
+  min-width: 0;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card, 16px);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.psa-corr-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+.psa-corr-inspector-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--weight-semibold, 600);
+  line-height: 1.3;
+}
+
+.psa-corr-inspector-close {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-pill, 90px);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12.5px;
+  /* On desktop the inspector is a persistent region beside the table, so a
+     close control would be chrome with nothing to close. It appears at the
+     widths where the panel actually covers the page. */
+  display: none;
+}
+
+.psa-corr-inspector-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.psa-corr-inspector-body {
+  padding: 14px 16px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.psa-corr-inspector-empty { margin: 0; font-size: 13px; }
+
+/* ---- Relationship structure --------------------------------------------- */
+
+.psa-corr-struct-lead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  /* Plum, not red: a split or a merge is a normal revision outcome. */
+  color: var(--color-primary);
+}
+
+.psa-corr-struct-lead .lucide { flex: 0 0 auto; }
+
+.psa-corr-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.psa-corr-node {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+}
+
+.psa-corr-node-selected {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.psa-corr-node-code {
+  font-size: 13px;
+  font-weight: var(--weight-semibold, 600);
+  white-space: nowrap;
+}
+
+.psa-corr-node-label {
+  font-size: 12.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.psa-corr-node-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* The word between the two halves of a split/merge is text, not a glyph, so
+   the structure survives with images off and reads aloud correctly. */
+.psa-corr-struct-joint {
+  margin: 8px 0 8px 10px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+}
+
+/* ---- Verified metadata --------------------------------------------------- */
+
+.psa-corr-meta {
+  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.psa-corr-meta dt {
+  font-size: 11.5px;
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--color-text) 58%, transparent);
+}
+
+.psa-corr-meta dd { margin: 0; }
+
+.psa-corr-meta-gloss {
+  grid-column: 2;
+  font-size: 12px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--color-text) 66%, transparent);
+}
+
+.psa-corr-inspector .psa-source-line { margin-top: 14px; font-size: 12.5px; }
+
+.psa-corr-askrm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  border-radius: var(--radius-pill, 90px);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+}
+
+.psa-corr-askrm:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+
+/* ==========================================================================
+   Responsive — breakpoints mirror app.css
+   ========================================================================== */
+
+@media (max-width: 1199.98px) {
+  .psa-corr-workspace { grid-template-columns: minmax(0, 1fr) 360px; }
+}
+
+/* Tablet: the inspector becomes a slide-over across the right of the page.
+   The table underneath keeps its scroll position because nothing
+   re-renders — only this panel's position changes. */
+@media (max-width: 991.98px) {
+  .psa-search-body { grid-template-columns: minmax(0, 1fr); }
+
+  .psa-corr-workspace { grid-template-columns: minmax(0, 1fr); }
+
+  .psa-corr-inspector {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 1055;
+    width: min(440px, 92vw);
+    max-height: none;
+    border-radius: 0;
+    border-inline-start: 1px solid var(--color-divider);
+    box-shadow: -12px 0 32px color-mix(in srgb, var(--color-text) 18%, transparent);
+  }
+
+  .psa-corr-inspector-close { display: inline-flex; }
+}
+
+/* Phone: full-screen relationship sheet. */
+@media (max-width: 575.98px) {
+  .psa-corr-inspector {
+    inset: 0;
+    width: 100vw;
+  }
+
+  .psa-corr-inspector-body { padding: 12px 14px 20px; }
+
+  .psa-col-legend-bar { gap: 6px 10px; }
+
+  .psa-howto-panel-inner { grid-template-columns: minmax(0, 1fr); }
+
+  .psa-corr-node { grid-template-columns: minmax(0, 1fr); }
+
+  .psa-corr-node-code { white-space: normal; overflow-wrap: anywhere; }
+}
+
+@media (max-width: 359.98px) {
+  .psa-corr-inspector-head { padding: 10px 12px; }
+  .psa-corr-inspector-title { font-size: 14px; }
+  .psa-col-tip { font-size: 11.5px; }
+  .psa-sys-title { font-size: 11px; }
+}

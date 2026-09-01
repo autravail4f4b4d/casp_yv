@@ -139,7 +139,7 @@
   levels <- row$available_levels[[1]]
 
   shiny::tags$div(
-    class = "psa-source-card",
+    class = "psa-source-card psa-liquid-glass",
 
     shiny::tags$div(
       class = "psa-source-card-head",
@@ -271,7 +271,7 @@
   validation <- .sources_validation(meta)
 
   shiny::tags$div(
-    class = "psa-source-card",
+    class = "psa-source-card psa-liquid-glass",
 
     shiny::tags$div(
       class = "psa-source-card-head",
@@ -352,7 +352,7 @@
   official_n <- if (is.list(by_prov) && !is.null(by_prov$official)) as.integer(by_prov$official) else 0L
 
   shiny::tags$div(
-    class = "psa-source-card",
+    class = "psa-source-card psa-liquid-glass",
 
     shiny::tags$div(
       class = "psa-source-card-head",

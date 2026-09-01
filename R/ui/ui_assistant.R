@@ -196,7 +196,7 @@ rm_assistant_failure_ui <- function(message = NULL) {
 #' round-trip is spent on it (spec 9).
 rm_assistant_ui <- function(id = "rm_assistant") {
   bslib::card(
-    class = "rm-assistant-card",
+    class = "rm-assistant-card psa-liquid-glass",
     fill = TRUE,
     # Viewport-relative, not a fixed pixel height: guarantees a usable chat
     # area even if an ancestor is not a fill container.
@@ -259,7 +259,7 @@ rm_assistant_unavailable_ui <- function(reason = NULL) {
     nzchar(trimws(reason))
 
   bslib::card(
-    class = "rm-assistant-card rm-assistant-unavailable",
+    class = "rm-assistant-card rm-assistant-unavailable psa-liquid-glass",
     min_height = "40vh",
     bslib::card_header(
       shiny::tags$h2("RM Assistant", class = "h5 mb-0")

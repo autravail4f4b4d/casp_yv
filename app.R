@@ -47,30 +47,34 @@ nav_label <- function(icon, text) {
 # R/ui/ui_labels.R, where the explicit mapping is defined and tested.
 
 ui <- bslib::page_navbar(
-  title = "Statistical Classifications",
-  # "Subtle Gradient" light theme (HANDOFF-CLAUDE-CODE.md v2.0), which
-  # supersedes the v1.0 Nocturne dark system entirely.
+  title = "PSA Statistical Classifications",
+  # Dark editorial "liquid glass" theme (UI_REFINEMENT_LIQUID_GLASS_HANDOFF
+  # sections 3-7), which supersedes the "Subtle Gradient" light system.
   #
   # Setting bg/fg/primary on bs_theme rather than overriding Bootstrap in
   # CSS is what makes every Bootstrap component -- form controls, cards,
   # tables, DT -- inherit the palette coherently. It is also why the
-  # dark-to-light inversion has to happen HERE and not only in app.css: a
+  # light-to-dark inversion has to happen HERE and not only in the CSS: a
   # stylesheet override alone would leave DT, selectize and the navbar
-  # rendering dark chrome under light content.
+  # rendering light chrome under dark content.
   theme = bslib::bs_theme(
     version = 5,
-    bg = "#ffffff",
-    fg = "#202124",
-    primary = "#54436b",
-    "body-bg" = "#ffffff",
-    "card-bg" = "#ffffff",
-    "border-color" = "#e6e6e6",
-    "link-color" = "#2f5f8f",
-    "link-hover-color" = "#416fa1",
-    # System font stack deliberately -- no webfont download, so the app has
-    # no third-party runtime dependency and no first-paint font swap.
+    bg = "#050505",
+    fg = "#f5f5f5",
+    primary = "#8f668f",
+    "body-bg" = "#050505",
+    "card-bg" = "rgba(255, 255, 255, 0.035)",
+    "border-color" = "rgba(255, 255, 255, 0.10)",
+    "link-color" = "#8fc0f0",
+    "link-hover-color" = "#b8d8f8",
+    # UI face: still a system stack, still NO webfont download. "Inter" is
+    # named first so a machine that already has it uses it, and every other
+    # machine falls through to the same system stack as before -- so there is
+    # still no third-party runtime dependency and no first-paint swap here.
+    # (The display serif is a separate, optional import in ui-tokens.css.)
     base_font = bslib::font_collection(
-      "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"
+      "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI",
+      "sans-serif"
     )
   ),
   # `id` makes the active tab available server-side as `input$main_nav`,
@@ -83,7 +87,25 @@ ui <- bslib::page_navbar(
   # Compare PSIC Editions / About outputs below) is the robust fix used
   # throughout this server function instead.
   id = "main_nav",
-  header = shiny::tags$head(shiny::tags$link(rel = "stylesheet", href = "app.css")),
+  # Stylesheet order is a contract, and it is the whole reason the dark
+  # "liquid glass" system needed no rewrite of the UI-01..UI-05 sheets:
+  #   app.css        base rules, almost entirely token-driven
+  #   ui-tokens.css  RETARGETS those tokens to the dark palette, sets the
+  #                  display/UI faces and the global canvas
+  #   ui-dialog.css  shared dialog/drawer shell (UI-02/03/04/05)
+  #   ui-filters.css search sidebar + correspondence guidance (UI-01/04/05)
+  #   ui-glass.css   liquid-glass primitives, applied to major surfaces;
+  #                  after the two UI sheets so it wins over their plates
+  #   ui-motion.css  transitions, and the reduced-motion escape LAST, so
+  #                  nothing loaded later can re-enable animation
+  header = shiny::tags$head(
+    shiny::tags$link(rel = "stylesheet", href = "app.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-tokens.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-dialog.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-filters.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-glass.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-motion.css")
+  ),
   # Visible tab LABELS change per HANDOFF §2; the `value =` identities that
   # drive input$main_nav are deliberately untouched, so every existing
   # req(input$main_nav == ...) gate below keeps working unchanged.
@@ -91,8 +113,15 @@ ui <- bslib::page_navbar(
   # nav_label() pairs each label with its Phosphor glyph. The icon is
   # aria-hidden -- the visible text is the accessible name, so the tab is
   # never announced as an icon and never relies on the glyph loading.
+  # UI-02. The Browse-hierarchy affordance is composed HERE rather than
+  # inside search_ui(), so the hierarchy feature and the search filters
+  # stay in separate modules: the slot renders its own button (and nothing
+  # at all for a system with no canonical hierarchy), and
+  # hierarchy_browser_server() below wires the whole feature in one call.
   bslib::nav_panel(nav_label("search", "Search"),
-                   value = "search", search_ui()),
+                   value = "search",
+                   search_ui(),
+                   hierarchy_browse_slot_ui()),
   bslib::nav_panel(nav_label("arrow-left-right", "PSOC + PSIC"),
                    value = "dual_search", dual_search_ui()),
   bslib::nav_panel(nav_label("split", "Compare Editions"),
@@ -147,22 +176,36 @@ server <- function(input, output, session) {
     versions <- classification_versions(input$classification_system)
     current <- registry$current_version[registry$id == input$classification_system][[1]]
 
-    # UI-POST-06: the label is humanised (`Q1_2023` -> `Q1 2023`) while
-    # choiceValues stays the raw identifier the whole service layer expects,
-    # so nothing downstream sees the pretty form. Order is untouched, which
-    # keeps the release history chronological.
-    choice_names <- lapply(versions, function(v) {
-      shiny::tagList(
-        shiny::tags$span(class = "psa-edition-name", release_display_label(v)),
-        status_badge(if (identical(v, current)) "current" else "archived")
-      )
-    })
+    # UI-01 RELEASE ORDER. The choice list is built by
+    # `edition_choice_spec()` (R/ui/ui_search.R) and NOT assembled here.
+    #
+    # This observer previously composed its own `choiceNames` and passed
+    # `versions` straight through in repository order, so PSGC listed
+    # Q1 2023 first and the CURRENT release (Q2 2026) last -- while
+    # `edition_choice_spec()`, which implements the current-first contract
+    # and is unit-tested, was never called by the running app. Duplicated
+    # presentation logic that silently diverges from the tested helper is
+    # the defect; calling the helper is the fix.
+    #
+    # Ordering comes from `release_newest_first()` -> `.release_effective_key()`,
+    # which derives a numeric year*100+month key from the canonical release
+    # IDENTIFIER (so "Q1_2023" < "APRIL_2024" < "Q2_2026"). It is not a
+    # lexical sort of display labels, and undatable identifiers keep their
+    # repository order rather than being reshuffled.
+    #
+    # `choiceValues` stays the raw identifier the whole service layer
+    # expects and `selected` stays the registry current version, so
+    # reordering the list cannot change which edition is in effect and no
+    # search/retrieval semantics move with it. UI-POST-06 humanised labels
+    # and the spelled-out CURRENT / ARCHIVED badges are produced by the
+    # helper too.
+    spec <- edition_choice_spec(versions, current)
 
     updateRadioButtons(
       session, "classification_version",
-      choiceNames = choice_names,
-      choiceValues = as.list(versions),
-      selected = current
+      choiceNames = spec$choiceNames,
+      choiceValues = spec$choiceValues,
+      selected = spec$selected
     )
   }, ignoreNULL = TRUE)
 
@@ -431,7 +474,23 @@ server <- function(input, output, session) {
       # correctly. Disabling only the INITIAL sort restores server order on
       # first paint; `ordering` stays at its default TRUE, so a user can
       # still click a header to sort interactively.
-      options = list(pageLength = 15, dom = "tip", order = list()),
+      # UI-01 polish: Status is a single short word ("current"/"archived")
+      # and must never break INSIDE that word. Measured at 375px on the
+      # PSOC + PSIC panels, whose tables are narrower than this one: the
+      # Status cell was squeezed to 52px and rendered "curre / nt" over two
+      # lines. No stylesheet was forcing it -- with `table-layout: auto`
+      # the browser breaks a word as a last resort when the column is
+      # compressed below its min-content width, and DataTables had shrunk
+      # the table to fit rather than letting it scroll.
+      #
+      # `psa-nowrap` is attached HERE, by column identity, rather than by a
+      # positional `td:nth-child(4)` rule in CSS -- the class then survives
+      # any future column reordering, and the stylesheet does not have to
+      # encode the column layout of three different tables.
+      options = list(
+        pageLength = 15, dom = "tip", order = list(),
+        columnDefs = list(list(className = "psa-nowrap", targets = 3))
+      ),
       class = "stripe hover"
     )
   })
@@ -583,7 +642,13 @@ server <- function(input, output, session) {
       # code/title match beneath a lower-relevance hybrid-tier row.
       DT::datatable(
         display, selection = "single", rownames = FALSE,
-        options = list(pageLength = 10, dom = "tip", order = list()),
+        # Same Status no-break rule as the Search grid. THIS is the table
+        # the defect was measured on: two stacked panels at 375px leave the
+        # Status column ~52px wide.
+        options = list(
+          pageLength = 10, dom = "tip", order = list(),
+          columnDefs = list(list(className = "psa-nowrap", targets = 3))
+        ),
         class = "stripe hover"
       )
     })
@@ -595,10 +660,28 @@ server <- function(input, output, session) {
       req(input$main_nav == "dual_search")
       s <- side()
       if (!is.null(s$error)) return(NULL)
-      entry_detail_ui(dual_search_side_selection(
+      entry <- dual_search_side_selection(
         s$result,
         input[[paste0(id("results"), "_rows_selected")]]
-      ))
+      )
+      # UI-03. The selection line -- and with it this side's "View details"
+      # button -- is mounted HERE, above the inline detail.
+      #
+      # `dual_selection_summary_ui()` existed and was unit-tested but was
+      # never rendered by the running app, so the button it builds was
+      # absent from the DOM and the
+      # `observeEvent(input$dual_search_<sys>_view_details)` handlers in
+      # `dual_search_details_server()` could never fire: the PSOC and PSIC
+      # detail dialogs were unreachable. Same defect family as the edition
+      # ordering above -- a tested component the app bypassed -- found while
+      # verifying focus restoration for those two dialogs.
+      #
+      # Row CLICK still only selects. Opening the dialog stays a deliberate
+      # second action, which is the UI-03 contract.
+      tagList(
+        dual_selection_summary_ui(entry, system_id),
+        entry_detail_ui(entry)
+      )
     })
 
     for (o in c("count", "state", "results", "detail")) {
@@ -607,6 +690,18 @@ server <- function(input, output, session) {
   }
   render_dual_panel("psoc", dual_psoc, dual_psoc_query)
   render_dual_panel("psic", dual_psic, dual_psic_query)
+
+  # UI-03. Explicit "View details" / "Compare selected details" dialogs for
+  # the dual panel. Row CLICK still only selects -- opening a dialog is a
+  # deliberate second action -- and the comparison always carries the
+  # safeguard that a PSOC code does not imply an equivalent PSIC code.
+  dual_search_details_server(input, output, session, dual_psoc, dual_psic)
+
+  # UI-02. One call wires the whole hierarchy browser: the slot button, the
+  # dialog, lazy expansion, hierarchy-local search and "View in Search".
+  # `results` lets View-in-Search select the canonical record in the Search
+  # table after the dialog closes.
+  hierarchy_browser_server(input, output, session, results = results)
 
   # --- Compare PSIC Editions: bidirectional 2019<->2026 correspondence. ---
   correspondence_query_debounced <- reactive(input$correspondence_query) |> debounce(250)
@@ -629,7 +724,14 @@ server <- function(input, output, session) {
     names(display) <- c("From code", "From label", "To code", "To label", "Relationship", "Provenance", "Confidence")
     DT::datatable(
       display, selection = "single", rownames = FALSE,
-      options = list(pageLength = 10, dom = "tip"), class = "stripe hover"
+      # Relationship / Provenance / Confidence are the same kind of short
+      # single-word vocabulary as Status and sit in a SEVEN-column table,
+      # so they are the most compressed of the three grids at 320px.
+      options = list(
+        pageLength = 10, dom = "tip",
+        columnDefs = list(list(className = "psa-nowrap", targets = c(4, 5, 6)))
+      ),
+      class = "stripe hover"
     )
   })
   outputOptions(output, "correspondence_results", suspendWhenHidden = FALSE)

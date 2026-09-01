@@ -1,0 +1,155 @@
+/* =========================================================================
+   ui-motion.css — transitions and the reduced-motion contract
+   =========================================================================
+
+   Ownership: every animation and transition primitive in the app, plus the
+   global reduced-motion escape. Loaded LAST so the reduced-motion block at
+   the bottom of this file is the final word in the cascade and cannot be
+   re-enabled by a later sheet.
+
+   NO ANIMATION FRAMEWORK (handoff §17, §20). CSS transitions and keyframes
+   only — no Framer Motion, no JS animation library, no canvas, no WebGL.
+
+   BUDGET. Calm motion, per the handoff:
+     * section reveal   fade + 8–16px y
+     * dialogs          opacity + scale 0.98 -> 1
+     * large surfaces   hover scale <= 1.01
+     * controls         background alpha only
+   Nothing here loops, and nothing moves further than 16px.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Section reveal
+   -------------------------------------------------------------------------
+   Runs ONCE, on the initial paint of a panel. Implemented as an animation
+   rather than a scroll observer so it needs no JavaScript at all and cannot
+   leave content permanently invisible if a script fails to run — the
+   element's resting state is the visible one, and the animation only
+   describes where it came from. */
+
+@keyframes psa-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes psa-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.psa-hero {
+  animation: psa-rise-in 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.psa-search-body,
+.psa-dual-grid,
+.psa-corr-workspace,
+.psa-card-deck,
+.rm-assistant-card {
+  animation: psa-rise-in 480ms cubic-bezier(0.22, 0.61, 0.36, 1) 60ms both;
+}
+
+/* -------------------------------------------------------------------------
+   Dialogs and sheets (handoff §11, §17)
+   -------------------------------------------------------------------------
+   120–180ms opacity/transform. No spring, no large travel: a hierarchy node
+   expanding or a details dialog opening should not read as a flourish in a
+   statistical utility. */
+
+.psa-dialog.fade .modal-dialog,
+.psa-dialog .psa-dialog__dialog {
+  transition: opacity 160ms ease, transform 160ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform: scale(0.98);
+  opacity: 0;
+}
+
+.psa-dialog.show .modal-dialog,
+.psa-dialog.show .psa-dialog__dialog {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.modal-backdrop { transition: opacity 160ms ease; }
+
+/* The correspondence inspector (UI-04) slides in from the right on desktop
+   and up from the bottom as a sheet on mobile — both within the 16px
+   budget, both opacity-led. */
+.psa-corr-inspector {
+  animation: psa-rise-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Hierarchy children (UI-02) fade in as they are lazily expanded. Opacity
+   only: a height animation on a lazily-built subtree would fight the
+   measurement it depends on, and the handoff explicitly rules out flashy
+   expansion. */
+[id^="psa-hier-children-"] {
+  animation: psa-fade-in 140ms ease both;
+}
+
+/* -------------------------------------------------------------------------
+   Hover on large surfaces
+   -------------------------------------------------------------------------
+   <= 1.01. Enough to acknowledge the pointer, not enough to shift the text
+   baseline under a reader's eye. Applied only to surfaces that are
+   themselves a link/target — never to a static data panel. */
+
+.psa-source-card {
+  transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              background-color 180ms ease,
+              box-shadow 180ms ease;
+}
+
+.psa-source-card:hover {
+  transform: scale(1.006);
+  background-color: rgba(255, 255, 255, 0.038);
+}
+
+/* -------------------------------------------------------------------------
+   Controls
+   -------------------------------------------------------------------------
+   Background alpha and border colour only. No transform on a button: a
+   moving tap target is a usability defect on touch. */
+
+.btn,
+.nav-link,
+.psa-hier-toggle,
+.psa-term-help-trigger,
+.psa-corr-inspector-close {
+  transition: background-color 140ms ease,
+              border-color 140ms ease,
+              color 140ms ease;
+}
+
+.form-control,
+.form-select,
+.selectize-input {
+  transition: background-color 160ms ease,
+              border-color 160ms ease,
+              box-shadow 160ms ease;
+}
+
+/* Focus rings never animate: assistive and keyboard users need the ring to
+   be present on the frame the focus lands, not 140ms later. */
+:focus-visible { transition: none; }
+
+/* -------------------------------------------------------------------------
+   Reduced motion (handoff §7, §17, §19)
+   -------------------------------------------------------------------------
+   The global escape, verbatim from the handoff. Reveals still END in the
+   visible state — `both` fill on every animation above means a 0.01ms run
+   lands on the `to` frame — so no content is left hidden by honouring the
+   preference. The ambient background in ui-tokens.css is static and needs
+   no counterpart here. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .psa-source-card:hover { transform: none; }
+}

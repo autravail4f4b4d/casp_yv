@@ -21,6 +21,93 @@
 # unchanged; only the widget type differs, so app.R updates it with
 # updateRadioButtons() instead of updateSelectInput().
 
+# ---- System selector: acronym + full official title (UI-01) ---------------
+#
+# The option text is ONE string, "PSIC — Philippine Standard Industrial
+# Classification" (see `system_choice_label()`), and the two-line treatment
+# is produced by splitting that string in selectize's own renderer. Doing it
+# this way rather than by passing two fields buys three things:
+#
+#   1. Type-ahead keeps working by acronym AND by title terms with no extra
+#      configuration: selectize's default `searchField: ["label"]` searches
+#      exactly the string that contains both.
+#   2. The <option> text in the underlying <select> -- what assistive
+#      technology and any non-selectize fallback read -- still carries the
+#      acronym and the full title.
+#   3. Nothing about the submitted value changes; the renderer is presentation
+#      only and the choice value stays the raw registry id.
+#
+# The renderer survives `updateSelectInput()`: Shiny's selectize binding
+# destroys and re-creates the control by re-reading the
+# `<script data-for="...">` config block that still sits in the DOM, so the
+# `render`/`data-eval` options are reapplied on every choice update.
+#
+# `escape()` is selectize's own HTML escaper and is applied to both halves.
+# The body is written out twice rather than hoisted into a shared global:
+# these strings are eval'd by the selectize binding at input-init time, and
+# depending on a separate <script> having already run would make the
+# renderer's availability an ordering question for no real saving.
+.psa_system_render_body <- function(cls) {
+  paste0(
+    "function(item, escape) {",
+    "  var label = String(item.label == null ? '' : item.label);",
+    "  var sep = label.indexOf(' \\u2014 ');",
+    "  var acronym = sep === -1 ? label : label.slice(0, sep);",
+    "  var title = sep === -1 ? '' : label.slice(sep + 3);",
+    "  return '<div class=\"psa-sys-line ", cls, "\">'",
+    "       + '<span class=\"psa-sys-acronym\">' + escape(acronym) + '</span>'",
+    "       + (title ? '<span class=\"psa-sys-title\">' + escape(title) + '</span>' : '')",
+    "       + '</div>';",
+    "}"
+  )
+}
+
+system_selector_render <- function() {
+  I(paste0(
+    "{ option: ", .psa_system_render_body("psa-sys-opt"),
+    ", item: ", .psa_system_render_body("psa-sys-item"), " }"
+  ))
+}
+
+#' Radio-group choices for the edition/release control (UI-01).
+#'
+#' Presentation only, and deliberately a pure function of its arguments so
+#' the ordering rule can be tested without a session: it returns exactly the
+#' three pieces `updateRadioButtons()` needs.
+#'
+#' Newest/current first, ordered by `release_newest_first()` -- canonical
+#' identifiers, never display labels. `selected` is the current edition, so
+#' reordering the list cannot change which edition is in effect.
+#'
+#' Current/Archived is carried by `status_badge()`, which spells the word
+#' out; the row never relies on colour to say which is which.
+#'
+#' @param versions character vector of canonical edition identifiers, in
+#'   repository order.
+#' @param current character(1). The registry's current edition for this
+#'   system.
+#'
+#' @return list(choiceNames = <list of tags>, choiceValues = <list of
+#'   character(1)>, selected = character(1)).
+edition_choice_spec <- function(versions, current) {
+  ordered <- release_newest_first(versions, current)
+
+  names_html <- lapply(ordered, function(v) {
+    is_current <- identical(v, current)
+    shiny::tags$span(
+      class = if (is_current) "psa-edition-row psa-edition-row-current" else "psa-edition-row",
+      shiny::tags$span(class = "psa-edition-name", release_display_label(v)),
+      status_badge(if (is_current) "current" else "archived")
+    )
+  })
+
+  list(
+    choiceNames = names_html,
+    choiceValues = as.list(ordered),
+    selected = current
+  )
+}
+
 search_ui <- function() {
   shiny::tagList(
     # --- Hero search (HANDOFF §4) -----------------------------------------
@@ -29,15 +116,23 @@ search_ui <- function() {
     # is visually hidden by .psa-hero-field label -- never placeholder-only
     # labelling (docs/UI_CONTRACT.md §10).
     shiny::tags$div(
-      class = "psa-hero",
-      # The approved Search design intentionally leads with the input
-      # rather than a visible page title, but the panel still needs a
-      # top-level heading so the document's heading hierarchy isn't
-      # missing its first rung for screen-reader users. Visually hidden,
-      # semantically present.
-      shiny::tags$h2(class = "visually-hidden", "Search classifications"),
+      # The centred editorial treatment is scoped to THIS hero by the
+      # --editorial modifier. Compare Editions and Sources reuse .psa-hero
+      # as a plain page-intro band and must stay left-aligned and compact.
+      class = "psa-hero psa-hero--editorial",
+      # Editorial hero (LIQUID_GLASS handoff section 9): eyebrow, display
+      # serif heading, one large search field, one explanatory line. The
+      # heading is now VISIBLE rather than visually-hidden -- the document
+      # keeps the same first heading rung it always had, and a sighted
+      # user gains the page title a screen-reader user already received.
+      shiny::tags$p(class = "psa-hero-eyebrow",
+                    "Philippine Statistical Classifications"),
+      shiny::tags$h2(
+        class = "psa-hero-title",
+        "Find the ", shiny::tags$em("official"), " code"
+      ),
       shiny::tags$div(
-        class = "psa-hero-field",
+        class = "psa-hero-field psa-liquid-glass",
         lucide_icon("search", 20),
         shiny::textInput(
           "classification_query",
@@ -56,11 +151,18 @@ search_ui <- function() {
     shiny::tags$div(
       class = "psa-search-body",
       shiny::tags$aside(
-        class = "psa-sidebar",
+        class = "psa-sidebar psa-sidebar-wide psa-liquid-glass psa-liquid-glass--flow",
         `aria-label` = "Classification filters",
-        shiny::selectInput(
-          "classification_system", "System",
-          choices = NULL, width = "100%"
+        # UI-01: the System control keeps its stable id and its plain
+        # `choices` contract; only the renderer changes, so
+        # updateSelectInput() from app.R still drives it.
+        shiny::div(
+          class = "psa-system-field",
+          shiny::selectizeInput(
+            "classification_system", "System",
+            choices = NULL, width = "100%",
+            options = list(render = system_selector_render())
+          )
         ),
         shiny::tags$div(
           class = "psa-edition-group",

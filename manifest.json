@@ -2742,13 +2742,13 @@
   },
   "files": {
     ".Rprofile": {
-      "checksum": "0754e33e867f47314aea8f6519c6c92b"
+      "checksum": "0b4613c34da027ffd662e20ad63a087e"
     },
     "ADDITIONAL_CLASSIFICATION_SYSTEMS_INGESTION.md": {
       "checksum": "b969155a7d163ad41810594fab604107"
     },
     "app.R": {
-      "checksum": "e8c53fd426ebba5383ad077547fea87f"
+      "checksum": "c0e2735d177b03ccddfc562b85ca2b34"
     },
     "CLAUDE.md": {
       "checksum": "61b18f3c01513f13cbe1d770ebfb3e95"
@@ -2877,7 +2877,7 @@
       "checksum": "95ee83b66460c5e2e08d6c55677c0e5c"
     },
     "docs/ASSISTANT_CONTRACT.md": {
-      "checksum": "3c06c5819a5b3591bfe293cb8fb88923"
+      "checksum": "6e80f1cbb6d155c8ebfbc758cf0f79c4"
     },
     "docs/CORRESPONDENCE_SOURCES.md": {
       "checksum": "2e313895ace365dafe131f21a35492a9"
@@ -2889,7 +2889,7 @@
       "checksum": "13add4bb00585f440a6b4747771b73b4"
     },
     "docs/UI_CONTRACT.md": {
-      "checksum": "636ba39b22588b163d12d8d13e08684f"
+      "checksum": "73fb423b9c5268262ed42c8e0a45e366"
     },
     "HANDOFF-CLAUDE-CODE.md": {
       "checksum": "1ed8296dd28e58ac39f2f4aa23898d76"
@@ -2898,10 +2898,10 @@
       "checksum": "bbf4ac83fb00360b3133772569107242"
     },
     "IMPLEMENTATION_STATUS.md": {
-      "checksum": "d358733b55991e80466cd8ec98e2558c"
+      "checksum": "b464333a485eab5f6227d02a12b32d04"
     },
     "LIVE_RM_EXECUTION_HARDENING_AND_SEMANTIC_SHADOW_RETRIEVAL.md": {
-      "checksum": "c5e44f18accc9d54e645975bdf80de3c"
+      "checksum": "00a695d5abd84f02406677ce082f302c"
     },
     "POST_CONNECT_STAGING_UI_REFINEMENT_GRAPH.md": {
       "checksum": "200805f85f01fed31aa82281fe4d66f1"
@@ -2958,7 +2958,7 @@
       "checksum": "e060b173ea79063d74ab96d54c215132"
     },
     "R/assistant/assistant_clarification.R": {
-      "checksum": "6c5588a9529b187069cf7371cf86b1eb"
+      "checksum": "18cf5a1e569486bdf8b9f2b67a214525"
     },
     "R/assistant/assistant_client.R": {
       "checksum": "0bb45778c4db142a5f040f7744bd9a16"
@@ -2982,7 +2982,7 @@
       "checksum": "7013d840c70c11ad1e941e11dea037a7"
     },
     "R/assistant/assistant_execution.R": {
-      "checksum": "0455f06685787497a25e2e900c907861"
+      "checksum": "b187c1b7ebbe2aacb8b700cf0ac9946c"
     },
     "R/assistant/assistant_hierarchy.R": {
       "checksum": "ed4e5ae2aedf847dc8c4c9ecd6d812cb"
@@ -3078,7 +3078,7 @@
       "checksum": "1a09ec3a9f5a8a09f40bf8065272be0a"
     },
     "R/retrieval/retrieval_shadow.R": {
-      "checksum": "4a2438e768415e52262109c5085bbd64"
+      "checksum": "9d37c0d94dfd7d0992e8c856d4d65630"
     },
     "R/schema.R": {
       "checksum": "f0fb01eafa98ff3326d797e894ecc98f"
@@ -3087,31 +3087,37 @@
       "checksum": "7425198bcb9550248d7ef3ffd253c2de"
     },
     "R/ui/ui_assistant.R": {
-      "checksum": "64df2f85b151568e6d38569e5e1406b7"
+      "checksum": "54c73be13f00b0249f211aa55bfc4e8a"
     },
     "R/ui/ui_correspondence.R": {
-      "checksum": "eda06f4d5a0f745b52e45ec27171a8f2"
+      "checksum": "aa9f525dc405d572d194e766d80362c5"
     },
     "R/ui/ui_details.R": {
-      "checksum": "bb03e2f82805473457f2b633ca200008"
+      "checksum": "5522896f3e9a5a155bb834c2e5e63ee4"
+    },
+    "R/ui/ui_dialog.R": {
+      "checksum": "4a6f207b00f02deeb4c430825836b8a1"
     },
     "R/ui/ui_dual_search.R": {
-      "checksum": "e4539b7f817507885ac63dfd138a70e4"
+      "checksum": "5da39ed37ffb2673c8f6416544a57dc5"
+    },
+    "R/ui/ui_hierarchy.R": {
+      "checksum": "0ec327a4333713b1539a7a181c4dd1b5"
     },
     "R/ui/ui_icons.R": {
       "checksum": "0c7c83c0fae2a143f5996ff4b6bb811e"
     },
     "R/ui/ui_labels.R": {
-      "checksum": "f3e57274516d6c709f4e07a71c558995"
+      "checksum": "00bb46ee0c3dc1867daa727363ba40a5"
     },
     "R/ui/ui_pscc.R": {
       "checksum": "3294713cc80a7993eb800b5cb9a2dde9"
     },
     "R/ui/ui_search.R": {
-      "checksum": "e1a50c993e80b94ac22aa03a7cb9d782"
+      "checksum": "b886d6f4550a94e9cfc87b5985e1abbc"
     },
     "R/ui/ui_sources.R": {
-      "checksum": "3e4a97b2708f73407ee62f35edda9b49"
+      "checksum": "67f06333b905813c8bfec00de665d7a8"
     },
     "README.md": {
       "checksum": "fd36afd36e1f4fb037cb025316f9d150"
@@ -3123,7 +3129,7 @@
       "checksum": "e9e416340dabe107b2c37e5831d8522f"
     },
     "RM_CLARIFICATION_LIFECYCLE_AND_DETERMINISTIC_RENDERING_HARDENING.md": {
-      "checksum": "08c4fcccb3ba8f058a45c5562fa2efbd"
+      "checksum": "e55ccf6f0bfb51f1390063f1eee01415"
     },
     "RM_CONTEXTUAL_CODING_CONTRACT_RESTORATION.md": {
       "checksum": "7672ac1e44bc2b3dc70103e536b07edb"
@@ -3183,10 +3189,10 @@
       "checksum": "65075c3fef1b11a6d0fdfccd3d429b69"
     },
     "tests/testthat/test-assistant-clarification-lifecycle.R": {
-      "checksum": "dd9ae5414da870cd5e9e808c3aeac398"
+      "checksum": "085ad33cfcbc354b1a1247ce8240a7a4"
     },
     "tests/testthat/test-assistant-clarification.R": {
-      "checksum": "14c54a21e37c836fc94965ed797b3061"
+      "checksum": "b983c02d9162ef1ba2b629faabb5b064"
     },
     "tests/testthat/test-assistant-coding-level.R": {
       "checksum": "37648916f1d85fb104b4b416e319335c"
@@ -3210,13 +3216,13 @@
       "checksum": "51e994874479b6a28d2ba618d923f7f9"
     },
     "tests/testthat/test-assistant-execution.R": {
-      "checksum": "7972d541b3a0ce7a7c851f6ff9f19df4"
+      "checksum": "586259f13dd92ff14422ec45103402a5"
     },
     "tests/testthat/test-assistant-failure-injection.R": {
       "checksum": "10f07522a7d11c10e4a8a78fd2eada25"
     },
     "tests/testthat/test-assistant-hierarchy-depth.R": {
-      "checksum": "97210e884f87f44b8f6a9fb4c1eca8eb"
+      "checksum": "aadd80c0c1f49210d3b968bbebc02019"
     },
     "tests/testthat/test-assistant-hierarchy.R": {
       "checksum": "4f67689172b59a39403c0f07b442e2a8"
@@ -3231,7 +3237,7 @@
       "checksum": "74ee85b14106178ec761ddf52b2b486b"
     },
     "tests/testthat/test-assistant-render.R": {
-      "checksum": "74018953ffabfccfd0f8a0fec6e944fe"
+      "checksum": "f988486c86ea75bd528631588fefc51c"
     },
     "tests/testthat/test-assistant-response-guard.R": {
       "checksum": "9072cabd862bee591efc430df5813e4c"
@@ -3279,7 +3285,7 @@
       "checksum": "27ad44effa637a15c992b0c954a63273"
     },
     "tests/testthat/test-correspondence-tooltip.R": {
-      "checksum": "c33b2e0aedd02ffb05c2fb320f1224a9"
+      "checksum": "916a4eb11fe375f3e3387612bd65180f"
     },
     "tests/testthat/test-curated-psoc-overrides.R": {
       "checksum": "b3cc1b22e2b58f336a4d8a1158f8e1a7"
@@ -3357,16 +3363,37 @@
       "checksum": "4ad2e46241d26c677a6c65ce42b08b2f"
     },
     "tests/testthat/test-semantic-non-authority.R": {
-      "checksum": "2dabdb022047c8e959522b3ec22d21cc"
+      "checksum": "cfb34e99762b71874900bda967086958"
     },
     "tests/testthat/test-semantic-retrieval.R": {
       "checksum": "7eff918dc2501e76f3ebc3ac5a272c7e"
     },
     "tests/testthat/test-semantic-shadow.R": {
-      "checksum": "72a88a62b1b59014d7a14ce1aac619d8"
+      "checksum": "6e867e7f92971a3b959235460b8e173f"
+    },
+    "tests/testthat/test-ui-details.R": {
+      "checksum": "3debe8dbd0342c1c44872f2c9b1d426e"
+    },
+    "tests/testthat/test-ui-dialog.R": {
+      "checksum": "c9e8ca27b2380ae12954eb2ae6dd26bc"
+    },
+    "tests/testthat/test-ui-hierarchy.R": {
+      "checksum": "6bd1b704abcfc0591df00f38808ea029"
     },
     "tests/testthat/test-ui-labels.R": {
       "checksum": "6816920b18f01c7398dca46580398bf3"
+    },
+    "tests/testthat/test-ui-liquid-glass.R": {
+      "checksum": "501afdac99a379937ad4f7f3c72ced05"
+    },
+    "tests/testthat/test-ui-release-order-and-focus.R": {
+      "checksum": "5b8a809f39f36515e8871ec32f3e4b56"
+    },
+    "UI_REFINEMENT_HANDOFF_UI01_UI05.md": {
+      "checksum": "ddf3329dbdc29d5d58fc92a34c8f1c70"
+    },
+    "UI_REFINEMENT_LIQUID_GLASS_HANDOFF.md": {
+      "checksum": "c8186b4334e34c5f60f17760621e5f13"
     },
     "unified-app-primary.dc.html": {
       "checksum": "d6bf06e500bc05d4437c2b50b4911cae"
@@ -3376,6 +3403,21 @@
     },
     "www/Phosphor.woff2": {
       "checksum": "527636c38907af87d10e6b15ac392648"
+    },
+    "www/ui-dialog.css": {
+      "checksum": "f96a3e26ae9df86e0fc601a17070986d"
+    },
+    "www/ui-filters.css": {
+      "checksum": "457ad94bf5fc2d80438ac4c0d25f204e"
+    },
+    "www/ui-glass.css": {
+      "checksum": "e36507497d807e5741e30c368ae5c958"
+    },
+    "www/ui-motion.css": {
+      "checksum": "8de72774feebe5a37b239b44f787243f"
+    },
+    "www/ui-tokens.css": {
+      "checksum": "72554a36af16693acef3aeeb5cf03f62"
     }
   },
   "users": null

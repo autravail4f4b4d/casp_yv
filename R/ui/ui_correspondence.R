@@ -45,7 +45,23 @@
   reclassified = list(label = "Reclassified",
                       text  = "the activity moved, or was recoded, to another category."),
   unchanged    = list(label = "Continued / unchanged",
-                      text  = "the concept remains substantially the same.")
+                      text  = "the concept remains substantially the same."),
+  # The four above are the ones readers ask about most, but they are not the
+  # whole supported vocabulary. Every remaining value in
+  # CORRESPONDENCE_RELATION_TYPES is glossed too, so the help can never be
+  # silent about a value the table is actually showing.
+  renamed      = list(label = "Renamed",
+                      text  = "the same concept is kept under a different title."),
+  new          = list(label = "New",
+                      text  = "the category has no counterpart in the earlier edition."),
+  discontinued = list(label = "Discontinued",
+                      text  = "the category has no counterpart in the later edition."),
+  complex      = list(label = "Complex",
+                      text  = "several old and several new categories are involved together."),
+  possible     = list(label = "Possible",
+                      text  = "a plausible counterpart that still needs checking."),
+  unknown      = list(label = "Unknown",
+                      text  = "the relationship has not been established.")
 )
 
 .CORRESPONDENCE_PROVENANCE_GLOSS <- list(
@@ -99,7 +115,7 @@
 .correspondence_term_help <- function(id, term, intro, gloss, allowed) {
   body_id <- paste0(id, "-body")
   shiny::tags$details(
-    class = "psa-term-help",
+    class = "psa-term-help psa-liquid-glass psa-liquid-glass--flow",
     id = id,
     shiny::tags$summary(
       class = "psa-term-help-trigger",
@@ -119,7 +135,60 @@
   )
 }
 
-#' The "What these columns mean" legend that sits directly above the results
+# Id of the single collapsible help panel (UI-05). Named once so the
+# trigger's aria-controls, the trigger's data-bs-target and the panel's own
+# id can never drift apart.
+.CORR_HOWTO_PANEL_ID <- "corr-howto-panel"
+
+#' The statistical-use safeguard, in neutral/informational dress.
+#'
+#' Two sentences on purpose. The first is the instruction a statistician
+#' needs in one line; the second is `CORRESPONDENCE_STATISTICAL_WARNING`,
+#' the vocabulary constant from R/correspondence/schema.R, so the fuller
+#' wording is never re-typed here and cannot drift from the rest of the app.
+#'
+#' `role="note"`, never `role="alert"`, and no error styling: a revised
+#' classification is a normal outcome, not a failure.
+correspondence_safeguard_note <- function() {
+  shiny::tags$div(
+    class = "psa-stat-warning psa-safeguard-note",
+    role = "note",
+    lucide_icon("info", 16),
+    shiny::tags$span(
+      shiny::tags$strong(
+        "Correspondence metadata does not itself justify automatic ",
+        "redistribution of historical statistical values."
+      ),
+      " ",
+      .corr_vocab("CORRESPONDENCE_STATISTICAL_WARNING")
+    )
+  )
+}
+
+#' A small info button beside a table-header term, opening a short popover.
+#'
+#' A real `<button>` inside `bslib::popover()`, deliberately not a `:hover`
+#' tooltip and not another disclosure: it is in the tab order, it opens on
+#' Enter/Space, it opens on tap, and -- the point of UI-05 -- it adds no
+#' vertical space to the page, so reading a column definition never pushes
+#' the results table down.
+.correspondence_column_tip <- function(term, gloss, allowed, intro) {
+  bslib::popover(
+    shiny::tags$button(
+      type = "button",
+      class = "psa-col-tip",
+      `aria-label` = paste0("What does ", term, " mean?"),
+      shiny::tags$span(class = "psa-col-tip-term", term),
+      lucide_icon("circle-help", 13)
+    ),
+    shiny::tags$p(class = "psa-term-help-intro", intro),
+    .correspondence_gloss_rows(gloss, allowed),
+    title = term,
+    placement = "bottom"
+  )
+}
+
+#' The "How to read this table" help that sits directly above the results
 #' table. It is a sibling of DT::DTOutput("correspondence_results"), never a
 #' wrapper around it, so the table's own sorting and filtering are untouched.
 correspondence_column_legend <- function() {
@@ -151,14 +220,68 @@ correspondence_column_legend <- function() {
     .corr_vocab("CORRESPONDENCE_CONFIDENCE_VALUES")
   )
 
+  # UI-05. The three term disclosures no longer sit open-ended on the page:
+  # they are the CONTENT of one collapsed panel behind a single compact
+  # control, so the review workflow is never pushed down the page by help
+  # text the reader did not ask for.
+  #
+  # The trigger is a Bootstrap 5 collapse button rather than a fourth
+  # <details>: nesting a disclosure inside a disclosure reads badly to
+  # screen-reader users, and Bootstrap keeps `aria-expanded` in sync on the
+  # button itself. The three inner <details> keep their ids, their native
+  # summary semantics and their programmatic associations exactly as before.
   shiny::tags$div(
     class = "psa-col-legend",
     role = "group",
-    `aria-label` = "What these columns mean",
-    shiny::tags$span(class = "psa-col-legend-title", "What these columns mean"),
-    relationship,
-    provenance,
-    confidence
+    `aria-label` = "How to read this table",
+    shiny::tags$div(
+      class = "psa-col-legend-bar",
+      shiny::tags$button(
+        type = "button",
+        class = "psa-howto-toggle",
+        `data-bs-toggle` = "collapse",
+        `data-bs-target` = paste0("#", .CORR_HOWTO_PANEL_ID),
+        `aria-expanded` = "false",
+        `aria-controls` = .CORR_HOWTO_PANEL_ID,
+        lucide_icon("circle-help", 15),
+        shiny::tags$span(class = "psa-col-legend-title", "How to read this table")
+      ),
+      # Column-level help, kept next to the table's own header row rather
+      # than in a page-expanding panel. Each is a real <button> inside a
+      # bslib popover, so it is keyboard-operable, works on touch, and adds
+      # no vertical space to the page when closed.
+      shiny::tags$span(
+        class = "psa-col-tips",
+        `aria-label` = "Column help",
+        role = "group",
+        .correspondence_column_tip(
+          "Relationship", .CORRESPONDENCE_RELATION_GLOSS,
+          .corr_vocab("CORRESPONDENCE_RELATION_TYPES"),
+          "What changed between editions."
+        ),
+        .correspondence_column_tip(
+          "Provenance", .CORRESPONDENCE_PROVENANCE_GLOSS,
+          .corr_vocab("CORRESPONDENCE_PROVENANCE_VALUES"),
+          "Where this mapping came from."
+        ),
+        .correspondence_column_tip(
+          "Confidence", .CORRESPONDENCE_CONFIDENCE_GLOSS,
+          .corr_vocab("CORRESPONDENCE_CONFIDENCE_VALUES"),
+          "How strong the supporting evidence is. An ordinal rating, not a probability."
+        )
+      )
+    ),
+    shiny::tags$div(
+      id = .CORR_HOWTO_PANEL_ID,
+      class = "collapse psa-howto-panel",
+      shiny::tags$div(
+        class = "psa-howto-panel-inner psa-liquid-glass psa-liquid-glass--flow",
+        relationship,
+        provenance,
+        confidence,
+        correspondence_safeguard_note()
+      )
+    )
   )
 }
 
@@ -200,6 +323,16 @@ correspondence_ui <- function() {
       )
     ),
 
+    # UI-04. Table and inspector are siblings in one grid, so selecting a
+    # row updates the panel beside the table instead of replacing the page.
+    # The grid collapses to a slide-over at tablet width and to a
+    # full-screen sheet at phone width -- all in CSS (www/ui-filters.css),
+    # so no re-render is involved and DT's paging, sorting and scroll
+    # position survive a selection change untouched.
+    shiny::tags$div(
+    class = "psa-corr-workspace",
+    shiny::tags$div(
+    class = "psa-corr-table-col",
     bslib::card(
       bslib::card_header("PSIC edition correspondence"),
       bslib::card_body(
@@ -215,25 +348,15 @@ correspondence_ui <- function() {
         correspondence_column_legend(),
         DT::DTOutput("correspondence_results")
       )
+    )
     ),
 
-    bslib::card(
-      bslib::card_body(
-        shiny::tags$div(
-          class = "psa-detail-head",
-          shiny::tags$h6("Relationship detail"),
-          # Reserved layout slot (HANDOFF §12) -- inert placeholder, NOT a
-          # control: a <span>, aria-hidden, not focusable, no cursor or
-          # hover affordance.
-          shiny::tags$span(
-            class = "psa-askrm-reserved",
-            `aria-hidden` = "true",
-            lucide_icon("sparkles", 14),
-            "Ask RM to explain this change"
-          )
-        ),
-        shiny::uiOutput("correspondence_detail")
-      )
+    # The inspector. `correspondence_detail` keeps its stable id and stays a
+    # uiOutput, so the server contract is unchanged; only where it renders
+    # and what it renders into have moved.
+    correspondence_inspector_shell(
+      shiny::uiOutput("correspondence_detail")
+    )
     ),
 
     shiny::tags$p(
@@ -241,6 +364,358 @@ correspondence_ui <- function() {
       CORRESPONDENCE_STATISTICAL_WARNING
     )
   )
+}
+
+# ---- Relationship inspector (UI-04) ---------------------------------------
+
+#' INTEGRATION SEAM -- shared dialog/drawer shell (owned by workstream UI-A).
+#'
+#' The inspector is a persistent side region on desktop and only becomes a
+#' modal-like surface (slide-over, then full-screen sheet) at narrower
+#' widths, so it deliberately does NOT hand its whole lifetime to a modal
+#' component. What it does need from the shared shell is the narrow-width
+#' behaviour: Escape-to-close, focus move-in/trap while the sheet covers the
+#' page, `aria-modal`, and focus restoration to the table row that opened it.
+#'
+#' This one function is the only place that has to change to adopt it. The
+#' signature assumed of UI-A is:
+#'
+#'   ui_dialog_shell(id, title, body,
+#'                   close_input_id = NULL,
+#'                   variant = c("modal", "drawer", "sheet"),
+#'                   labelled_by = NULL,
+#'                   width = NULL)
+#'
+#' Until that exists, the markup below is self-contained and degrades
+#' honestly: the region is labelled and announced, and the close control is
+#' an ordinary Shiny input that clears the table selection (which is what
+#' closes the inspector) without disturbing query, direction or paging.
+correspondence_inspector_shell <- function(body) {
+  shiny::tags$aside(
+    id = "correspondence-inspector",
+    class = "psa-corr-inspector psa-liquid-glass",
+    role = "region",
+    `aria-labelledby` = "correspondence-inspector-title",
+    # Selection changes update the panel in place while focus stays in the
+    # table, so the new content is announced rather than silently swapped.
+    `aria-live` = "polite",
+    shiny::tags$div(
+      class = "psa-corr-inspector-head",
+      shiny::tags$h3(
+        id = "correspondence-inspector-title",
+        class = "psa-corr-inspector-title",
+        "Relationship detail"
+      ),
+      shiny::actionButton(
+        "correspondence_inspector_close",
+        "Close",
+        class = "psa-corr-inspector-close",
+        `aria-label` = "Close relationship detail"
+      )
+    ),
+    shiny::tags$div(class = "psa-corr-inspector-body", body)
+  )
+}
+
+#' Swap the from_*/to_* sides of a correspondence tibble.
+#'
+#' Pure column relabelling, used only to bring a reverse-direction lookup
+#' back into the direction the user is reading. No value is altered.
+.corr_swap_sides <- function(g) {
+  out <- g
+  for (f in c("system", "version", "code", "level", "label")) {
+    a <- paste0("from_", f)
+    b <- paste0("to_", f)
+    out[[a]] <- g[[b]]
+    out[[b]] <- g[[a]]
+  }
+  out
+}
+
+#' The full verified relationship group a selected row belongs to.
+#'
+#' A split row is one edge of a one-to-many change and a merged row is one
+#' edge of a many-to-one change; showing either on its own reads as a
+#' one-to-one mapping, which is precisely the misreading UI-04 exists to
+#' prevent. This re-queries the deterministic service for every sibling edge
+#' of the same change. It adds NO data: every row returned is a row the
+#' correspondence artifact already contains.
+#'
+#' @param row A one-row tibble in the `search_psic_correspondence()` shape.
+#' @param data_path character or NULL. Override for tests.
+#'
+#' @return A tibble in the same shape, ordered as the service returns it, or
+#'   NULL when the row is not part of a group (or the lookup is
+#'   unavailable). NULL means "show the single verified row" -- never a
+#'   fabricated group.
+correspondence_relationship_group <- function(row, data_path = NULL) {
+  if (is.null(row) || nrow(row) == 0L) {
+    return(NULL)
+  }
+  rt <- as.character(row$relation_type[[1]])
+  if (!rt %in% c("split", "merged", "complex")) {
+    return(NULL)
+  }
+
+  fv <- as.character(row$from_version[[1]])
+  tv <- as.character(row$to_version[[1]])
+
+  # `merged` is grouped on the TARGET (many old -> one new), which means
+  # asking the service the question from the other side and swapping the
+  # answer back into the direction on screen.
+  by_target <- identical(rt, "merged")
+  key <- if (by_target) row$to_code[[1]] else row$from_code[[1]]
+  if (is.na(key)) {
+    return(NULL)
+  }
+
+  out <- tryCatch(
+    {
+      g <- if (by_target) {
+        .corr_swap_sides(get_psic_correspondence(key, tv, fv, data_path = data_path))
+      } else {
+        get_psic_correspondence(key, fv, tv, data_path = data_path)
+      }
+      g
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(out) || nrow(out) < 2L) {
+    return(NULL)
+  }
+  out
+}
+
+#' One node in a split/merge structure: code, title, edition, level.
+#'
+#' `selected` marks the edge the user actually clicked, so the row they came
+#' from stays findable inside its group.
+.corr_tree_node <- function(code, label, level, version, selected = FALSE) {
+  shiny::tags$li(
+    class = if (isTRUE(selected)) "psa-corr-node psa-corr-node-selected" else "psa-corr-node",
+    `aria-current` = if (isTRUE(selected)) "true" else NULL,
+    shiny::tags$span(class = "mono psa-corr-node-code", code),
+    shiny::tags$span(class = "psa-corr-node-label", label),
+    shiny::tags$span(
+      class = "psa-corr-node-meta",
+      status_badge(if (identical(version, "2026")) "current" else "archived", prefix = version),
+      if (!is.na(level)) shiny::tags$span(class = "text-muted small", level)
+    )
+  )
+}
+
+#' The relationship-specific structural view.
+#'
+#' Split shows the whole verified split group, merged shows every verified
+#' contributing source, and everything else shows the verified pair. The
+#' glyph and the framing are neutral throughout: a revised classification is
+#' a normal outcome, never an error, so no failure styling and no
+#' triangle-alert appears here.
+.correspondence_structure_ui <- function(row, group) {
+  rt <- as.character(row$relation_type[[1]])
+  fv <- as.character(row$from_version[[1]])
+  tv <- as.character(row$to_version[[1]])
+
+  # No verified group available: fall back to the single verified pair
+  # rather than implying a structure the data does not state.
+  if (is.null(group) || nrow(group) < 2L) {
+    return(shiny::tags$div(
+      class = "psa-corr-struct psa-corr-struct-pair",
+      shiny::tags$p(
+        class = "psa-corr-struct-lead",
+        switch(rt,
+          unchanged    = "Continued - one-to-one continuity between the two editions.",
+          renamed      = "Continued under a new title - one-to-one between the two editions.",
+          reclassified = "Reclassified - the activity moved, or was recoded, to another category.",
+          new          = "New in this edition - no verified counterpart in the earlier edition.",
+          discontinued = "Discontinued - no verified counterpart in the later edition.",
+          possible     = "Possible counterpart - proposed for review, not an established mapping.",
+          "One verified relationship between these two editions."
+        )
+      ),
+      shiny::tags$div(
+        class = "psa-corr-row",
+        .correspondence_side(
+          row$from_code, row$from_label, row$from_level, row$from_version,
+          "(no prior counterpart - new in this edition)"
+        ),
+        shiny::tags$span(
+          class = "psa-corr-arrow",
+          lucide_icon("arrow-left-right", 20)
+        ),
+        .correspondence_side(
+          row$to_code, row$to_label, row$to_level, row$to_version,
+          "(no related category - discontinued/absorbed)"
+        )
+      )
+    ))
+  }
+
+  if (identical(rt, "merged")) {
+    sources <- group[!duplicated(group$from_code), , drop = FALSE]
+    return(shiny::tags$div(
+      class = "psa-corr-struct psa-corr-struct-merged",
+      shiny::tags$p(
+        class = "psa-corr-struct-lead",
+        lucide_icon("merge", 17),
+        sprintf(
+          "Merged - %d verified %s categories became one %s category.",
+          nrow(sources), fv, tv
+        )
+      ),
+      shiny::tags$ul(
+        class = "psa-corr-tree psa-corr-tree-sources",
+        `aria-label` = paste("Contributing", fv, "categories"),
+        lapply(seq_len(nrow(sources)), function(i) {
+          .corr_tree_node(
+            sources$from_code[[i]], sources$from_label[[i]],
+            sources$from_level[[i]], sources$from_version[[i]],
+            selected = identical(sources$from_code[[i]], row$from_code[[1]])
+          )
+        })
+      ),
+      shiny::tags$div(class = "psa-corr-struct-joint", "becomes"),
+      shiny::tags$ul(
+        class = "psa-corr-tree psa-corr-tree-target",
+        `aria-label` = paste("Resulting", tv, "category"),
+        .corr_tree_node(
+          row$to_code[[1]], row$to_label[[1]], row$to_level[[1]],
+          row$to_version[[1]],
+          selected = TRUE
+        )
+      )
+    ))
+  }
+
+  # split / complex: one source, every verified target.
+  targets <- group[!duplicated(group$to_code), , drop = FALSE]
+  shiny::tags$div(
+    class = "psa-corr-struct psa-corr-struct-split",
+    shiny::tags$p(
+      class = "psa-corr-struct-lead",
+      lucide_icon("split", 17),
+      sprintf(
+        if (identical(rt, "complex")) {
+          "Complex - one %s category relates to %d verified %s categories."
+        } else {
+          "Split - one %s category became %d verified %s categories."
+        },
+        fv, nrow(targets), tv
+      )
+    ),
+    shiny::tags$ul(
+      class = "psa-corr-tree psa-corr-tree-source",
+      `aria-label` = paste("Original", fv, "category"),
+      .corr_tree_node(
+        row$from_code[[1]], row$from_label[[1]], row$from_level[[1]],
+        row$from_version[[1]],
+        selected = TRUE
+      )
+    ),
+    shiny::tags$div(class = "psa-corr-struct-joint", "became"),
+    shiny::tags$ul(
+      class = "psa-corr-tree psa-corr-tree-targets",
+      `aria-label` = paste("Resulting", tv, "categories"),
+      lapply(seq_len(nrow(targets)), function(i) {
+        .corr_tree_node(
+          targets$to_code[[i]], targets$to_label[[i]],
+          targets$to_level[[i]], targets$to_version[[i]],
+          selected = identical(targets$to_code[[i]], row$to_code[[1]])
+        )
+      })
+    )
+  )
+}
+
+#' One-line contextual gloss for a value, drawn from the same glossary the
+#' help panel uses (UI-05 "inspector integration"). Silently absent for a
+#' value with no gloss rather than inventing an explanation.
+.corr_inline_gloss <- function(gloss, value) {
+  entry <- gloss[[as.character(value)]]
+  if (is.null(entry)) {
+    return(NULL)
+  }
+  shiny::tags$dd(class = "psa-corr-meta-gloss", entry$text)
+}
+
+#' Render the selected relationship into the inspector.
+#'
+#' @param row A one-row tibble in the `search_psic_correspondence()` shape,
+#'   or NULL / zero rows when nothing is selected.
+#' @param group Optional. The verified relationship group from
+#'   `correspondence_relationship_group()`.
+correspondence_inspector_ui <- function(row, group = NULL) {
+  if (is.null(row) || nrow(row) == 0L) {
+    return(shiny::tags$p(
+      class = "text-muted psa-corr-inspector-empty",
+      "Select a row in the results table to see the full relationship, ",
+      "including every category involved in a split or a merge."
+    ))
+  }
+
+  rt <- as.character(row$relation_type[[1]])
+  prov <- as.character(row$provenance[[1]])
+  conf <- as.character(row$confidence[[1]])
+
+  shiny::tagList(
+    .correspondence_structure_ui(row, group),
+
+    shiny::tags$dl(
+      class = "psa-corr-meta",
+      shiny::tags$dt("Relationship"),
+      shiny::tags$dd(shiny::tags$span(
+        class = "psa-tag psa-tag-neutral", tools::toTitleCase(rt)
+      )),
+      .corr_inline_gloss(.CORRESPONDENCE_RELATION_GLOSS, rt),
+
+      shiny::tags$dt("Provenance"),
+      shiny::tags$dd(provenance_badge(prov)),
+      .corr_inline_gloss(.CORRESPONDENCE_PROVENANCE_GLOSS, prov),
+
+      shiny::tags$dt("Confidence"),
+      shiny::tags$dd(confidence_badge(conf)),
+      .corr_inline_gloss(.CORRESPONDENCE_CONFIDENCE_GLOSS, conf)
+    ),
+
+    shiny::tags$div(
+      class = "psa-source-line",
+      shiny::tags$strong("Evidence: "),
+      if (is.na(row$evidence[[1]])) shiny::tags$em("Not recorded") else row$evidence[[1]]
+    ),
+
+    # Always shown in the inspector, not only for split/merge: the reader is
+    # here precisely because they are about to act on a mapping.
+    correspondence_safeguard_note(),
+
+    shiny::actionButton(
+      "correspondence_ask_rm",
+      shiny::tagList(
+        lucide_icon("sparkles", 14),
+        "Ask RM to explain this relationship"
+      ),
+      class = "psa-corr-askrm"
+    )
+  )
+}
+
+#' The verified, bounded context an "Ask RM" action may carry.
+#'
+#' Explicitly a whitelist, and explicitly built from the SELECTED ROW only:
+#' nothing inferred, nothing from the model, no free text from the user, and
+#' no column the correspondence artifact did not verify. Returns NULL when
+#' there is no selection, so the caller can never send an empty shell.
+correspondence_ask_rm_context <- function(row) {
+  if (is.null(row) || nrow(row) == 0L) {
+    return(NULL)
+  }
+  keep <- c(
+    "from_system", "from_version", "from_code", "from_level", "from_label",
+    "to_system", "to_version", "to_code", "to_level", "to_label",
+    "relation_type", "provenance", "confidence"
+  )
+  keep <- intersect(keep, names(row))
+  lapply(stats::setNames(keep, keep), function(k) as.character(row[[k]][[1]]))
 }
 
 #' Provenance badge. Never color alone -- the level is always spelled out.
