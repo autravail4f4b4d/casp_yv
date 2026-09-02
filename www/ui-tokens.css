@@ -1,48 +1,138 @@
 @import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap');
 
 /* =========================================================================
-   ui-tokens.css — Lumora light editorial tokens, typography, global canvas
+   ui-tokens.css — semantic design tokens, typography, global canvas
    =========================================================================
 
    WHAT THIS FILE IS, AND WHY IT IS THE ONLY PLACE THE PALETTE LIVES.
 
-   app.css routes essentially every colour through a semantic token (200
-   var() references against 6 raw literals in its body), and ui-dialog.css
-   and ui-filters.css contain ZERO colour literals -- they are pure token
-   consumers. Audited before this pass, and it is what makes a whole-theme
-   replacement a token edit rather than a rewrite of 90 KB of working rules.
+   app.css routes essentially every colour through a semantic token, and
+   ui-dialog.css and ui-filters.css contain ZERO colour literals -- they are
+   pure token consumers. That is what makes a whole-appearance replacement a
+   token edit rather than a rewrite of 90 KB of working rules.
 
-   So this file RETARGETS that existing semantic layer. The previous pass
-   pointed it at a near-black canvas with a plum accent and an Instrument
-   Serif display face; it now points at the Lumora light system. No rule in
-   app.css, ui-dialog.css or ui-filters.css had to change to follow it.
+   So this file RETARGETS that existing semantic layer. It now carries the
+   `--ui-*` semantic tokens taken from the imported Claude Design artifact
+   ("PSA Classifications Redesign"), with the older `--lumora-*` / `--psa-*`
+   names kept as an alias layer that resolves to them.
+
+   ONE APPEARANCE. The artifact is a single dark appearance and is
+   implemented as such. Theme SWITCHING is deliberately not implemented in
+   this pass -- there is no `prefers-color-scheme` block, no `[data-theme]`
+   selector and no toggle anywhere in this system.
 
    Ownership: TOKENS, TYPOGRAPHY and the GLOBAL CANVAS (body, Bootstrap and
    DataTables ground). Surfaces live in ui-glass.css; motion in
-   ui-motion.css.
+   ui-motion.css; the assistant sidecar in ui-sidecar.css.
 
-   CONTRAST. Every functional-text token clears WCAG AA against the white
-   canvas, and the measured ratio is recorded beside it. Nothing in this
-   system depends on transparency for legibility.
+   CONTRAST. Every functional-text token clears WCAG AA against the surface
+   it is used on, and the measured ratio is recorded beside it. Nothing in
+   this system depends on transparency for legibility.
    ========================================================================= */
 
 :root {
-  /* ---- Lumora palette (handoff section 2, verbatim) -------------------- */
-  --lumora-background: #ffffff;
-  --lumora-foreground: #111111;
-  --lumora-ink: #0a0a0a;
-  --lumora-muted: #8d8d8d;
-  --lumora-subtle: #b6b6b6;
-  --lumora-line: #e6e5e2;
-  --lumora-surface: #f1f0ee;
-  --lumora-surface-2: #e3e2df;
+  /* =====================================================================
+     SEMANTIC DESIGN TOKENS  (Claude Design "PSA Classifications Redesign")
+     =====================================================================
 
-  --lumora-accent: #b15f2c;
-  --lumora-accent-from: #cf8047;
-  --lumora-accent-to: #97501f;
+     THIS BLOCK IS THE PALETTE. Everything below it is an alias layer that
+     resolves to these names, and every stylesheet in the app resolves to
+     that alias layer, so a future theme is an edit of THIS block alone.
 
-  --lumora-hero-from: #ecebe9;
-  --lumora-hero-to: #c9c9c9;
+     The imported design artifact is a single dark appearance and is
+     implemented faithfully as such. Theme SWITCHING (light / system /
+     dark) is deliberately NOT implemented in this pass: there is exactly
+     one set of values here and no `prefers-color-scheme` block, no
+     `[data-theme]` selector and no toggle. Tokenising now is what makes
+     adding the second appearance later a values change rather than a
+     rewrite.
+
+     CONTRAST. Functional text tokens clear WCAG AA against the surfaces
+     they are used on; the measured ratio is recorded beside each. The
+     artifact's own #6b6b6d micro-label grey measures 3.6:1 on #111111 and
+     is therefore NOT adopted as a text token -- --ui-text-subtle is
+     #8b8b8d instead, which is the value the artifact itself uses for
+     helper copy. */
+
+  /* Grounds. canvas = the page; surface = a card/panel on it;
+     surface-muted = a well INSIDE a panel (inputs, inner tables);
+     surface-elevated = the assistant sidecar/drawer ground, one step
+     darker than the page so a panel over content reads as above it. */
+  --ui-canvas: #0c0c0c;
+  --ui-surface: #111111;
+  --ui-surface-muted: #0d0d0d;
+  --ui-surface-elevated: #0a0a0a;
+
+  /* Text. */
+  --ui-text: #fafafa;                       /* 18.1:1 on --ui-canvas */
+  --ui-text-strong: #ffffff;                /* 18.8:1 */
+  --ui-text-body: #efefef;                  /* 16.0:1 */
+  --ui-text-muted: #9e9e9e;                 /*  7.3:1 on canvas, 7.1:1 on surface */
+  --ui-text-subtle: #8b8b8d;                /*  5.7:1 on canvas, 5.5:1 on surface */
+  --ui-text-placeholder: #aeaeae;           /*  8.9:1 */
+
+  /* Lines. The artifact draws two weights: a 6.5% hairline for ordinary
+     card edges and an 18% line for anything the reader must be able to
+     find (open controls, the verified-classification card, outline
+     buttons). */
+  --ui-border: rgba(255, 255, 255, 0.065);
+  --ui-border-mid: rgba(255, 255, 255, 0.14);
+  --ui-border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Accent. STATE ONLY, per the artifact's own legend -- selection rails,
+     eyebrows, focus. It is never a primary action colour. */
+  --ui-accent: #78d0cd;
+  --ui-accent-soft: #a6e2df;
+  --ui-accent-gradient: linear-gradient(90deg,
+    #ffe776 0%, #ffd400 22%, #ffd000 40%,
+    #c9c93c 60%, #86ca8a 76%, #78d0cd 100%);
+  --ui-accent-rail: linear-gradient(180deg, #ffd400, #78d0cd);
+
+  /* Primary action = white pill with near-black text (artifact legend).
+     This is the ONE inverted surface in the system. */
+  --ui-primary-bg: #ffffff;
+  --ui-primary-bg-hover: #e8e8e8;
+  --ui-primary-text: #0c0c0c;
+
+  /* Selection + focus. */
+  --ui-selected-bg: rgba(255, 255, 255, 0.055);
+  --ui-hover-bg: rgba(255, 255, 255, 0.035);
+  --ui-focus: #78d0cd;
+
+  --ui-dialog-backdrop: #060606;
+
+  /* Functional status colours, raised off the artifact's palette to clear
+     AA on the dark ground (it defines none of its own). */
+  --ui-status-error: #ff9b8a;               /*  8.0:1 on --ui-canvas */
+  --ui-status-success: #7fd6ae;             /* 10.6:1 */
+  --ui-link: #78d0cd;                       /* 10.2:1 */
+  --ui-link-hover: #a6e2df;                 /* 13.4:1 */
+
+  /* ---- Lumora alias layer ----------------------------------------------
+     These names came from the previous (light) pass and are read ~150
+     times across app.css, ui-glass.css, ui-filters.css and ui-dialog.css.
+     They are REPOINTED at the semantic tokens above rather than renamed:
+     renaming would churn every surface rule and every accepted structural
+     test for no behavioural gain. What each one MEANS is unchanged. */
+  --lumora-background: var(--ui-canvas);
+  --lumora-foreground: var(--ui-text);
+  /* The emphatic inverted surface: navbar active pill, primary button,
+     active pagination. In this appearance that is the white pill, not a
+     black card. The one former consumer that must stay dark -- the
+     verified-classification card -- reads --ui-verified-bg instead. */
+  --lumora-ink: var(--ui-primary-bg);
+  --lumora-muted: var(--ui-text-subtle);
+  --lumora-subtle: var(--ui-text-subtle);
+  --lumora-line: var(--ui-border);
+  --lumora-surface: var(--ui-surface);
+  --lumora-surface-2: var(--ui-border-strong);
+
+  --lumora-accent: var(--ui-accent);
+  --lumora-accent-from: var(--ui-accent-soft);
+  --lumora-accent-to: var(--ui-accent-soft);
+
+  --lumora-hero-from: var(--ui-surface);
+  --lumora-hero-to: var(--ui-canvas);
 
   --lumora-radius-pill: 9999px;
   --lumora-radius-card: 2rem;
@@ -51,24 +141,19 @@
 
   --lumora-shell: 88rem;
 
-  /* Measured companions the reference does not name.
-     ------------------------------------------------
-     `--lumora-muted` #8d8d8d measures 3.1:1 on white: fine for large text,
-     rules and glyphs, and NOT enough for body copy. The reference is a
-     marketing site and can afford that; a classification utility cannot,
-     so functional secondary text uses --lumora-muted-text instead. This is
-     the handoff's own instruction in section 24: do not copy low-opacity
-     text that fails contrast in this app. */
-  --lumora-muted-text: #5f5f5f;      /*  6.9:1 on #ffffff */
-  --lumora-ink-on-dark: #ffffff;     /* 19.6:1 on #0a0a0a */
-  --lumora-muted-on-dark: rgba(255, 255, 255, 0.72);
+  /* Measured companions the design artifact does not name. The artifact is
+     a layout study and can afford a 3.6:1 micro-label grey; a public
+     classification utility cannot, so every one of these resolves to a
+     token that clears AA on the surface it is used on. */
+  --lumora-muted-text: var(--ui-text-muted);
+  /* "on-dark" now means "on the inverted (white) pill", which is the only
+     surface in this appearance whose text has to flip. */
+  --lumora-ink-on-dark: var(--ui-primary-text);
+  --lumora-muted-on-dark: var(--ui-text-muted);
 
-  /* #b15f2c measures 4.6:1 on white -- AA for text, and the accent is only
-     ever used for small markers, rails, focus and short labels. The darker
-     step carries accent TEXT that sits on a tinted surface. */
-  --lumora-accent-text: #97501f;     /*  6.1:1 on #ffffff */
-  --lumora-accent-wash: rgba(177, 95, 44, 0.08);
-  --lumora-accent-wash-strong: rgba(177, 95, 44, 0.16);
+  --lumora-accent-text: var(--ui-accent);
+  --lumora-accent-wash: rgba(120, 208, 205, 0.10);
+  --lumora-accent-wash-strong: rgba(120, 208, 205, 0.20);
 
   /* ---- Typography (handoff section 1) ---------------------------------- */
   /* ONE face. No serif anywhere: the previous pass's display serif is
@@ -98,7 +183,10 @@
 
   --ink: var(--lumora-foreground);
   --ink-mute: var(--lumora-muted-text);
-  --white: #ffffff;
+  /* "white" means "the brightest ground in the system"; on this appearance
+     that is the page's own near-black, not literal white. Rules that
+     genuinely need the inverted pill read --ui-primary-bg. */
+  --white: var(--ui-surface);
 
   /* "cream" and "lavender" keep their names -- dozens of rules reference
      them -- and become the warm light surface and the accent wash. */
@@ -106,59 +194,58 @@
   --lavender: var(--lumora-accent-wash);
 
   --hairline: var(--lumora-line);
-  --hairline-strong: #d5d4d0;
+  --hairline-strong: var(--ui-border-strong);
 
-  --blue: #1f5c99;                   /*  6.4:1 on #ffffff */
-  --blue-hover: #17456f;             /*  9.4:1 */
+  --blue: var(--ui-link);
+  --blue-hover: var(--ui-link-hover);
 
-  --red: #a33a28;                    /*  6.0:1 */
-  --green: #1f6b52;                  /*  6.0:1 */
+  --red: var(--ui-status-error);
+  --green: var(--ui-status-success);
 
   /* ---- Retargeted app.css semantic layer -------------------------------- */
   --color-primary: var(--lumora-accent);
   --color-primary-deep: var(--lumora-accent-to);
   --color-primary-press: var(--lumora-accent-to);
   --color-primary-tint: var(--lumora-accent-from);
-  --color-on-primary: #ffffff;
+  --color-on-primary: var(--ui-primary-text);
 
   --text-body: var(--lumora-foreground);
   --text-mute: var(--lumora-muted-text);
-  --text-on-primary: #ffffff;
-  --text-on-primary-mute: rgba(255, 255, 255, 0.78);
+  --text-on-primary: var(--ui-primary-text);
+  --text-on-primary-mute: rgba(12, 12, 12, 0.72);
   --text-link: var(--blue);
   --text-link-hover: var(--blue-hover);
 
   --surface-canvas: var(--lumora-background);
-  --surface-card: #ffffff;
-  --surface-cream: var(--lumora-surface);
+  --surface-card: var(--ui-surface);
+  --surface-cream: var(--ui-surface-muted);
   --surface-lavender: var(--lumora-accent-wash);
   --surface-plum: var(--lumora-ink);
 
   --border-hairline: var(--lumora-line);
   --border-strong: var(--lumora-surface-2);
-  --border-on-plum: rgba(255, 255, 255, 0.28);
+  --border-on-plum: rgba(12, 12, 12, 0.28);
 
   --status-error: var(--red);
   --status-success: var(--green);
 
-  /* The Search hero band. A light vertical wash (handoff section 7) -- no
-     photo, no canvas, no raster. */
-  --mesh-band:
-    linear-gradient(180deg,
-      var(--lumora-hero-from) 0%,
-      var(--lumora-surface) 55%,
-      var(--lumora-background) 100%);
-  --mesh-soft:
-    linear-gradient(160deg, var(--lumora-surface) 0%, #ffffff 100%);
+  /* The page bands. The artifact draws no hero wash at all -- the search
+     field sits directly on the canvas -- so these flatten to the canvas
+     rather than being retinted. The names stay because app.css reads
+     them. */
+  --mesh-band: none;
+  --mesh-soft: none;
+  --mesh-peach: var(--ui-surface);
+  --mesh-lavender: var(--ui-surface);
 
-  /* Elevation on a light ground is a soft neutral drop, not the luminous
-     inner edge the dark system needed. */
+  /* Elevation on a dark ground is a deep drop plus, for the top surfaces,
+     the artifact's own 40-48px ambient shadow. */
   --elev-0: none;
-  --elev-1: 0 1px 2px rgba(17, 17, 17, 0.04), 0 8px 24px rgba(17, 17, 17, 0.06);
-  --elev-2: 0 2px 6px rgba(17, 17, 17, 0.06), 0 24px 60px rgba(17, 17, 17, 0.10);
-  --elev-3: 0 1px 3px rgba(17, 17, 17, 0.06), 0 10px 28px rgba(17, 17, 17, 0.08);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --elev-2: 0 2px 40px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 2px 48px rgba(0, 0, 0, 0.55);
   --elev-4: var(--lumora-line) 0 0 0 1px inset;
-  --ring-plum-inset: 0 0 0 1px rgba(17, 17, 17, 0.30) inset,
+  --ring-plum-inset: 0 0 0 1px var(--ui-border-strong) inset,
                      0 0 0 3px var(--lumora-accent-wash-strong);
 
   /* ---- Geometry (handoff section 2) ------------------------------------- */
@@ -187,19 +274,19 @@
      behavioural gain. What they MEAN is unchanged -- page ground, elevated
      panel, quiet line, strong line, focus -- only their values moved from a
      near-black system to a near-white one. */
-  --psa-bg: var(--lumora-background);
-  --psa-bg-elevated: var(--lumora-surface);
-  --psa-panel: #ffffff;
-  --psa-panel-strong: var(--lumora-surface);
-  --psa-text: var(--lumora-foreground);
-  --psa-text-muted: var(--lumora-muted-text);
-  --psa-text-subtle: var(--lumora-muted);
-  --psa-line: var(--lumora-line);
-  --psa-line-strong: var(--lumora-surface-2);
-  --psa-focus: var(--lumora-accent);
+  --psa-bg: var(--ui-canvas);
+  --psa-bg-elevated: var(--ui-surface);
+  --psa-panel: var(--ui-surface);
+  --psa-panel-strong: var(--ui-surface-muted);
+  --psa-text: var(--ui-text);
+  --psa-text-muted: var(--ui-text-muted);
+  --psa-text-subtle: var(--ui-text-subtle);
+  --psa-line: var(--ui-border);
+  --psa-line-strong: var(--ui-border-strong);
+  --psa-focus: var(--ui-focus);
 
-  --psa-text-solid: var(--lumora-foreground);       /* 17.7:1 on white */
-  --psa-text-muted-solid: var(--lumora-muted-text); /*  6.9:1 */
+  --psa-text-solid: var(--ui-text);            /* 18.1:1 on --ui-canvas */
+  --psa-text-muted-solid: var(--ui-text-muted);/*  7.3:1 */
 
   /* Former plum-accent aliases, now the burnt-orange accent. */
   --psa-plum: var(--lumora-accent);
@@ -229,10 +316,10 @@
    ========================================================================= */
 
 html {
-  /* The document is light again, so native chrome -- scrollbars, form
-     defaults, overscroll -- follows without per-control overrides. */
-  color-scheme: light;
-  background: var(--lumora-background);
+  /* The document is dark, so native chrome -- scrollbars, form defaults,
+     overscroll, the caret -- follows without per-control overrides. */
+  color-scheme: dark;
+  background: var(--ui-canvas);
   overflow-x: hidden;
 }
 
@@ -245,15 +332,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The dark pass painted a fixed ambient radial glow behind everything. A
-   light editorial system does not want one: the canvas is simply white and
-   depth comes from surfaces and hairlines. Neutralised here rather than
-   left to fight the new ground. */
+/* No ambient glow behind the page. The imported design's canvas is a flat
+   #0c0c0c and all of its depth comes from surfaces, hairlines and shadow;
+   a radial wash would fight all three. */
 body::before { content: none; display: none; }
 
 ::selection {
   background: var(--lumora-accent-wash-strong);
-  color: var(--lumora-foreground);
+  color: var(--ui-text-strong);
 }
 
 /* =========================================================================
@@ -307,9 +393,9 @@ code.psa-code {
 .form-select,
 .selectize-input,
 textarea.form-control {
-  background-color: #ffffff;
-  color: var(--lumora-foreground);
-  border: 1px solid var(--lumora-line);
+  background-color: var(--ui-surface-muted);
+  color: var(--ui-text-body);
+  border: 1px solid var(--ui-border-mid);
   border-radius: var(--lumora-radius-control);
   min-height: 2.5rem;
 }
@@ -326,9 +412,9 @@ textarea.form-control::placeholder {
 .form-select:focus,
 .selectize-input.focus,
 .selectize-input.input-active {
-  background-color: #ffffff;
-  color: var(--lumora-foreground);
-  border-color: rgba(17, 17, 17, 0.30);
+  background-color: var(--ui-surface-muted);
+  color: var(--ui-text-body);
+  border-color: var(--ui-border-strong);
   outline: 2px solid var(--lumora-accent);
   outline-offset: 1px;
   box-shadow: none;
@@ -349,11 +435,11 @@ textarea.form-control::placeholder {
    white, so the menu keeps a real line and a real shadow. */
 .selectize-dropdown,
 .selectize-dropdown-content {
-  background: #ffffff;
-  color: var(--lumora-foreground);
-  border: 1px solid var(--lumora-line);
+  background: var(--ui-surface);
+  color: var(--ui-text-body);
+  border: 1px solid var(--ui-border-strong);
   border-radius: var(--lumora-radius-control);
-  box-shadow: var(--elev-1);
+  box-shadow: var(--elev-2);
 }
 
 .selectize-dropdown .active,
@@ -365,8 +451,8 @@ textarea.form-control::placeholder {
 .selectize-input > .item { color: var(--lumora-foreground); }
 
 .form-check-input {
-  background-color: #ffffff;
-  border-color: var(--lumora-surface-2);
+  background-color: var(--ui-surface-muted);
+  border-color: var(--ui-border-strong);
 }
 
 .form-check-input:checked {
@@ -484,7 +570,7 @@ table.dataTable th.psa-nowrap {
   --bs-pagination-focus-color: var(--lumora-foreground);
   --bs-pagination-focus-bg: var(--lumora-surface);
   --bs-pagination-focus-box-shadow: none;
-  --bs-pagination-active-color: #ffffff;
+  --bs-pagination-active-color: var(--ui-primary-text);
   --bs-pagination-active-bg: var(--lumora-ink);
   --bs-pagination-active-border-color: var(--lumora-ink);
   --bs-pagination-disabled-color: var(--lumora-subtle);

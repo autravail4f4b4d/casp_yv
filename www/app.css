@@ -1173,33 +1173,13 @@ table.dataTable tbody tr.selected td {
   margin-top: 4px;
 }
 
-/* ---- Reserved "Ask RM" slot (HANDOFF §12) -------------------------------
-   VISUAL PLACEHOLDER ONLY. Deliberately a <span>, not an <a>/<button>:
-   aria-hidden, not focusable, no cursor affordance, no hover state. An
-   inert-but-focusable control would be a worse accessibility outcome than
-   omitting it, so it must stay out of the tab order and the accessibility
-   tree until it is actually wired. */
-.psa-askrm-reserved {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 1px dashed var(--border-hairline);
-  /* 4px, NOT the 90px button pill (handoff §17). The pill radius is what
-     marks a real control, so nothing clickable-looking ships unwired. */
-  border-radius: var(--radius-input);
-  /* Kept at the design's 35% (2.94:1). This is the one place the
-     sub-AA value is retained deliberately: the element is aria-hidden,
-     inert and conveys no information -- it exists only to reserve layout
-     space for a future control. The handoff sets it at --text-mute, which
-     also happens to clear WCAG AA (5.3:1) rather than the v1.0 value's
-     2.94:1, so the accessible choice and the design choice agree here. */
-  color: var(--text-mute);
-  font: var(--type-caption);
-  letter-spacing: var(--track-caption);
-  cursor: default;
-  user-select: none;
-}
+/* The reserved "Ask RM" slot that used to live here is GONE. It was an
+   inert, aria-hidden <span> holding layout space for a control that had
+   not been wired yet. The imported design activates those positions as
+   real controls (`.psa-askrm` / `.psa-askrm--context`, styled in
+   ui-design.css and built in R/ui/ui_sidecar.R), so the placeholder and
+   its rules are removed rather than left behind to be maintained forever
+   against markup that no longer exists. */
 
 /* ---- Buttons (handoff §13) ----------------------------------------------
    Three treatments only: primary, secondary, outline -- all pill.
@@ -1254,7 +1234,7 @@ table.dataTable tbody tr.selected td {
 .btn-secondary:hover,
 .btn.btn-secondary:hover,
 .btn-default:hover {
-  background: #ebe1f4;
+  background: var(--ui-hover-bg);
   color: var(--text-body);
 }
 
@@ -1266,7 +1246,7 @@ table.dataTable tbody tr.selected td {
 }
 
 .btn-outline-primary:hover {
-  background: rgba(84, 67, 107, 0.08);
+  background: var(--ui-hover-bg);
   color: var(--text-body);
 }
 
@@ -1814,10 +1794,6 @@ table.dataTable tbody tr.selected td {
     min-height: 44px;
     min-width: 44px;
   }
-
-  /* Reserved Ask RM slots are layout reservations, not content — at phone
-     width the space is better given to the data itself. */
-  .psa-askrm-reserved { display: none; }
 
   /* --- PSOC + PSIC at phone width -------------------------------------- */
   .psa-dual-grid { gap: 12px; }

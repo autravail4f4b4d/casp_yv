@@ -1,0 +1,926 @@
+/* =========================================================================
+   ui-design.css — layout and components introduced by the imported design
+   =========================================================================
+
+   IMPORTED SOURCE
+   ---------------
+   Claude Design project "PSA Classifications Redesign", surfaces 1a-1m.
+   The artifact is the authority for composition, control placement and
+   action hierarchy. It is NOT the authority for behaviour, data or ARIA:
+   where a newer functional decision conflicts with it, the functional
+   decision wins and the reason is recorded at the rule.
+
+   LOAD ORDER (app.R header, and it is a contract)
+   ----------------------------------------------
+     app.css        base rules, token-driven
+     ui-tokens.css  the palette + typography + global canvas
+     ui-dialog.css  shared dialog/drawer shell
+     ui-filters.css search rail + correspondence layout
+     ui-glass.css   surface treatments
+     ui-design.css  THIS FILE — new/moved layout from the imported design,
+                    so it wins over the earlier sheets' placement rules
+     ui-motion.css  transitions, and the reduced-motion escape LAST
+
+   WHAT LIVES HERE
+   ---------------
+     1. Search page head + results toolbar          (1a, 1b)
+     2. Collapsed System / Edition pickers          (1a, 1b, 1c)
+     3. PSOC + PSIC page-level action               (1d, 1e)
+     4. Compare Editions matched-height row         (1f, 1g)
+     5. RM Assistant sidecar / drawer / sheet       (1l)
+
+   NO THEME SWITCHING. Every colour resolves to a --ui-* token in
+   ui-tokens.css; there is no media-query or attribute theme selector in
+   this file, deliberately.
+   ========================================================================= */
+
+
+/* =========================================================================
+   1. Search — page head, hero field, results toolbar        (surface 1a/1b)
+   ========================================================================= */
+
+/* The design removes the hero BAND. The page head is left-aligned, sits on
+   the plain canvas, and carries no wash: the search field is what marks
+   Search as the primary surface, by being the widest control on the page. */
+.psa-hero--page {
+  align-items: stretch;
+  padding: 30px 0 4px;
+  background: none;
+}
+
+.psa-hero-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.psa-hero-headings { min-width: 0; }
+
+.psa-hero--page .psa-hero-title {
+  margin: 0 0 6px;
+  font-size: 27px;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.02em;
+}
+
+.psa-hero--page .psa-hero-help {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13.5px;
+  color: var(--ui-text-subtle);
+}
+
+.psa-hero-actions { flex: 0 0 auto; }
+
+/* Full width, not a centred 820px column: the artifact's field spans the
+   whole content measure. */
+.psa-hero--page .psa-hero-field {
+  width: 100%;
+  isolation: isolate;
+}
+
+/* The accent underglow. Purely decorative -- it is a 4px bleed of the
+   design's gradient behind the field, and the field's own border is what
+   actually delimits the control, so nothing is communicated by it alone. */
+.psa-hero--page .psa-hero-field::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -4px;
+  border-radius: var(--lumora-radius-pill);
+  background: var(--ui-accent-gradient);
+  opacity: 0.85;
+  z-index: -1;
+}
+
+/* RESULTS TOOLBAR. Browse hierarchy sits beside the count it scopes. */
+.psa-results-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.psa-results-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.psa-results-toolbar > * { min-width: 0; }
+
+/* The slot is now inline in the toolbar rather than a block under the
+   rail; it collapses to nothing for a system with no canonical hierarchy,
+   exactly as before. */
+.psa-results-toolbar .psa-hierarchy-slot {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.psa-results-toolbar .psa-result-count { margin: 0; }
+
+.psa-detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Sticky selected entry (artifact 1a): details never end up below a
+   200-row table. Released below the three-column breakpoint, where the
+   detail column is stacked under the results instead of beside them. */
+@media (min-width: 1280px) {
+  .psa-detail-col {
+    position: sticky;
+    top: 84px;
+    align-self: start;
+    max-height: calc(100vh - 108px);
+    overflow-y: auto;
+  }
+}
+
+/* 1280 and below the artifact collapses the selected entry under the
+   table as a full-width card. */
+@media (max-width: 1279.98px) {
+  .psa-results-split { grid-template-columns: minmax(0, 1fr); }
+}
+
+
+/* =========================================================================
+   2. Collapsed pickers — System and Edition / release    (surface 1a/1b/1c)
+   ========================================================================= */
+
+.psa-picker-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.psa-picker-label {
+  font-size: 10.5px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+/* The collapsed control. A real <button>, sized like the other filter
+   controls so the rail reads as one set. */
+.psa-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: var(--lumora-radius-control);
+  border: 1px solid var(--ui-border-mid);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.psa-picker-trigger:hover { border-color: var(--ui-border-strong); }
+
+.psa-picker-trigger:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.psa-picker-value {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* The Edition value puts its release and its CURRENT/ARCHIVED badge on one
+   line; the System value stacks acronym over title. */
+.psa-edition-field .psa-picker-value {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.psa-picker-value-main {
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.01em;
+  color: var(--ui-text);
+}
+
+.psa-picker-value-sub {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ui-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.psa-picker-caret {
+  flex: 0 0 auto;
+  color: var(--ui-text-subtle);
+}
+
+.psa-picker-trigger[aria-expanded="true"] .psa-picker-caret {
+  transform: rotate(180deg);
+}
+
+/* ---- The disclosed panel ------------------------------------------------
+   Desktop: a popover anchored under the trigger. It is `position: absolute`
+   inside the field, so it can never displace Level -- which is the whole
+   reason the release list stopped being permanently expanded. */
+.psa-picker-panel {
+  position: absolute;
+  z-index: 1050;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 340px;
+  padding: 8px;
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  box-shadow: var(--elev-2);
+  overflow: hidden;
+}
+
+.psa-picker-panel[hidden] { display: none; }
+
+.psa-picker-panel-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* The sheet header is phone-only; on desktop the popover's own edge and
+   the trigger above it are the affordance. */
+.psa-picker-panel-head { display: none; }
+
+.psa-picker-panel-title {
+  font-size: 17px;
+  font-weight: var(--weight-medium);
+  color: var(--ui-text);
+}
+
+.psa-picker-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--ui-border-mid);
+  background: var(--ui-hover-bg);
+  color: var(--ui-text-body);
+  cursor: pointer;
+}
+
+.psa-picker-panel-close:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Edition rows inside the panel -------------------------------------- */
+
+/* Group headers (Current / Archived · N) ride inside the first row of each
+   group -- see edition_choice_spec() for why -- and are lifted out of the
+   row's flow here so they read as headers rather than as row text. */
+.psa-edition-group-head {
+  display: block;
+  width: 100%;
+  margin: 6px 0 2px;
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+.psa-edition-row-current .psa-edition-group-head { color: var(--ui-accent); }
+
+.psa-edition-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.psa-edition-name { font-size: 13.5px; }
+
+
+/* ---- System field: select on desktop, sheet trigger on phone ------------ */
+
+.psa-system-sheet-trigger { display: none; }
+
+@media (max-width: 767.98px) {
+  .psa-system-select { display: none; }
+
+  .psa-system-sheet-trigger {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  /* Both pickers become full-width sheets docked to the bottom of the
+     viewport. The artifact is explicit that a picker must COVER the
+     control underneath rather than float across it, which is what an
+     anchored popover does at 390px. */
+  .psa-picker-panel {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1060;
+    max-height: 88vh;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
+    border-radius: 26px 26px 0 0;
+    border: none;
+    border-top: 1px solid var(--ui-border-mid);
+    background: var(--ui-surface);
+    box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.55);
+  }
+
+  .psa-picker-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--ui-border);
+  }
+
+  .psa-picker-panel-body { padding: 8px 18px 20px; }
+
+  /* A dim behind the sheet, painted by the body class the picker script
+     sets. Non-interactive: the sheet's own close button and Escape are the
+     dismissals, so this can never become the only way out. */
+  body.psa-picker-open::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1055;
+    background: var(--ui-dialog-backdrop);
+    opacity: 0.72;
+    pointer-events: none;
+  }
+
+  .psa-picker-trigger { min-height: 52px; }
+}
+
+/* ---- The mobile System sheet's own contents (surface 1c) ---------------- */
+
+.psa-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.psa-picker-search .lucide {
+  position: absolute;
+  left: 14px;
+  color: var(--ui-text-placeholder);
+  pointer-events: none;
+}
+
+.psa-picker-search .form-group,
+.psa-picker-search .shiny-input-container { width: 100%; margin-bottom: 0; }
+
+.psa-picker-search input.form-control { padding-left: 40px; min-height: 46px; }
+
+/* The search field's <label> stays in the DOM for assistive technology and
+   is hidden visually only -- never placeholder-only labelling. */
+.psa-picker-search label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.psa-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.psa-picker-option {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px;
+  border-radius: var(--lumora-radius-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.psa-picker-option:hover { background: var(--ui-hover-bg); }
+
+.psa-picker-option:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+/* Selection is a left rail PLUS a spelled-out "Selected" tag and
+   aria-pressed -- three signals, never colour alone. */
+.psa-picker-option.is-selected {
+  position: relative;
+  background: var(--ui-selected-bg);
+  border-color: var(--ui-border-strong);
+  overflow: hidden;
+}
+
+.psa-picker-option.is-selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--ui-accent-rail);
+}
+
+.psa-picker-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.psa-picker-option-acronym {
+  font-size: 18px;
+  font-weight: var(--weight-semibold);
+}
+
+.psa-picker-option-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ui-text-muted);
+}
+
+.psa-picker-empty { margin: 12px 2px; font-size: 13px; }
+
+
+/* =========================================================================
+   3. PSOC + PSIC — page-level Compare action              (surface 1d/1e)
+   ========================================================================= */
+
+.psa-dual-hero {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.psa-dual-hero-text { min-width: 0; max-width: 72ch; }
+
+.psa-dual-compare {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0;
+  text-align: right;
+}
+
+.psa-dual-compare__hint {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 12px;
+  color: var(--ui-text-subtle);
+}
+
+/* Phone: the action goes full width directly under the intro. It is still
+   above both panels, so it never requires scrolling past two tables. */
+@media (max-width: 767.98px) {
+  .psa-dual-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .psa-dual-compare {
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .psa-dual-compare .psa-dialog-open { width: 100%; justify-content: center; }
+
+  .psa-dual-compare__hint { max-width: none; }
+}
+
+
+/* =========================================================================
+   4. Compare Editions — direction width + matched-height row (1f/1g)
+   ========================================================================= */
+
+/* Direction takes the wide column. The artifact draws it at roughly 1.4fr
+   against the search field's 1fr, which is enough for "2019 PSIC → PSIC
+   Revision 5 (2026)" to sit on one line with slack at every desktop width
+   rather than arming its ellipsis.
+
+   SCOPED TO >= 768 DELIBERATELY. This sheet loads after ui-filters.css, so
+   an unconditional rule here outranks that sheet's phone-width collapse to
+   a single full-width column -- measured at 320px, where the 320px minimum
+   pushed the Direction control 24px past the viewport and the page's own
+   overflow guard then CLIPPED it. Below 768 the collapse in ui-filters.css
+   is the correct layout and this rule must not reach it. */
+@media (min-width: 768px) {
+  .psa-corr-filters {
+    grid-template-columns: minmax(320px, 1.4fr) minmax(240px, 1fr);
+  }
+}
+
+/* MATCHED HEIGHT (desktop only). The table card and the relationship
+   inspector share one top and one bottom edge: the row stretches, the
+   table's own body flexes to fill whatever height the taller card sets,
+   and the DT footer/pagination stays pinned to the bottom edge of the
+   table card instead of floating in the middle of it.
+   Mobile keeps natural per-card heights -- forcing equalisation on a
+   stacked column would leave one card padded out with dead space. */
+@media (min-width: 992px) {
+  .psa-corr-workspace { align-items: stretch; }
+
+  .psa-corr-table-col { display: flex; flex-direction: column; }
+
+  .psa-corr-table-col > .card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Bootstrap gives a .card a 24px bottom margin. Inside a stretched
+       grid row that margin is dead space BELOW the card's edge, so the
+       two cards' bottom edges sat 24px apart however tall the row grew.
+       Measured in the browser; the row's own gap still separates the
+       columns horizontally. */
+    margin-bottom: 0;
+  }
+
+  .psa-corr-table-col > .card > .card-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .psa-corr-table-col .dataTables_wrapper {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .psa-corr-table-col .dataTables_wrapper > .row:has(.dataTables_paginate) {
+    margin-top: auto;
+  }
+
+  /* The inspector stops being a sticky island once it is edge-matched to
+     the table beside it: it is the same height as its neighbour, so there
+     is nothing for it to stick past.
+
+     The two-class selector matches ui-glass.css's own
+     `.psa-corr-inspector.psa-liquid-glass { position: sticky }`, which is
+     a specificity step above a plain class and would otherwise win this
+     even though that sheet loads first. Found in browser UAT, where the
+     cards stayed 12px and 36px out of alignment. */
+  .psa-corr-inspector,
+  .psa-corr-inspector.psa-liquid-glass {
+    position: static;
+    max-height: none;
+    height: 100%;
+  }
+}
+
+
+/* =========================================================================
+   5. RM Assistant — sidecar / drawer / sheet               (surface 1l)
+   ========================================================================= */
+
+/* ---- Launchers ---------------------------------------------------------- */
+
+.psa-askrm {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-hover-bg);
+  color: var(--ui-text-body);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.psa-askrm:hover {
+  background: var(--ui-selected-bg);
+  color: var(--ui-text);
+}
+
+.psa-askrm:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* The record-level action inside the selected-entry card is the primary
+   action there, so it takes the inverted pill (artifact 1a). */
+.psa-askrm--context {
+  width: 100%;
+  justify-content: center;
+  min-height: 42px;
+  border-color: var(--ui-primary-bg);
+  background: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
+}
+
+.psa-askrm--context:hover {
+  background: var(--ui-primary-bg-hover);
+  border-color: var(--ui-primary-bg-hover);
+  color: var(--ui-primary-text);
+}
+
+/* The global launcher sits in the application header on every page. */
+.navbar .psa-askrm { margin-left: 12px; }
+
+/* ---- The panel ---------------------------------------------------------- */
+
+.psa-rm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1064;
+  background: var(--ui-dialog-backdrop);
+  opacity: 0.72;
+}
+
+.psa-rm-scrim[hidden] { display: none; }
+
+.psa-rm-sidecar {
+  position: fixed;
+  z-index: 1065;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text);
+  overflow: hidden;
+}
+
+.psa-rm-sidecar[hidden] { display: none; }
+
+.psa-rm-sidecar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.psa-rm-sidecar-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.psa-rm-sidecar-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: var(--weight-medium);
+  color: var(--ui-text);
+}
+
+/* RM's standing, stated permanently in the panel chrome: it reads the same
+   verified data Search does and is never itself a source. */
+.psa-rm-sidecar-standing {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+.psa-rm-sidecar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.psa-rm-sidecar-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--ui-border-mid);
+  background: var(--ui-hover-bg);
+  color: var(--ui-text-body);
+  cursor: pointer;
+}
+
+.psa-rm-sidecar-close:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.psa-rm-sidecar-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rm-assistant-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Attached context --------------------------------------------------- */
+
+.psa-rm-context:empty { display: none; }
+
+.psa-rm-context {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px 0;
+}
+
+.psa-rm-context-label {
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+.psa-rm-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.psa-rm-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--lumora-radius-pill);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  font-size: 12.5px;
+  color: var(--ui-text-body);
+}
+
+/* Marks the chip as RETRIEVED data rather than something the user typed. */
+.psa-rm-context-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--lumora-radius-pill);
+  background: var(--ui-accent-gradient);
+}
+
+.psa-rm-context-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.psa-rm-context-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--lumora-radius-pill);
+  background: var(--ui-hover-bg);
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+
+.psa-rm-context-remove:hover { color: var(--ui-text); }
+
+.psa-rm-context-remove:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Breakpoint 1: >= 1280 — DOCKED, NON-MODAL -------------------------- */
+@media (min-width: 1280px) {
+  .psa-rm-sidecar {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 440px;
+    border-left: 1px solid var(--ui-border);
+  }
+
+  /* The page reflows to make room rather than being covered, which is what
+     makes the non-modal semantics honest: the content beside the panel is
+     still fully visible and fully operable.
+     Applied to <body> rather than to the navbar and the page container
+     separately: measured in the browser, the container's own padding is
+     zeroed by the fill-page rules, so a per-container override lost and
+     the results table ran on underneath the panel. Body padding shifts
+     every static descendant at once, and leaves the position:fixed panel,
+     its scrim and every dialog where they belong.
+
+     `!important` is deliberate and is the only one in this sheet. bslib's
+     fill page writes `style="padding:0px;gap:0px"` directly onto <body>,
+     and an inline declaration outranks every stylesheet rule regardless of
+     selector specificity. Overriding an inline style is the one case the
+     keyword exists for; without it the panel silently covers the content
+     it is supposed to sit beside, which is the difference between a
+     non-modal side panel and a modal one that lies about being non-modal. */
+  body.psa-rm-docked { padding-inline-end: 440px !important; }
+
+  /* The scrim never appears in this mode: dimming the page would say the
+     rest of the document is unavailable when it is not. */
+  .psa-rm-scrim { display: none !important; }
+}
+
+/* ---- Breakpoint 2: 1024–1279 — OVERLAY DRAWER, MODAL -------------------- */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .psa-rm-sidecar {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 420px;
+    max-width: 92vw;
+    border-left: 1px solid var(--ui-border-mid);
+    box-shadow: -24px 0 60px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ---- Breakpoint 3: <= 1023 — BOTTOM SHEET, MODAL ------------------------ */
+@media (max-width: 1023.98px) {
+  .psa-rm-sidecar {
+    inset: auto 0 0 0;
+    height: 94%;
+    border-top: 1px solid var(--ui-border-mid);
+    border-radius: 26px 26px 0 0;
+    box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .psa-rm-sidecar-close,
+  .psa-rm-context-remove { min-width: 40px; min-height: 40px; }
+
+  .psa-rm-sidecar-close { width: 44px; height: 44px; }
+}
+
+/* Page scroll is locked only in the two MODAL modes. */
+body.psa-rm-overlay { overflow: hidden; }
+
+
+/* =========================================================================
+   Touch targets — every control introduced here clears 44px at phone width
+   ========================================================================= */
+@media (max-width: 575.98px) {
+  .psa-picker-trigger,
+  .psa-picker-option,
+  .psa-askrm { min-height: 44px; }
+
+  .psa-picker-panel-close,
+  .psa-rm-sidecar-close { min-width: 44px; min-height: 44px; }
+
+  .psa-hero-head { flex-direction: column; align-items: stretch; gap: 14px; }
+
+  .psa-hero-actions .psa-askrm { width: 100%; justify-content: center; }
+
+  .psa-results-toolbar { align-items: flex-start; }
+}

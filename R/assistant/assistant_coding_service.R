@@ -271,7 +271,18 @@ assistant_coding_service <- function(occupation = NULL,
 }
 
 #' Every code the service authorised, as one flat vector.
+#'
+#' `context` is a third slot alongside psoc/psic, written only by
+#' `assistant_attached_context_packet()`. It exists because a record the
+#' user attached from Search may belong to any registered system -- a PSGC
+#' province, a PSCED programme -- and filing such a code under `psoc` or
+#' `psic` to get it authorised would be a lie in the packet. Packets from
+#' the coding service carry no `context` slot, so this union is a no-op for
+#' every pre-existing caller.
 assistant_allowed_codes <- function(packet) {
   if (is.null(packet) || is.null(packet$allowed_codes)) return(character(0))
-  unique(c(packet$allowed_codes$psoc, packet$allowed_codes$psic))
+  codes <- c(packet$allowed_codes$psoc,
+             packet$allowed_codes$psic,
+             packet$allowed_codes$context)
+  unique(as.character(codes[!is.na(codes)]))
 }

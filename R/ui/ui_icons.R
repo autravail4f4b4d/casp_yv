@@ -40,7 +40,14 @@ LUCIDE_PATHS <- list(
   # Controls
   `rotate-cw` = '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   square = '<rect width="18" height="18" x="3" y="3" rx="2"/>',
-  `arrow-up` = '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>'
+  `arrow-up` = '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+
+  # Disclosure / dismissal. Added for the collapsed System and Edition
+  # pickers and the assistant sidecar, all of which need a caret and a
+  # close glyph beside a visible label.
+  `chevron-down` = '<path d="m6 9 6 6 6-6"/>',
+  x = '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  `list-tree` = '<path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/>'
 )
 
 #' Inline a Lucide glyph as local SVG.

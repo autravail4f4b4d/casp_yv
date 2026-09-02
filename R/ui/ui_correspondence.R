@@ -804,14 +804,24 @@ correspondence_inspector_ui <- function(row, group = NULL) {
     # here precisely because they are about to act on a mapping.
     correspondence_safeguard_note(),
 
-    shiny::actionButton(
-      "correspondence_ask_rm",
-      shiny::tagList(
-        lucide_icon("sparkles", 14),
-        "Ask RM to explain this relationship"
-      ),
-      class = "psa-corr-askrm"
-    )
+    correspondence_ask_rm_button()
+  )
+}
+
+#' The relationship-level "Ask RM" action.
+#'
+#' ONE definition, used by both relationship renderers, so the id and the
+#' accessible name cannot drift apart between them. It opens the global
+#' assistant panel with THIS relationship attached as a visible, removable
+#' context chip (see `correspondence_ask_rm_context()` for the whitelist and
+#' R/ui/ui_sidecar.R for the panel); it never navigates.
+#'
+#' `id` is unchanged: `correspondence_ask_rm`.
+correspondence_ask_rm_button <- function() {
+  rm_context_button_ui(
+    "correspondence_ask_rm",
+    "Ask RM to explain this relationship",
+    class = "psa-corr-askrm"
   )
 }
 
@@ -915,7 +925,10 @@ confidence_badge <- function(c, with_label = TRUE) {
 #' @param row A one-row tibble in the `get_psic_correspondence()` /
 #'   `search_psic_correspondence()` from_*/to_* shape, or a zero-row/NULL
 #'   value when nothing is selected.
-correspondence_detail_ui <- function(row) {
+#' @param ask_rm logical(1). Whether to render the relationship-level "Ask
+#'   RM" action. FALSE in a deployment with no working assistant
+#'   configuration, so an action that cannot be delivered is never offered.
+correspondence_detail_ui <- function(row, ask_rm = TRUE) {
   if (is.null(row) || nrow(row) == 0L) {
     return(shiny::tags$p(
       class = "text-muted",
@@ -979,6 +992,16 @@ correspondence_detail_ui <- function(row) {
         shiny::tags$strong("Statistical-use note "),
         CORRESPONDENCE_STATISTICAL_WARNING
       )
-    )
+    ),
+
+    # The inspector's primary action (design surface 1f), and the last
+    # thing in it: it is only meaningful once a row is selected, which is
+    # the only state in which this function renders anything at all.
+    #
+    # This renderer is the one the running application mounts into the
+    # inspector shell, so the action has to live here to be reachable.
+    # `correspondence_inspector_ui()` builds the same button from the same
+    # helper, so the two cannot drift.
+    if (isTRUE(ask_rm)) correspondence_ask_rm_button()
   )
 }

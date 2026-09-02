@@ -10,8 +10,19 @@
 # PUBLIC CONTRACT (this file)
 #
 #   rm_assistant_ui(id = "rm_assistant")        -> bslib card; the chat panel
+#   rm_assistant_panel_ui(id = "rm_assistant")  -> the chat, no card shell
+#   rm_assistant_chat_ui(id = "rm_assistant")   -> the shinychat mount
 #   rm_assistant_unavailable_ui(reason = NULL)  -> bslib card; degraded state
 #   rm_assistant_new_chat_ui(id = "rm_assistant") -> actionButton ("New chat")
+#
+# WHERE THIS PANEL IS MOUNTED
+#
+# As of the imported design (surface 1l) the assistant is NOT a nav_panel.
+# It is mounted once per page inside the global sidecar/drawer/sheet built
+# by R/ui/ui_sidecar.R, which supplies the header and the disclosure. The
+# card form (`rm_assistant_ui()`) is retained for the degraded/standalone
+# case and for the panel's own tests. Exactly ONE of the two may be mounted
+# in a running page: both mount the same `shinychat` module id.
 #
 # Stable module id .......... "rm_assistant"          (spec 10)
 # Stable new-chat input id .. "rm_assistant-new_chat" (shiny::NS(id, "new_chat"))
@@ -220,25 +231,51 @@ rm_assistant_ui <- function(id = "rm_assistant") {
       fillable = TRUE,
       padding = 0,
       gap = 0,
-      shinychat::chat_mod_ui(
-        id,
-        # --- named chat_ui() arguments, forwarded through `...` ------------
-        greeting = .rm_assistant_greeting(),
-        placeholder = "Describe an occupation, business activity, or code...",
-        footer = shiny::tags$span(
-          class = "rm-assistant-disclaimer",
-          .rm_assistant_footer()
-        ),
-        fill = TRUE,
-        height = "100%",
-        # Slightly wider than shinychat's 680px default so the classification
-        # tables RM emits are readable; still collapses to 100% on mobile.
-        width = "min(760px, 100%)",
-        # --- extra HTML attributes on the chat element ---------------------
-        role = "region",
-        `aria-label` = "RM Assistant chat"
-      )
+      rm_assistant_chat_ui(id)
     )
+  )
+}
+
+
+#' The chat region on its own, with no surrounding card.
+#'
+#' This is what the sidecar mounts (R/ui/ui_sidecar.R). The sidecar supplies
+#' its own header -- title, standing line, New chat, close -- so wrapping the
+#' chat in `rm_assistant_ui()`'s card there would draw a card header inside
+#' a panel header and a card border inside a panel border.
+#'
+#' It is the SAME `shinychat` module with the SAME id, so every server
+#' contract in the block at the top of this file is unchanged. Only one of
+#' these may be mounted per page: two would mean a duplicate
+#' `rm_assistant-chat` element and two transcripts of one conversation.
+rm_assistant_panel_ui <- function(id = "rm_assistant") {
+  shiny::tags$div(
+    class = "rm-assistant-panel",
+    rm_assistant_chat_ui(id)
+  )
+}
+
+
+#' The `shinychat` mount itself. One definition, two shells.
+rm_assistant_chat_ui <- function(id = "rm_assistant") {
+  shinychat::chat_mod_ui(
+    id,
+    # --- named chat_ui() arguments, forwarded through `...` ------------
+    greeting = .rm_assistant_greeting(),
+    placeholder = "Describe an occupation, business activity, or code...",
+    footer = shiny::tags$span(
+      class = "rm-assistant-disclaimer",
+      .rm_assistant_footer()
+    ),
+    fill = TRUE,
+    height = "100%",
+    # Slightly wider than shinychat's 680px default so the classification
+    # tables RM emits are readable; still collapses to 100% on mobile and
+    # inside the 440px sidecar.
+    width = "min(760px, 100%)",
+    # --- extra HTML attributes on the chat element ---------------------
+    role = "region",
+    `aria-label` = "RM Assistant chat"
   )
 }
 
@@ -252,7 +289,11 @@ rm_assistant_ui <- function(id = "rm_assistant") {
 #' by R/assistant/assistant_client.R. It is rendered as escaped plain text and
 #' nothing else; this function never renders a condition object, a stack
 #' trace, or provider error output.
-rm_assistant_unavailable_ui <- function(reason = NULL) {
+#' @param heading logical(1). Whether to draw the card's own "RM Assistant"
+#'   header. FALSE when the panel is mounted inside the sidecar, which
+#'   supplies that heading itself -- otherwise the degraded state announces
+#'   the same H2 twice in a row, which is what browser UAT found.
+rm_assistant_unavailable_ui <- function(reason = NULL, heading = TRUE) {
   reason_ok <- is.character(reason) &&
     length(reason) == 1L &&
     !is.na(reason) &&
@@ -261,9 +302,11 @@ rm_assistant_unavailable_ui <- function(reason = NULL) {
   bslib::card(
     class = "rm-assistant-card rm-assistant-unavailable psa-liquid-glass",
     min_height = "40vh",
-    bslib::card_header(
-      shiny::tags$h2("RM Assistant", class = "h5 mb-0")
-    ),
+    if (isTRUE(heading)) {
+      bslib::card_header(
+        shiny::tags$h2("RM Assistant", class = "h5 mb-0")
+      )
+    },
     bslib::card_body(
       shiny::tags$div(
         class = "psa-rm-unavailable",

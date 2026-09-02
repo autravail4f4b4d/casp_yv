@@ -151,23 +151,39 @@ test_that("lucide_icon rejects an unknown glyph rather than rendering blank", {
 # Reserved "Ask RM" slots stay inert (handoff §17)
 # ---------------------------------------------------------------------
 
-test_that("reserved Ask RM slots are not focusable controls", {
-  for (panel in list(search_ui(), correspondence_ui())) {
-    html <- .render(panel)
-    if (!grepl("psa-askrm-reserved", html, fixed = TRUE)) next
+test_that("the reserved Ask RM slots are now real, activated controls", {
+  # The previous pass parked an inert `aria-hidden` <span> where the
+  # contextual assistant actions were going to go. The imported design
+  # (surface 1l) activates them: each is a real control that opens the
+  # global assistant panel with that record attached. This test replaces
+  # the one that asserted the placeholder stayed inert -- the placeholder
+  # is what was supposed to be temporary.
+  panels <- list(search = .render(search_ui()),
+                 correspondence = .render(correspondence_ui()))
 
-    # Pull each reserved slot's opening tag.
-    slots <- regmatches(
-      html, gregexpr("<[a-z]+[^>]*psa-askrm-reserved[^>]*>", html)
-    )[[1]]
-    expect_gt(length(slots), 0L)
-
-    for (s in slots) {
-      # Never a button or a link, never tabbable, always hidden from AT.
-      expect_false(grepl("^<button", s))
-      expect_false(grepl("^<a ", s))
-      expect_false(grepl("tabindex", s, fixed = TRUE))
-      expect_match(s, 'aria-hidden="true"', fixed = TRUE)
-    }
+  for (nm in names(panels)) {
+    # No inert placeholder is left behind anywhere.
+    expect_false(grepl("psa-askrm-reserved", panels[[nm]], fixed = TRUE), info = nm)
   }
+
+  # The page-level launcher on Search is a real button with a real
+  # accessible name, and it discloses rather than navigates.
+  expect_match(panels$search, 'data-psa-rm-open', fixed = TRUE)
+  expect_match(panels$search, "Ask RM about a code", fixed = TRUE)
+
+  # The two record-level launchers are Shiny inputs, because the server has
+  # to build the verified context before the panel opens.
+  entry_action <- .render(rm_context_button_ui("search_ask_rm_entry",
+                                               "Ask RM about this entry"))
+  expect_match(entry_action, "^<button", info = "entry action is a button")
+  expect_match(entry_action, "search_ask_rm_entry", fixed = TRUE)
+  # The CONTROL is exposed to assistive technology. Only the decorative
+  # glyph inside it is hidden, so the check is against the opening tag
+  # rather than the whole subtree.
+  open_tag <- regmatches(entry_action, regexpr("^<button[^>]*>", entry_action))
+  expect_false(grepl('aria-hidden="true"', open_tag, fixed = TRUE))
+
+  corr_action <- .render(correspondence_ask_rm_button())
+  expect_match(corr_action, "correspondence_ask_rm", fixed = TRUE)
+  expect_match(corr_action, "Ask RM to explain this relationship", fixed = TRUE)
 })

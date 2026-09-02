@@ -37,15 +37,17 @@
 
 test_that("every refinement stylesheet exists in www/", {
   for (f in c("app.css", "ui-tokens.css", "ui-dialog.css",
-              "ui-filters.css", "ui-glass.css", "ui-motion.css")) {
+              "ui-filters.css", "ui-glass.css", "ui-design.css",
+              "ui-motion.css")) {
     expect_true(file.exists(file.path(.repo, "www", f)), info = f)
   }
 })
 
-test_that("app.R loads all six stylesheets", {
+test_that("app.R loads all seven stylesheets", {
   app <- .read("app.R")
   for (f in c("app.css", "ui-tokens.css", "ui-dialog.css",
-              "ui-filters.css", "ui-glass.css", "ui-motion.css")) {
+              "ui-filters.css", "ui-glass.css", "ui-design.css",
+              "ui-motion.css")) {
     expect_true(.has(app, sprintf('href = "%s"', f)), info = f)
   }
 })
@@ -55,10 +57,12 @@ test_that("stylesheet load order is the documented cascade", {
   # defined; ui-glass.css must outrank the flat plates ui-dialog/ui-filters
   # set; ui-motion.css carries the reduced-motion escape and must be last so
   # no later sheet can re-enable animation. A reordering would not error --
-  # it would quietly restore light surfaces or drop the motion opt-out.
+  # it would quietly restore superseded surfaces, put the imported design's
+  # layout underneath the rules it replaces, or drop the motion opt-out.
   app <- .read("app.R")
   order <- c("app.css", "ui-tokens.css", "ui-dialog.css",
-             "ui-filters.css", "ui-glass.css", "ui-motion.css")
+             "ui-filters.css", "ui-glass.css", "ui-design.css",
+             "ui-motion.css")
   positions <- vapply(
     order,
     function(f) regexpr(sprintf('href = "%s"', f), app, fixed = TRUE)[[1]],
@@ -150,10 +154,18 @@ test_that("glass surfaces that host an overlay do not clip it", {
 test_that("navbar tab identities and the nav id are preserved", {
   app <- .read("app.R")
   expect_true(.has(app, 'id = "main_nav"'))
-  for (v in c("search", "dual_search", "correspondence",
-              "rm_assistant", "about")) {
+  # The FOUR workspace destinations. Every `req(input$main_nav == ...)` gate
+  # in the server reads one of these, so a rename here silently detaches an
+  # output rather than erroring.
+  for (v in c("search", "dual_search", "correspondence", "about")) {
     expect_true(.has(app, sprintf('value = "%s"', v)), info = v)
   }
+
+  # RM is deliberately NOT one of them any more (imported design, surface
+  # 1l): it is a contextual panel mounted once per page, not a place you
+  # navigate to. Asserted rather than merely dropped, because re-adding the
+  # tab would silently give the app two mounts of the same shinychat id.
+  expect_false(.has(app, 'value = "rm_assistant"'))
 })
 
 test_that("Search input, filter and output ids are preserved", {
@@ -218,7 +230,13 @@ test_that("the hero keeps a real label and a real heading", {
   # visually-hidden to visible; it did not disappear.
   expect_true(.has(html, "<h2"))
   expect_true(.has(html, "psa-hero-title"))
-  expect_true(.has(html, "psa-hero-eyebrow"))
+
+  # The imported design REMOVES the hero band: no eyebrow, no wash, no
+  # centred display treatment -- just the page title, one line of help and
+  # the search field. The heading and the label above are what had to
+  # survive that; the decorative eyebrow did not.
+  expect_false(.has(html, "psa-hero-eyebrow"))
+  expect_true(.has(html, "psa-hero--page"))
 })
 
 test_that("the filter sidebar keeps its accessible region label", {
@@ -396,89 +414,144 @@ test_that("no page-level horizontal overflow is introduced by the canvas", {
 
 
 # =========================================================================
-# 8. Lumora light system (UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF §28)
+# 8. Imported Claude Design appearance ("PSA Classifications Redesign")
 # =========================================================================
 #
-# The theme was replaced wholesale, so these assert the NEW contract in the
-# same spirit as the rest of this file: semantic facts that fail silently in
-# a browser, never a screenshot or a bare hex spot-check.
+# The appearance was replaced wholesale, so these assert the NEW contract in
+# the same spirit as the rest of this file: semantic facts that fail
+# silently in a browser, never a screenshot or a bare hex spot-check.
+#
+# The design artifact is a single dark appearance. What these tests pin is
+# that it is expressed as TOKENS in one place, that the alias layer every
+# other stylesheet reads resolves to those tokens, and that no theme
+# SWITCHING was introduced -- that was explicitly deferred.
 
-test_that("the Lumora palette is declared once, in the token layer", {
+test_that("the design palette is declared once, as semantic tokens", {
   tokens <- .read("www", "ui-tokens.css")
-  for (tok in c("--lumora-background: #ffffff", "--lumora-foreground: #111111",
-                "--lumora-ink: #0a0a0a", "--lumora-line: #e6e5e2",
-                "--lumora-surface: #f1f0ee", "--lumora-accent: #b15f2c",
+  for (tok in c("--ui-canvas: #0c0c0c", "--ui-surface: #111111",
+                "--ui-surface-muted: #0d0d0d", "--ui-surface-elevated: #0a0a0a",
+                "--ui-text: #fafafa", "--ui-accent: #78d0cd",
+                "--ui-primary-bg: #ffffff", "--ui-primary-text: #0c0c0c",
+                "--ui-border: rgba(255, 255, 255, 0.065)",
+                "--ui-border-strong: rgba(255, 255, 255, 0.18)",
                 "--lumora-radius-card: 2rem", "--lumora-radius-control: .875rem",
                 "--lumora-radius-pill: 9999px")) {
     expect_true(.has(tokens, tok), info = tok)
   }
 
-  # Declared in ONE place: a second :root palette in a surface sheet is how
-  # a theme starts drifting from itself.
-  for (f in c("ui-glass.css", "ui-filters.css", "ui-dialog.css", "ui-motion.css")) {
+  # Declared in ONE place: a second :root palette in a surface or layout
+  # sheet is how an appearance starts drifting from itself.
+  for (f in c("ui-glass.css", "ui-filters.css", "ui-dialog.css",
+              "ui-motion.css", "ui-design.css")) {
+    expect_false(.has(.read("www", f), "--ui-canvas:"), info = f)
     expect_false(.has(.read("www", f), "--lumora-accent:"), info = f)
   }
 })
 
-test_that("the application canvas is light and its text is dark ink", {
+test_that("the older token names are an alias layer over the design tokens", {
+  # This is what let a whole-appearance replacement stay a token edit: ~150
+  # rules across four stylesheets read the --lumora-* / --psa-* names, and
+  # those names are REPOINTED rather than renamed.
   tokens <- .read("www", "ui-tokens.css")
-  expect_true(.has(tokens, "background: var(--lumora-background);"))
-  expect_true(.has(tokens, "color: var(--lumora-foreground);"))
-  expect_true(.has(tokens, "color-scheme: light;"))
-
-  # bs_theme compiles Bootstrap against the same palette. Without this the
-  # navbar, DT and selectize keep rendering dark chrome under light content.
-  app <- .read("app.R")
-  expect_true(.has(app, 'bg = "#ffffff"'))
-  expect_true(.has(app, 'fg = "#111111"'))
-  expect_true(.has(app, 'primary = "#b15f2c"'))
-  expect_true(.has(app, '"border-color" = "#e6e5e2"'))
+  for (alias in c("--lumora-background: var(--ui-canvas);",
+                  "--lumora-foreground: var(--ui-text);",
+                  "--lumora-surface: var(--ui-surface);",
+                  "--lumora-line: var(--ui-border);",
+                  "--lumora-accent: var(--ui-accent);",
+                  "--psa-bg: var(--ui-canvas);",
+                  "--psa-panel: var(--ui-surface);",
+                  "--psa-focus: var(--ui-focus);")) {
+    expect_true(.has(tokens, alias), info = alias)
+  }
 })
 
-test_that("no dark-theme surface value survives underneath the light theme", {
-  # Handoff §25: do not leave conflicting dark-theme rules active beneath
-  # the light one. The dark pass's signature values are the near-black
-  # plates and the plum accent.
+test_that("no theme switching was implemented", {
+  # Explicitly deferred: semantic tokens now, the second appearance later.
+  # A stray prefers-color-scheme block or [data-theme] selector would mean
+  # the app silently has two half-built appearances, which is worse than
+  # one finished one. Scanned over RULES, not comments -- this file and the
+  # sheets themselves document the deferral in prose.
   strip <- function(f) gsub("(?s)[/][*].*?[*][/]", "", .read("www", f), perl = TRUE)
-  for (f in c("ui-tokens.css", "ui-glass.css", "ui-motion.css")) {
+  for (f in c("app.css", "ui-tokens.css", "ui-glass.css", "ui-filters.css",
+              "ui-dialog.css", "ui-design.css", "ui-motion.css")) {
     css <- strip(f)
-    for (dead in c("#050505", "#0b0b0b", "#0d0d0d", "#8f668f", "#c9a9c9",
-                   "rgba(143, 102, 143")) {
+    expect_false(.has(css, "prefers-color-scheme"), info = f)
+    expect_false(.has(css, "[data-theme"), info = f)
+  }
+  # And no toggle control anywhere in the UI layer.
+  for (f in list.files(file.path(.repo, "R", "ui"), full.names = TRUE)) {
+    src <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    expect_false(grepl("theme_toggle|toggle_theme|input_dark_mode", src), info = basename(f))
+  }
+})
+
+test_that("the application canvas is the design's dark ground", {
+  tokens <- .read("www", "ui-tokens.css")
+  expect_true(.has(tokens, "background: var(--ui-canvas);"))
+  expect_true(.has(tokens, "color: var(--lumora-foreground);"))
+  expect_true(.has(tokens, "color-scheme: dark;"))
+
+  # bs_theme compiles Bootstrap against the same values. Without this the
+  # navbar, DT and selectize keep rendering the previous chrome under the
+  # new content -- and the .btn-close / hamburger data-URI glyphs, which
+  # are compiled from `fg`, come out invisible.
+  app <- .read("app.R")
+  expect_true(.has(app, 'bg = "#0c0c0c"'))
+  expect_true(.has(app, 'fg = "#fafafa"'))
+  expect_true(.has(app, 'primary = "#78d0cd"'))
+  expect_true(.has(app, '"card-bg" = "#111111"'))
+})
+
+test_that("no superseded light-appearance value survives underneath", {
+  # Do not leave conflicting rules from the previous appearance active
+  # beneath this one. Its signature values were the white/cream grounds and
+  # the burnt-orange accent.
+  strip <- function(f) gsub("(?s)[/][*].*?[*][/]", "", .read("www", f), perl = TRUE)
+  for (f in c("ui-tokens.css", "ui-glass.css", "ui-motion.css", "ui-design.css")) {
+    css <- strip(f)
+    for (dead in c("#f1f0ee", "#e6e5e2", "#b15f2c", "#97501f", "#cf8047",
+                   "#5f5f5f", "rgba(177, 95, 44")) {
       expect_false(.has(css, dead), info = paste(f, dead))
     }
   }
 })
 
-test_that("burnt orange is the focus and accent token", {
+test_that("the accent is a state colour and the primary action is the pill", {
+  # The artifact's own legend: the gradient/teal accent marks STATE
+  # (selection rails, eyebrows, focus) and the primary action is a white
+  # pill with near-black text. Those are two different jobs and must not
+  # collapse into one.
   tokens <- .read("www", "ui-tokens.css")
-  expect_true(.has(tokens, "--psa-focus: var(--lumora-accent);"))
+  expect_true(.has(tokens, "--psa-focus: var(--ui-focus);"))
   expect_true(.has(tokens, "outline: 2px solid var(--lumora-accent);"))
+
+  glass <- .read("www", "ui-glass.css")
+  expect_true(.has(glass, "background: var(--ui-primary-bg);\n  border-color: var(--ui-primary-bg);"))
+  expect_true(.has(glass, "color: var(--ui-primary-text);"))
 })
 
-test_that("ink is used selectively, not as the page ground", {
-  # §9: black cards are EMPHASIS against a light page. The verified
-  # classification card is the one surface that earns it; the canvas, the
-  # sidebar, the panels and the dialog plate must all stay light.
+test_that("the verified classification card stays the most emphatic surface", {
+  # It is no longer an INVERTED plate -- on this ground the inverted plate
+  # is the primary button, and the two must not read as the same object.
+  # It earns its standing from an elevated ground, a brighter border and a
+  # shadow instead.
   glass <- .read("www", "ui-glass.css")
-  expect_true(.has(glass, "background: var(--lumora-ink);"))
-
   block <- function(sel) {
-    # Selectors here are all `.name` with hyphens only, so escaping the
-    # leading dot is enough -- no general regex escaper needed.
     esc <- sub("^[.]", "[.]", sel)
     m <- regmatches(glass, regexpr(paste0(esc, "[ ][{][^}]*[}]"), glass, perl = TRUE))
     if (length(m)) m else ""
   }
+  card <- block(".psa-verified-card")
+  expect_true(.has(card, "border: 1px solid var(--ui-border-strong);"))
+  expect_true(.has(card, "background: var(--ui-surface);"))
+  expect_true(.has(card, "box-shadow: var(--elev-2);"))
+
+  # The ordinary panels must NOT borrow that treatment, or nothing on the
+  # page reads as the answer.
   for (sel in c(".psa-sidebar", ".psa-dual-panel", ".rm-assistant-card",
                 ".psa-source-card")) {
-    expect_false(.has(block(sel), "--lumora-ink"), info = sel)
+    expect_false(.has(block(sel), "--ui-border-strong"), info = sel)
   }
-
-  # Text on the ink card inverts explicitly rather than relying on
-  # inheritance, and its secondary step is the measured one rather than the
-  # reference's .55 alpha, which lands under AA.
-  expect_true(.has(glass, ".psa-verified-card .psa-tag"))
-  expect_true(.has(glass, "--lumora-muted-on-dark"))
 })
 
 test_that("the surface primitive keeps its structural contracts", {
@@ -491,19 +564,16 @@ test_that("the surface primitive keeps its structural contracts", {
   expect_true(.has(glass, ".psa-liquid-glass > * { position: relative; z-index: 1; }"))
 })
 
-test_that("primary actions are ink pills and secondary are lined white", {
+test_that("primary actions are pills and hover transforms are gated off touch", {
   glass <- .read("www", "ui-glass.css")
   expect_true(.has(glass, "border-radius: var(--lumora-radius-pill);"))
-  expect_true(.has(glass, "background: var(--lumora-ink);\n  border-color: var(--lumora-ink);"))
-
-  # Hover transforms are gated off touch: a moving tap target is a defect.
+  # A moving tap target is a defect.
   expect_true(.has(glass, "@media (hover: hover) and (pointer: fine)"))
 })
 
-test_that("classification codes are ink, never the low-contrast accent", {
-  # Measured at 4.06:1 in accent on the warm surface -- compliant for large
-  # text, and the worst treatment in the app applied to its most important
-  # datum. Ink takes it to 16.58:1.
+test_that("classification codes are full-strength text, never the accent", {
+  # The accent is a state colour; a headline code is not a state marker,
+  # and the accent is the least legible treatment in the system.
   glass <- .read("www", "ui-glass.css")
   expect_true(.has(glass, ".psa-detail-code,\n.psa-verified-code {\n  color: var(--lumora-foreground);\n}"))
 })
@@ -519,13 +589,20 @@ test_that("codes and table headers never break mid-word", {
   expect_true(.has(tokens, "table.dataTable thead th {\n  white-space: nowrap;\n}"))
 })
 
-test_that("secondary text mixed by alpha was raised for the light ground", {
-  # app.css expresses secondary copy as color-mix at 50/55% of --color-text.
-  # Those steps were AA on black and measure 3.54:1 and 4.17:1 on white.
+test_that("functional secondary text clears AA on the dark ground", {
+  # The artifact's own #6b6b6d micro-label grey measures 3.6:1 on #111111.
+  # It is deliberately NOT adopted as a text token: --ui-text-subtle is
+  # #8b8b8d (5.5:1 on surface) and --ui-text-muted is #9e9e9e (7.1:1).
   tokens <- .read("www", "ui-tokens.css")
   expect_true(.has(tokens, ".rm-assistant-disclaimer"))
   expect_true(.has(tokens, "color: var(--lumora-muted-text);"))
-  expect_true(.has(tokens, "--lumora-muted-text: #5f5f5f;"))
+  expect_true(.has(tokens, "--ui-text-muted: #9e9e9e;"))
+  expect_true(.has(tokens, "--ui-text-subtle: #8b8b8d;"))
+
+  strip <- function(f) gsub("(?s)[/][*].*?[*][/]", "", .read("www", f), perl = TRUE)
+  for (f in c("ui-tokens.css", "ui-glass.css", "ui-design.css")) {
+    expect_false(.has(strip(f), "#6b6b6d"), info = f)
+  }
 })
 
 test_that("the reference's marketing machinery was NOT imported", {

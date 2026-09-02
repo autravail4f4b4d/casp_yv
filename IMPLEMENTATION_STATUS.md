@@ -1680,3 +1680,487 @@ Escape and close button.
   which touches no RM code.
 - Incognito, a second browser engine and real touch interaction remain
   unexercised.
+
+---
+
+# Milestone — imported Claude Design layout + RM contextual sidecar
+
+Branch `feature/ui-final-layout-rm-sidecar`, baseline HEAD
+`379b2b500b3d8628f5524941e2b443699bfc3818`. **Uncommitted**, for review.
+
+## Verified starting baseline
+
+`Rscript scripts/run_tests.R` on the untouched tree: the recorded baseline
+for this branch. The full suite was re-run after every workstream and again
+at the end of the milestone (see Verification).
+
+## Design import
+
+The Claude Design MCP path could not be used: `DesignSync` reported that
+design-system authorization is not available to a non-interactive session,
+so `list_projects` never ran. The artifact was supplied locally instead and
+read directly:
+
+```text
+External read-only Claude Design project reference
+  PSA Classifications Redesign.dc.html   1361 lines
+  support.js                             1911 lines
+```
+
+Both are **external, read-only references**. Neither was copied into the
+repository and neither was modified. `support.js` is the generated
+`dc-runtime` canvas engine and contains no application content.
+
+All thirteen surfaces (1a–1m) were read in full and mapped. No conflict was
+found between the artifact and the newer functional decisions: the artifact
+already draws the Edition control as a collapsed picker, Compare Selected as
+a page-level action, the matched-height Compare Editions row, and RM as a
+contextual sidecar rather than a nav tab.
+
+`unified-app-primary.dc.html` in this repository was NOT used.
+
+## What changed
+
+| Area | Change |
+|---|---|
+| Navigation | Four workspace destinations. RM removed as a nav panel and mounted once per page as a global panel |
+| Search | Hero band removed; page head + full-width field; results toolbar carrying the count and Browse hierarchy; sticky selected-entry column at 1280+ |
+| System control | Desktop selectize unchanged; new phone-width picker sheet over the shared dialog shell, showing the complete registry set |
+| Edition control | Permanently expanded radio list replaced by a collapsed control + disclosed popover/sheet. Same `classification_version` radio input, same update path |
+| PSOC + PSIC | Compare selected details moved from the page foot to the page head, above both panels |
+| Compare Editions | Direction widened at 768+; matched-height table/inspector row at 992+; relationship-level Ask RM action made reachable |
+| RM Assistant | Sidecar (1280+, non-modal) / drawer (1024–1279, modal) / sheet (1023 and below, modal), one panel and one chat mount |
+| Contextual RM | Reserved `.psa-askrm-reserved` slots activated as real controls; attached-context chips |
+| Tokens | `--ui-*` semantic tokens declared once in `ui-tokens.css`; the older `--lumora-*` / `--psa-*` names repointed at them; `bs_theme()` compiled from the same values |
+
+## Files changed
+
+```text
+modified   app.R
+modified   R/ui/ui_assistant.R
+modified   R/ui/ui_correspondence.R
+modified   R/ui/ui_dual_search.R
+modified   R/ui/ui_icons.R
+modified   R/ui/ui_search.R
+modified   www/app.css
+modified   www/ui-glass.css
+modified   www/ui-motion.css
+modified   www/ui-tokens.css
+modified   tests/testthat/test-design-semantics.R
+modified   tests/testthat/test-ui-liquid-glass.R
+new        R/ui/ui_pickers.R
+new        R/ui/ui_sidecar.R
+new        www/ui-design.css
+new        tests/testthat/test-ui-pickers.R
+new        tests/testthat/test-ui-sidecar.R
+new        tests/testthat/test-ui-design-layout.R
+modified   docs/UI_CONTRACT.md          (section 23)
+modified   docs/ASSISTANT_CONTRACT.md   (section 16)
+modified   IMPLEMENTATION_STATUS.md     (this section)
+```
+
+**Nothing under `R/assistant/`, `R/retrieval/`, `R/correspondence/`,
+`R/adapters/`, `data/`, `data-raw/`, `scripts/`, `renv.lock` or
+`DESCRIPTION` was touched.** `repository.R`, `registry.R`, `search.R`,
+`schema.R` and `parallel_search.R` are unmodified. Semantic authority
+remains off; no provider, model or embedding configuration was changed.
+
+## Defects found and fixed during browser UAT
+
+Every one of these was measured in a running browser, not inferred.
+
+1. **The disclosed Edition panel was a sibling of its positioned field.**
+   `position: absolute` therefore resolved against the page, not the
+   control. Composed by one function (`psa_picker_field()`) now, and the
+   nesting is asserted rather than only the CSS.
+2. **Focus on open landed on nothing.** The panel's phone-width sheet
+   header is `display:none` at desktop, and its close button was the first
+   focusable match. The candidate list now prefers the checked option and
+   filters zero-size elements.
+3. **The docked sidecar did not reflow the page.** bslib's fill page writes
+   `style="padding:0px"` onto `<body>`; the per-container override lost and
+   the results table ran on underneath the panel. Now body padding with
+   `!important` — the one in this sheet.
+4. **The RM panel kept docked, non-modal semantics after a resize.** The
+   media-query change event, `resize` and `ResizeObserver` all failed to
+   fire under viewport emulation. The state is now also re-derived on any
+   interaction, so the panel can never be *used* in a stale mode.
+5. **The backdrop never appeared when a resize crossed into overlay mode.**
+   It was set only in `open()`; it now follows the breakpoint.
+6. **The phone-width picker sheet docked 2600px down the document.** A
+   `position: fixed` element resolves against the nearest ancestor with a
+   transform, and the entrance reveal puts one on `.psa-search-body` for
+   its whole duration — indefinitely in a throttled tab, where it never
+   advances past frame 0. The reveal is now suspended while a sheet is
+   open, in `ui-motion.css`, which owns motion and loads last.
+7. **Compare Editions Direction was clipped at 320px.** `ui-design.css`
+   loads after `ui-filters.css`, so an unconditional 320px minimum
+   outranked that sheet's phone-width collapse. Scoped to 768+.
+8. **The matched-height row did not match.** Two causes: `ui-glass.css`'s
+   two-class `.psa-corr-inspector.psa-liquid-glass { position: sticky }`
+   outranked a plain class regardless of load order, and Bootstrap's 24px
+   `.card` bottom margin left the two bottom edges apart. Both fixed;
+   edges now measure identical.
+9. **The degraded RM card announced "RM Assistant" twice** inside the
+   sidecar, which supplies that heading itself.
+10. **The relationship-level Ask RM action was unreachable.** It was built
+    only by `correspondence_inspector_ui()`, which the running app never
+    renders. Both renderers now build it from one helper.
+
+## Verification
+
+```text
+Rscript scripts/run_tests.R      FAIL 0 | WARN 0 | SKIP 0 | PASS 7435
+Rscript -e "renv::status()"      No issues found
+git diff --check                 clean
+```
+
+New contract tests:
+
+```text
+tests/testthat/test-ui-pickers.R         complete registry scope, unchanged
+                                         version input, current-first order,
+                                         grouping, sheet-vs-popover, a11y
+tests/testthat/test-ui-sidecar.R         RM not a nav panel, one mount,
+                                         non-modal docked semantics, modal
+                                         narrow semantics, persistence,
+                                         attached context, degradation
+tests/testthat/test-ui-design-layout.R   page-level compare action, direction
+                                         width, matched-height row, detail
+                                         exposure limits, overflow guards
+```
+
+Rewritten: section 8 of `test-ui-liquid-glass.R` (the appearance contract)
+and the reserved-Ask-RM-slot test in `test-design-semantics.R`, which
+asserted that a placeholder stayed inert and now asserts it was activated.
+
+## Browser UAT — what was actually exercised
+
+Live Shiny app, Chromium, both provider states.
+
+* Widths **1440, 1366, 1280, 1100, 1024, 768, 767, 390, 375, 320** across
+  all four destinations: no page-level horizontal overflow at any width on
+  any destination.
+* Search: System (desktop select and phone sheet), Edition popover open /
+  keyboard / Escape / focus return / selection closes it, current-first
+  ordering with Current and Archived groups, results toolbar, Browse
+  hierarchy dialog.
+* Phone System sheet: complete 10-system registry list, search filter,
+  selected state, and confirmed to **cover** the Edition control rather
+  than float across it.
+* PSOC + PSIC: compare action visible without scrolling, genuinely disabled
+  until both selections exist, comparison dialog with the independence
+  safeguard, Escape and close.
+* Compare Editions: direction control at every width, matched-height row
+  measured edge-to-edge, relationship-level Ask RM.
+* RM: all three breakpoints, docked non-modal reflow measured, overlay
+  backdrop and scroll lock, contextual attach from both Search and Compare
+  Editions, two chips coexisting, chip removal, close-preserves-chat,
+  navigation-preserves-context, degraded state.
+
+## RM non-regression
+
+**Not executed as a live model matrix.** This worktree has no provider
+credential, and configuring one is outside this milestone's boundary. What
+was executed is the deterministic assistant suite that pins the same
+behaviour without a provider — routing, clarification lifecycle, execution,
+response guard, tool registry, contextual coding and the evaluation
+fixtures — all of which pass inside the full run above.
+
+The structural argument is the stronger one here: **no file under
+`R/assistant/` or `R/retrieval/` was modified**, `assistant_handle_turn()`
+is still the only path a turn takes, the tool interlock and render
+suppression are untouched, and `R/ui/ui_sidecar.R` is asserted by test not
+to reference any of them.
+
+## Known limitations
+
+- The live RM conversation matrix (mayor / teacher / statistician /
+  carpenter / outsourced janitor / palay / corn / six-item batch / angkas)
+  remains unrun in this worktree, for the reason above.
+- Attached context is visible, removable state **about** the conversation;
+  it is not injected into the model's prompt in this pass.
+- The design's "Export CSV" control (surface 1a) was not implemented: it is
+  a new feature, not a placement change, and this milestone is presentation
+  only.
+- Descriptive-data enrichment for PSOC/PSIC details remains deferred; the
+  detail dialogs render only metadata that actually exists.
+- Theme switching is not implemented, deliberately. The tokens are in place
+  for it; there is exactly one appearance.
+- Under viewport emulation the entrance animations never advance past
+  frame 0 and the passive resize signals do not fire. Both are harness
+  artifacts with in-app mitigations (see defects 4 and 6), but neither has
+  been observed in a normal, visible browser tab.
+
+---
+
+# Milestone — RM attached-context bridge
+
+Branch `feature/ui-final-layout-rm-sidecar`, on top of the imported-design
+milestone above. **Uncommitted**, for review.
+
+## The blocker this closes
+
+Attached context was visible and removable in the panel but inert: a user
+who attached PSOC 1112 and asked "Why is this classified here?" was asking
+about a referent RM had no access to, and the turn was coded as if the
+words themselves described somebody's job.
+
+## Bridge architecture
+
+```text
+UI selection (already verified)
+   │  identifiers only — system / version / code
+   ▼
+assistant_turn_set_attached_context()      per-session turn state
+   │
+   ▼
+assistant_handle_turn()                    the ONLY entry point
+   │
+   ├─ pending clarification?  ── yes ──▶  bounded reply path (context ignored)
+   ├─ latest packet?          ── yes ──▶  existing explanation path
+   ├─ not a referential turn? ── yes ──▶  ordinary routing + coding
+   │
+   ▼  assistant_attached_context_for_turn()
+assistant_verify_attached_context()        CANONICAL RE-READ
+   │  get_classification_entry() / get_psic_correspondence()
+   │  unreadable ──▶ NULL ──▶ turn proceeds as before
+   ▼
+assistant_attached_context_packet()        allowed_codes$context = verified
+   │
+   ├─▶ retained as the turn's packet ──▶ response guard authorises those
+   │                                      codes and nothing else
+   └─▶ assistant_render_attached_context() ──▶ app.R grounds the provider
+                                                history BEFORE the round-trip
+```
+
+Five properties make this safe rather than convenient:
+
+1. **Identifiers only.** A row held across turns is a snapshot, and
+   presenting classification facts that were true earlier is the one thing
+   this application must never do. The descriptor forces a fresh canonical
+   read, which also makes an edition change fail closed.
+2. **One entry point.** The bridge is consulted from inside
+   `assistant_handle_turn()`; nothing calls it from anywhere else.
+3. **No second classification path.** The only services it may call are
+   `get_classification_entry()` and `get_psic_correspondence()` — asserted
+   by a test that scans its own source.
+4. **The guard still guards.** The verified read becomes a packet, so
+   `assistant_guard_response()` authorises exactly the codes the repository
+   returned and rejects everything else, as on a coding turn.
+5. **Weakest referent.** A pending clarification and an answer RM just
+   produced both outrank it; an explicit coding request never reaches it.
+
+## Files changed
+
+```text
+new        R/assistant/assistant_attached_context.R    the bridge
+modified   R/assistant/assistant_execution.R           one branch + result shape
+modified   R/assistant/assistant_turn_state.R          descriptor accessors
+modified   R/assistant/assistant_coding_service.R      allowed_codes$context
+modified   R/ui/ui_sidecar.R                           descriptors, one writer
+modified   app.R                                       turn_state wiring, grounding
+new        tests/testthat/test-assistant-attached-context.R
+modified   docs/ASSISTANT_CONTRACT.md                  §17 (§16.3 superseded)
+modified   docs/UI_CONTRACT.md                         §23.12 rewritten
+modified   IMPLEMENTATION_STATUS.md                    this section
+```
+
+**`R/assistant/` did change** — necessarily, since the brief asks for a
+bridge into the turn pipeline. Nothing under `R/retrieval/`,
+`R/correspondence/`, `R/adapters/`, `data/`, `data-raw/`, `scripts/`,
+`renv.lock` or `DESCRIPTION` was touched, and `repository.R`, `registry.R`,
+`search.R`, `schema.R` and `parallel_search.R` are unmodified.
+
+### The one change that is not additive
+
+`.assistant_single_result()` and the batch result now carry
+`context_note = NA_character_`. Without it the field was absent on some
+result shapes, so `is.na(res$context_note)` returned `logical(0)` at the
+call site — which is not FALSE, it is an error inside `if`. Found by the
+new tests before it could reach a running session.
+
+## Acceptance matrix
+
+| Case | Result |
+|---|---|
+| A — attach PSOC 1112, "Why is this classified here?" | "this" resolves to verified PSOC 1112; `allowed_codes` = {1112}; grounding block carries the repository's own label/level/status |
+| B — 1112 attached, "What is the PSOC for a statistician at PSA?" | Fresh request supersedes; no context note; resolves 2122 / 8411; the chip stays attached |
+| C — teacher clarification pending, reply "latter" | Resolves 2330 / 85314 normally; no context note; no pending state survives. The bridge refuses to fire while any question is pending |
+| D — context removed | No context note; the removed code is authorised by nothing; the turn behaves exactly as it did before the bridge existed |
+| E — attach a relationship, "Explain this relationship." | Verified correspondence reaches RM; both sides authorised and nothing else; the statistical-use safeguard is in the block |
+
+## RM regression
+
+The named matrix, run deterministically **with PSOC 1112 attached
+throughout**, is byte-identical to the matrix without it:
+
+```text
+mayor                 resolved   psoc 1111  psic 84113
+teacher -> latter     resolved   psoc 2330  psic 85314
+statistician (after)  resolved   psoc 2122  psic 8411
+carpenter -> "residential construction"  resolved  psoc 7115  psic 41001
+carpenter -> "residential" (bare)        clarify   psoc 7115  PSIC UNRESOLVED
+janitor -> agency     resolved              psic 78200   (one wage-payer question)
+palay -> upland       resolved   psoc 6111  psic 01123
+corn                  resolved   psoc 6112  psic 01130
+six-item batch        resolved   8325, 9335, 8141, 5247, 2124, 3424
+angkas after batch    resolved   psoc 8323   (no 3424 leak)
+```
+
+No context note is offered on any of them. That non-interference is now a
+test, not an observation.
+
+> The carpenter and batch rows above were corrected after review; the
+> original report labelled the `"residential construction"` flow as
+> `carpenter -> residential` and used an invented batch input. See the
+> correction section at the end of this document for the audit.
+
+## Verification
+
+```text
+Rscript scripts/run_tests.R      FAIL 0 | WARN 0 | SKIP 0 | PASS 7561
+Rscript -e "renv::status()"      No issues found
+git diff --check                 clean
+```
+
+## Known limitations
+
+- Still no live provider in this worktree, so the model's *prose* on a
+  context turn is unexercised. What is exercised is everything that decides
+  what it may say: the canonical read, the packet, the authorised code set
+  and the guard.
+- The bridge fires on the existing short-referential detector
+  (`assistant_explanation_requested()`). A long referential paragraph is
+  not treated as one — deliberately, since widening that detector would
+  change which turns the model is allowed to speak on.
+- When RM has just produced an answer, that answer remains the referent for
+  "this" even if a chip was attached afterwards. Recency between the two is
+  not tracked; the nearer-referent rule is simply "RM's own last answer
+  wins".
+
+---
+
+## Correction — the reported "carpenter → residential 7115 / 41001"
+
+### What happened
+
+**A reporting defect, not a behavioural one.** The matrix row labelled
+`carpenter -> residential` was produced by running the input
+**`"residential construction"`**, which is a different accepted flow. The
+oracle flow — the bare qualifier `"residential"` — was never run in that
+report, and the label implied it had been.
+
+### The two flows, both accepted, and both already pinned in the repo
+
+| Input after `carpenter psoc psic` | Outcome | Oracle |
+|---|---|---|
+| `residential` (bare qualifier) | `clarification_required`, PSOC 7115 preserved, **PSIC unresolved**, question narrows, pending survives | `test-assistant-clarification-lifecycle.R:66` — "carpenter leaves PSIC unresolved and 'residential' cannot authorise 87100" |
+| `residential construction` (real activity) | `resolved`, PSOC 7115, PSIC 41001 | `test-assistant-clarification-lifecycle.R:86` — "carpenter + a real activity still resolves (the narrowing is not a wall)" |
+
+Both tests are part of the accepted v10.1 baseline, both are **unmodified
+on this branch**, and both pass.
+
+### Where 41001 comes from
+
+Existing activity-slot handling, on the fuller phrase only. Ruled out by
+direct measurement, not by argument:
+
+| Candidate cause | Verdict |
+|---|---|
+| Stale clarification state | No — the bare-qualifier flow keeps its pending question and resolves nothing |
+| Attached-context bridge | No — identical results with context attached, and no context note is produced on any coding turn |
+| Existing activity-slot handling | **Yes** — and only for `"residential construction"` |
+| Fresh global retrieval | No — the bare qualifier is refused, which is the defect that test was written for (it once returned 87100) |
+| A modified test expectation | No — no RM-behaviour test file is modified on this branch |
+| Another pre-existing behaviour | Confirmed pre-existing: byte-identical output at baseline HEAD `379b2b5` |
+
+Baseline comparison method: the HEAD tree was exported with `git archive`
+to a scratch directory and the same script run against it. Every carpenter
+flow, in all three context conditions, produced identical output on HEAD
+and on this branch.
+
+### Expectations changed during the bridge work — full audit
+
+`git diff -- tests/` shows exactly two TRACKED test files modified on this
+branch, both from the earlier presentation milestone and both purely
+visual: `test-design-semantics.R` and `test-ui-liquid-glass.R`. **No
+RM-behaviour test, and no eval fixture, is modified.**
+
+The expectations changed during the bridge work were both in files this
+branch itself added:
+
+**1. `test-assistant-attached-context.R`, case D** — new file.
+
+* was: `expect_identical(res$allowed_codes, character(0))` and
+  `expect_null(assistant_turn_latest_packet(st))`
+* became (wrongly): `expect_false(.psoc_code %in% ...)` on both
+* now: the strong form is **restored** —
+  `expect_identical(res$allowed_codes, character(0))` and
+  `expect_identical(assistant_allowed_codes(latest_packet), character(0))`,
+  plus an explicit assertion that a code-less packet object *does* exist
+  and the status is `clarification_required`.
+* why the original was half-wrong: `allowed_codes == character(0)` was
+  correct all along and should never have been weakened. `expect_null(packet)`
+  was factually wrong — a referential turn with no referent falls through
+  to routing and produces an empty clarification packet. **Verified
+  identical at HEAD**, so the corrected assertion pins the baseline rather
+  than the bridge.
+* alters accepted v10.1 behaviour: **no**.
+
+**2. `test-ui-sidecar.R`** — new file from the presentation milestone.
+
+* was: `grepl("system = as.character(entry$system)", src)` and
+  `grepl("code = as.character(entry$code)", src)` — asserting the old
+  snapshot-shaped `detail =` payload
+* now: asserts the identifier-only descriptor constructors, plus two new
+  tests that the chip's label never becomes the descriptor and that one
+  writer keeps chips and descriptors in step
+* why: the payload it described no longer exists; the bridge deliberately
+  replaced a carried row with identifiers. The replacement assertion is
+  stronger, not weaker.
+* alters accepted v10.1 behaviour: **no** — it describes UI plumbing.
+
+A third, trivial one in the same file: a `sync_turn_state(` call-site count
+of `>= 4` corrected to `>= 3`, because the definition line does not match
+the call pattern.
+
+### Also corrected in the same pass
+
+The batch row of that report used an invented six-line input. The accepted
+batch input is the one in `test-assistant-execution.R:205`, and it is now
+what the matrix runs. Per-item codes verified: 8325, 9335, 8141, 5247,
+2124, 3424.
+
+### The matrix, re-run from fresh sessions
+
+Normal and with an unrelated PSOC 1112 attached — behaviourally identical:
+
+```text
+mayor                       resolved   1111 / 84113
+teacher (turn 1)            clarify    2330 / 8531
+teacher -> latter           resolved   2330 / 85314
+statistician after teacher  resolved   2122 / 8411
+carpenter (turn 1)          clarify    7115 / —
+carpenter -> residential    clarify    7115 / —        PSIC unresolved
+janitor (turn 1)            clarify    wage-payer question
+janitor -> agency pays      resolved         / 78200
+palay -> upland             resolved   6111 / 01123
+corn                        resolved   6112 / 01130
+six-item batch              resolved   8325, 9335, 8141, 5247, 2124, 3424
+angkas after batch          resolved   8323            no 3424 leak
+```
+
+No context note is offered on any coding turn in either condition.
+
+### Precedence, re-asserted
+
+```text
+VALID BOUNDED CLARIFICATION  >  ATTACHED PAGE CONTEXT
+EXPLICIT NEW CODING REQUEST  >  STALE ATTACHED PAGE CONTEXT
+ATTACHED CONTEXT             >  only genuinely referential turns
+```
+
+A weak activity fragment such as `residential` is not a referential turn
+and never reaches the bridge. That is now asserted directly, with an
+attached record present, in `test-assistant-attached-context.R`.

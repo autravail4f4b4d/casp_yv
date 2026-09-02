@@ -162,15 +162,35 @@ dual_search_ui <- function() {
     shiny::tags$div(
       class = "psa-dual",
 
+      # PAGE HEAD (design surface 1d).
+      #
+      # "Compare selected details" is a PAGE-LEVEL action and now sits here,
+      # beside the title, instead of below both tables. Measured reason, not
+      # taste: at the bottom of the page it was under two 10-row DataTables
+      # and their pagination, so the control a user reaches for immediately
+      # after making the second selection required scrolling past everything
+      # they had just used. It is the first thing in the tab order after the
+      # intro, and it is visible without scrolling at every supported width.
       shiny::tags$div(
         class = "psa-hero psa-dual-hero",
-        shiny::tags$h2(class = "psa-dual-title", "PSOC + PSIC"),
-        shiny::tags$p(
-          class = "psa-dual-intro",
-          "Two separate searches. Search an occupation on one side and an ",
-          "industry on the other \u2014 each side keeps its own query, its own ",
-          "results and its own selection. ",
-          shiny::tags$strong("They never determine each other.")
+        shiny::tags$div(
+          class = "psa-dual-hero-text",
+          shiny::tags$h2(class = "psa-dual-title", "PSOC + PSIC"),
+          shiny::tags$p(
+            class = "psa-dual-intro",
+            "Two separate searches. Search an occupation on one side and an ",
+            "industry on the other \u2014 each side keeps its own query, its own ",
+            "results and its own selection. ",
+            shiny::tags$strong("They never determine each other.")
+          )
+        ),
+        # UI-03: compare the two selections in one dialog. Rendered as an
+        # output purely so the control can be genuinely disabled until one
+        # row of EACH kind is selected -- it is not a second search surface
+        # and it reads no data.
+        shiny::tags$div(
+          class = "psa-dual-compare",
+          shiny::uiOutput(DUAL_SEARCH_COMPARE_OUTPUT)
         )
       ),
 
@@ -178,15 +198,6 @@ dual_search_ui <- function() {
         class = "psa-dual-grid",
         dual_search_panel_ui("psoc"),
         dual_search_panel_ui("psic")
-      ),
-
-      # UI-03: compare the two selections in one dialog. Rendered as an
-      # output purely so the control can be genuinely disabled until one row
-      # of EACH kind is selected -- it is not a second search surface and it
-      # reads no data.
-      shiny::tags$div(
-        class = "psa-dual-compare",
-        shiny::uiOutput(DUAL_SEARCH_COMPARE_OUTPUT)
       ),
 
       shiny::tags$p(

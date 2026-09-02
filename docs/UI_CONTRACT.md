@@ -51,21 +51,25 @@ edition is PSA's current one or an archived reference.
 | Browse/Archive | Combined into the Search screen; edition selector + level selector + blank-query browse together satisfy this |
 | Dual Search | Implemented as a separate nav panel — one query, independent PSOC (occupations) + PSIC (industries) result panels |
 | Compare PSIC Editions | Implemented as a separate nav panel — bidirectional PSIC 2019 ↔ Revision 5 (2026) correspondence explorer |
-| RM Assistant | Implemented as a separate nav panel — conversational assistant (shinychat + ellmer). See `docs/ASSISTANT_CONTRACT.md` |
+| RM Assistant | **No longer a nav panel — superseded by §23.8.** A global contextual panel (sidecar / drawer / sheet) mounted once per page and opened from the header and from record-level launchers. See `docs/ASSISTANT_CONTRACT.md` §16 |
 | About/Data Sources | Implemented as a separate nav panel |
 
-All five nav panels live under one `bslib::page_navbar(id = "main_nav", ...)`
+**Four** nav panels live under one `bslib::page_navbar(id = "main_nav", ...)`
 — `input$main_nav` is a real Shiny input holding the active tab's `value`
-(`"search"` / `"dual_search"` / `"correspondence"` / `"rm_assistant"` /
-`"about"`). See the implementation note under section 4 for why this exists
-and why every secondary-tab output is gated on it.
+(`"search"` / `"dual_search"` / `"correspondence"` / `"about"`). See the
+implementation note under section 4 for why this exists and why every
+secondary-tab output is gated on it. `"rm_assistant"` is no longer one of
+those values.
 
-**The RM Assistant panel is the one exception to that gating**, and
-deliberately so: it declares no Shiny outputs at all. The chat is a custom
-element driven by custom messages (delivered whether or not the tab is
-visible) and its greeting is present in the initial HTML rather than pushed
-from the server, so it needs neither the `req(input$main_nav == ...)` gate
-nor `outputOptions(suspendWhenHidden = FALSE)`.
+**The RM panel needs no such gating**, and deliberately so: it declares no
+Shiny outputs that drive the chat. The chat is a custom element driven by
+custom messages (delivered whether or not the panel is open) and its
+greeting is present in the initial HTML rather than pushed from the server,
+so it needs neither a `req(input$main_nav == ...)` gate nor
+`outputOptions(suspendWhenHidden = FALSE)`. Its two `renderUI` outputs (the
+attached-context chips and the Search screen's record-level launcher) are
+forced always-on for the same reason every other always-visible output in
+this app is.
 
 ## 4. Stable Shiny input/output IDs
 
@@ -83,7 +87,7 @@ server logic in the same change.
 | `classification_query` | input (text) | Free-text search query; blank = browse |
 | `classification_results` | output (DT table) | Results table; row selection drives the detail card |
 | `selected_entry` | output (uiOutput) | The "Selected entry" detail card body |
-| `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"rm_assistant"` / `"about"` |
+| `main_nav` | input (implicit, from `page_navbar(id = "main_nav")`) | The active tab's value: `"search"` / `"dual_search"` / `"correspondence"` / `"about"`. `"rm_assistant"` was removed when RM became a global panel (§23.2) |
 | `classification_result_count` | output (uiOutput) | Result count above the results table; reads the same reactive as the table so the two can never disagree |
 | `sources_panel` | output (uiOutput) | The About/Data Sources panel body |
 | `dual_search_psoc_query` | input (text) | PSOC query. **Independent of PSIC** (UI-POST-02): typing here must never change any PSIC state |
@@ -446,8 +450,12 @@ bookmarkable value is stable.
 | `search` | Search | Search |
 | `dual_search` | PSOC + PSIC | Dual Search |
 | `correspondence` | Compare Editions | Compare PSIC Editions |
-| `rm_assistant` | RM Assistant | RM Assistant |
 | `about` | Sources | About / Data Sources |
+
+`rm_assistant` was a fifth value in this table until the imported design
+made RM a global panel rather than a destination (§23.2). The assistant's
+own ids — the `rm_assistant` module namespace, `rm_assistant-chat`,
+`rm_assistant-new_chat` — are unchanged.
 
 Browse/Archive remains **not** a separate value — it is expressed inside
 `search` by the edition control + level select + blank-query browse.
@@ -492,19 +500,19 @@ fallback the handoff explicitly permits (§5) rather than the bottom tab
 bar; it sets the same five `main_nav` values through the same mechanism,
 and its links measure ~275×53px. The toggler is floored at 44×44px.
 
-### Reserved "Ask RM" slots — inert, and must stay inert
+### Reserved "Ask RM" slots — SUPERSEDED, now activated
 
-Two positions (Search detail header; Compare Editions relationship-detail
-header) render `<span class="psa-askrm-reserved" aria-hidden="true">`.
-They are **not** `<a>`/`<button>`, carry no `tabindex`, no cursor
-affordance and no hover state, and are confirmed absent from the
-accessibility tree. An inert-but-focusable control would be a worse
-accessibility outcome than omitting it.
-
-Their text is deliberately kept at the design's 35% opacity (2.94:1),
-below WCAG AA — permissible only because the element is `aria-hidden` and
-conveys no content. **When these are wired into real controls they must
-gain button semantics AND be raised to at least 50% opacity (4.76:1).**
+> **Superseded by §23.9.** This subsection described two inert,
+> `aria-hidden` `<span class="psa-askrm-reserved">` placeholders that held
+> layout space for controls that had not been wired yet, and set the
+> conditions they had to meet when they were: real button semantics and
+> AA-clearing text.
+>
+> Both conditions are now met. The placeholders are gone from the markup
+> and their CSS is deleted; the two positions carry real `<button>`
+> controls that open the global assistant panel with the record attached.
+> See §23.9 for the launcher inventory and §23.12 for what "attached
+> context" is and is not.
 
 ### Focus visibility
 
@@ -1031,3 +1039,222 @@ marketing information architecture, and no React/Tailwind/Vite/Framer
 migration. Motion is CSS only, on the reference's own
 `cubic-bezier(.22, 1, .36, 1)` curve, with hover transforms gated behind
 `(hover: hover) and (pointer: fine)`.
+
+---
+
+## 23. Imported Claude Design layout ("PSA Classifications Redesign")
+
+The design artifact lives **outside this repository** and is treated as a
+read-only external reference:
+
+```text
+External read-only Claude Design project reference
+  PSA Classifications Redesign.dc.html   the thirteen surfaces
+  support.js                             the generated dc-runtime canvas engine
+```
+
+Neither file is copied into the repository and neither was modified. The
+artifact is the authority for **composition, control placement, action
+hierarchy and responsive behaviour**. It is not the authority for data,
+behaviour, ARIA or scope: where it conflicts with a functional decision
+made after it was drawn, the functional decision wins, and the reason is
+recorded at the rule that implements it.
+
+### 23.1 Surfaces and where each one lives
+
+| Artifact | Surface | Implementation |
+|---|---|---|
+| 1a / 1b | Search — desktop / mobile | `search_ui()` (`R/ui/ui_search.R`) |
+| 1c | System picker sheet (mobile) | `system_picker_dialog_ui()` (`R/ui/ui_pickers.R`) |
+| 1d / 1e | PSOC + PSIC — desktop / mobile | `dual_search_ui()` (`R/ui/ui_dual_search.R`) |
+| 1f / 1g | Compare Editions — desktop / mobile | `correspondence_ui()` (`R/ui/ui_correspondence.R`) |
+| 1h | Hierarchy browser dialog / sheet | `hierarchy_dialog_ui()` (`R/ui/ui_hierarchy.R`) |
+| 1i / 1j | PSOC / PSIC details dialog | `entry_detail_dialog_ui()` (`R/ui/ui_details.R`) |
+| 1k | PSOC + PSIC comparison dialog | `entry_comparison_dialog_ui()` (`R/ui/ui_details.R`) |
+| 1l | RM Assistant sidecar / drawer / sheet | `rm_sidecar_ui()` (`R/ui/ui_sidecar.R`) |
+| 1m | Sources | `sources_ui()` (`R/ui/ui_sources.R`) |
+
+### 23.2 Four workspace destinations
+
+`main_nav` now carries **four** values — `search`, `dual_search`,
+`correspondence`, `about`. `rm_assistant` is gone as a navigation value:
+RM is not a place you navigate to, it is a panel that opens over or beside
+the destination you are already on. Every `req(input$main_nav == ...)`
+gate in `app.R` reads one of the four that remain, unchanged.
+
+### 23.3 System control — complete registry scope
+
+The System picker exposes the **complete registry-supported classification
+set** on every surface, desktop and mobile. The artifact illustrates five
+systems in its mobile sheet; that is a drawing, not a scope. Both the
+desktop `selectizeInput` and the mobile sheet are built from
+`classification_registry()`, and `search_pickers_server()` validates any
+client-supplied id against `registry$id` before applying it. There is no
+hard-coded system list anywhere in the picker layer.
+
+### 23.4 Edition / release — collapsed, not expanded
+
+The permanently expanded radio list is replaced by a collapsed control that
+states the selected release and its CURRENT / ARCHIVED status on one line,
+and discloses the full list on demand: a popover anchored inside its own
+field on desktop, a bottom sheet at 767px and below.
+
+**The input contract is unchanged.** `classification_version` is still a
+`radioButtons` group with the same id, the same raw canonical values and
+the same `updateRadioButtons()` update path — it is *moved* inside the
+disclosed panel, not replaced. `edition_choice_spec()` still owns
+current-first ordering (`release_newest_first()`), and now also emits the
+Current / Archived group headers and the archived count.
+
+The disclosed panel must remain a DESCENDANT of `.psa-picker-field`: it is
+`position: absolute`, so as a sibling it anchors to the page instead of to
+its own control.
+
+### 23.5 Browse hierarchy
+
+Mounted in the **results toolbar**, beside the count it scopes, rather than
+at the foot of the filter rail. Only the mount point moved:
+`hierarchy_browse_slot_ui()`, the dialog, lazy expansion, hierarchy-local
+search and View in Search are the same feature, wired by the same single
+`hierarchy_browser_server()` call.
+
+### 23.6 Compare selected details
+
+A page-level action in the PSOC + PSIC page head, above both panels and
+visible without scrolling at every supported width. Disabled (and
+`aria-disabled`) until one PSOC row and one PSIC row are both selected.
+`dual_search_compare` / `dual_search_compare_open` are unchanged, and the
+independence safeguard is still printed on the page and again inside the
+comparison dialog.
+
+### 23.7 Compare Editions
+
+Direction takes the wide column (about 1.4fr against the search field's
+1fr) at 768px and above only — below that, `ui-filters.css` collapses both
+controls to one full-width column and this sheet must not reach it.
+
+At 992px and above the table card and the relationship inspector form a
+**matched-height row**: the grid stretches, the inspector stops being
+sticky, the table body flexes, pagination is pushed to the card's bottom
+edge, and the card's Bootstrap bottom margin is zeroed so the two bottom
+edges meet. Mobile keeps natural per-card heights.
+
+Relationship detail exposes only user-facing statistical information —
+source, target, relationship, confidence, derived correspondence, UN ISIC
+corroboration where verified, and the statistical-use note. No standalone
+Provenance row and no retrieval diagnostics. The underlying `provenance`
+field is untouched in the data and is still carried into
+`correspondence_ask_rm_context()`.
+
+### 23.8 RM Assistant — three breakpoints, one panel
+
+| Width | Presentation | Semantics |
+|---|---|---|
+| 1280+ | Docked sidecar, 440px | **Non-modal.** `role="complementary"`, no `aria-modal`, no backdrop, no focus trap, page reflows |
+| 1024–1279 | Overlay drawer, 420px | Modal: `role="dialog"`, `aria-modal="true"`, backdrop, focus contained, page does not reflow |
+| 1023 and below | Bottom sheet, 94% height | Modal, as above |
+
+One panel element and one `shinychat` mount across all three — a second
+would mean a duplicate `rm_assistant-chat` id and two transcripts of one
+conversation. ARIA is switched at the breakpoint by `matchMedia`, because
+CSS cannot set ARIA and a media query cannot reach the accessibility tree.
+The state is re-derived from `matchMedia` on the media-query change event,
+on `resize`, from a `ResizeObserver`, and again on any interaction with the
+panel — the passive signals were observed not to fire under viewport
+emulation, and a panel whose ARIA and whose layout disagree about whether
+the rest of the page is reachable is the failure this design must not have.
+
+The docked reflow is `body.psa-rm-docked { padding-inline-end: 440px
+!important }`. The `!important` is required, not sloppy: bslib's fill page
+writes `style="padding:0px"` directly onto `<body>`, and an inline
+declaration outranks every stylesheet rule.
+
+Closing the panel sets `hidden` on an element that is never removed, so the
+transcript, scroll position and the ellmer client's turn history all
+survive close/reopen and navigation. Only **New chat** clears the
+conversation, through the existing `rm_assistant-new_chat` observer.
+
+### 23.9 Reserved "Ask RM" slots are now ACTIVATED
+
+Section 17's inert `.psa-askrm-reserved` placeholders are gone. In their
+place:
+
+| Launcher | Kind | Behaviour |
+|---|---|---|
+| `rm_open_global` (header) | plain `<button data-psa-rm-open>` | Opens the panel client-side, no server round-trip |
+| `search_ask_rm_page` (Search head) | plain `<button data-psa-rm-open>` | As above |
+| `search_ask_rm_entry` (selected entry) | Shiny `actionButton` | Attaches the selected canonical record, then opens |
+| `correspondence_ask_rm` (inspector) | Shiny `actionButton` | Attaches the selected relationship, then opens |
+
+The two record-level launchers render only when the deployment has a
+working assistant configuration — an action that promises record-specific
+help must not be offered where it cannot be delivered.
+
+`correspondence_ask_rm` is built by `correspondence_ask_rm_button()` and is
+rendered by **both** `correspondence_detail_ui()` (which the running app
+mounts) and `correspondence_inspector_ui()`. Before this milestone it
+existed only in the second, which the app never renders, so the control was
+in the source and not in the DOM.
+
+### 23.10 Stylesheet load order (amended)
+
+```text
+app.css        base rules, token-driven
+ui-tokens.css  DECLARES the --ui-* design tokens; retargets the older
+               --lumora-* / --psa-* names at them; canvas and typography
+ui-dialog.css  shared dialog/drawer shell
+ui-filters.css search rail + correspondence layout
+ui-glass.css   surface treatments
+ui-design.css  NEW — layout introduced/moved by the imported design
+ui-motion.css  transitions, reduced-motion escape LAST
+```
+
+Three cascade hazards are load-bearing and are asserted by tests:
+
+* `ui-design.css` loads after `ui-filters.css`, so any unconditional rule
+  in it outranks that sheet's narrow-width rules. Design rules that must
+  not reach mobile are scoped with `min-width` queries.
+* `ui-glass.css` carries two-class selectors such as
+  `.psa-corr-inspector.psa-liquid-glass`, which outrank a plain class in
+  `ui-design.css` regardless of load order.
+* `ui-motion.css` loads last and owns motion, so the rule that suspends
+  the entrance reveal while a picker sheet is open lives there. It has to:
+  a `position: fixed` sheet resolves against the nearest ancestor carrying
+  a transform, and the reveal puts one on exactly the containers those
+  controls live in.
+
+### 23.11 Semantic tokens, and no theme switching
+
+The palette is declared once, as `--ui-*` semantic tokens at the top of
+`www/ui-tokens.css`; every other colour name in the system is an alias
+resolving to them, and `bs_theme()` in `app.R` is compiled from the same
+values.
+
+Theme **switching** is deliberately not implemented: there is no
+`prefers-color-scheme` block, no `[data-theme]` selector and no toggle
+anywhere in the system. A future second appearance is an edit of that one
+token block.
+
+The artifact's own `#6b6b6d` micro-label grey measures 3.6:1 on `#111111`
+and is **not** adopted as a text token. Functional secondary text uses
+`--ui-text-muted` (`#9e9e9e`, 7.1:1 on surface) and `--ui-text-subtle`
+(`#8b8b8d`, 5.5:1).
+
+### 23.12 Attached context
+
+Attached-context chips are a visible, removable record of *which verified
+application object* the user pressed "Ask RM" from. They are per-session.
+
+The chip the user reads carries a label; what RM can reach is an
+**identifier-only descriptor** (system / version / code, or the two sides
+of a PSIC relationship) that is re-read from the canonical repository on
+the turn that uses it. A referential question — "Why is this classified
+here?", "Explain this relationship." — resolves against that read; an
+explicit new coding request and an outstanding clarification both outrank
+it. Removing a chip removes it from subsequent turns; New chat clears both
+the chips and the descriptors.
+
+The rules, the precedence order and the limits are in
+`docs/ASSISTANT_CONTRACT.md` §17. The UI's only responsibility is to keep
+the chips and the descriptors in step, which it does through a single
+writer in `rm_sidecar_server()`.

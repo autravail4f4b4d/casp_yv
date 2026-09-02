@@ -42,7 +42,7 @@
    ------------------------------------------------------------------------- */
 
 .psa-liquid-glass {
-  background: #ffffff;
+  background: var(--ui-surface);
   border: none;
   box-shadow: var(--elev-1);
   position: relative;
@@ -155,7 +155,7 @@
 .navbar > .container-fluid > * { position: relative; z-index: 1; }
 
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .navbar > .container-fluid { background: #ffffff; }
+  .navbar > .container-fluid { background: var(--ui-canvas); }
 }
 
 .navbar-brand {
@@ -194,7 +194,7 @@
    Measured in the browser before this was added. */
 .navbar .nav-link.active,
 .navbar .nav-link:not(:empty).active {
-  color: #ffffff !important;
+  color: var(--ui-primary-text) !important;
   background: var(--lumora-ink) !important;
   border-bottom-color: transparent;
   font-weight: var(--weight-semibold);
@@ -216,7 +216,7 @@
 .navbar-toggle {
   border: 1px solid var(--lumora-line);
   border-radius: var(--lumora-radius-control);
-  background: #ffffff;
+  background: var(--ui-surface);
   color: var(--lumora-foreground);
 }
 
@@ -274,20 +274,12 @@
   border-radius: var(--lumora-radius-card);
 }
 
-.psa-hero--editorial {
-  padding: 4rem var(--space-huge) 2.75rem;
-  text-align: center;
-}
-
-.psa-hero-eyebrow {
-  margin: 0 0 0.875rem;
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--lumora-accent-text);
-}
+/* The centred `--editorial` hero and its eyebrow are GONE. The imported
+   design removes the hero band outright: no eyebrow, no wash, no centred
+   display treatment -- just a left-aligned page head over a full-width
+   search field (`.psa-hero--page`, ui-design.css). Their rules are deleted
+   rather than left to be maintained against markup that no longer
+   exists. */
 
 .psa-hero-title {
   margin: 0 0 1.625rem;
@@ -322,7 +314,7 @@
   min-height: 4rem;
   padding: 0 3.625rem 0 3.5rem;
   border-radius: var(--lumora-radius-pill);
-  background: #ffffff;
+  background: var(--ui-surface);
   border: 1px solid var(--lumora-line);
   color: var(--lumora-foreground);
   font-size: 1.0625rem;
@@ -341,7 +333,7 @@
 
 .psa-hero-field input.form-control:focus,
 .psa-hero-field input.form-control:focus-visible {
-  border-color: rgba(17, 17, 17, 0.30);
+  border-color: var(--ui-border-strong);
   box-shadow: none;
   outline: none;
 }
@@ -357,20 +349,14 @@
   color: var(--lumora-muted-text);
 }
 
-/* app.css steps .psa-hero's padding down at 991.98px and again at 575.98px.
-   .psa-hero--editorial carries the same specificity and loads later, so it
-   would otherwise keep the desktop padding at every width. Each of
-   app.css's steps is therefore restated for the editorial variant: the hero
-   must not eat the fold on a tablet or a phone (handoff §23). */
+/* The page head steps its heading down with the viewport so the title and
+   the search field below it never eat the fold on a tablet or a phone. */
 @media (max-width: 991.98px) {
-  .psa-hero--editorial { padding: 2.5rem 1.25rem 1.875rem; }
   .psa-hero-title { font-size: clamp(1.875rem, 5.2vw, 2.75rem); }
 }
 
 @media (max-width: 767.98px) {
-  .psa-hero--editorial { padding: 1.75rem 1rem 1.5rem; }
   .psa-hero-title { font-size: clamp(1.625rem, 7.5vw, 2.125rem); margin-bottom: 1.125rem; }
-  .psa-hero-eyebrow { margin-bottom: 0.625rem; letter-spacing: 0.12em; }
   .psa-hero-field input.form-control {
     min-height: 3.375rem;
     padding: 0 1.125rem 0 2.875rem;
@@ -443,7 +429,7 @@
 .psa-dialog .psa-dialog__content {
   border-radius: var(--lumora-radius-card);
   border: none;
-  background: #ffffff;
+  background: var(--ui-surface);
   color: var(--lumora-foreground);
 }
 
@@ -451,8 +437,8 @@
    without the dialog needing to be dark itself. */
 .psa-dialog .modal-backdrop,
 .modal-backdrop.show {
-  background: #111111;
-  opacity: 0.42;
+  background: var(--ui-dialog-backdrop);
+  opacity: 0.72;
 }
 
 .psa-dialog__header,
@@ -563,7 +549,7 @@
 .psa-dual-panel {
   border-radius: var(--lumora-radius-card-sm);
   border: none;
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .psa-dual-panel-title {
@@ -621,7 +607,7 @@
   .psa-corr-inspector {
     border-radius: var(--lumora-radius-card);
     border: none;
-    background: #ffffff;
+    background: var(--ui-surface);
   }
 }
 
@@ -634,8 +620,8 @@
     border-radius: 0;
     border: none;
     border-inline-start: 1px solid var(--lumora-line);
-    background: #ffffff;
-    box-shadow: -12px 0 40px rgba(17, 17, 17, 0.12);
+    background: var(--ui-surface);
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.55);
   }
 
   .psa-corr-inspector::before { display: none; }
@@ -655,7 +641,7 @@
   color: var(--lumora-muted-text);
   border-radius: var(--lumora-radius-pill);
   border: 1px solid var(--lumora-line);
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .psa-corr-inspector-close:hover {
@@ -666,7 +652,7 @@
 .psa-corr-node {
   border-radius: var(--lumora-radius-card-sm);
   border: 1px solid var(--lumora-line);
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .psa-corr-node-label { color: var(--lumora-foreground); }
@@ -688,7 +674,7 @@
 }
 
 .psa-tag-archived {
-  background: #ffffff;
+  background: var(--ui-surface);
   color: var(--lumora-muted-text);
 }
 
@@ -719,7 +705,7 @@
 .psa-term-help-trigger,
 .psa-howto-toggle {
   color: var(--lumora-foreground);
-  background: #ffffff;
+  background: var(--ui-surface);
   border: 1px solid var(--lumora-line);
   border-radius: var(--lumora-radius-pill);
   font-weight: var(--weight-medium);
@@ -747,7 +733,7 @@
 .psa-disclosure {
   border-radius: var(--lumora-radius-card-sm);
   border: 1px solid var(--lumora-line);
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .psa-disclosure > summary {
@@ -770,7 +756,7 @@
 .rm-assistant-card {
   border-radius: var(--lumora-radius-card);
   border: none;
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .rm-assistant-card > .card-header,
@@ -790,7 +776,7 @@
   border-radius: var(--lumora-radius-pill);
   border: 1px solid var(--lumora-line);
   color: var(--lumora-foreground);
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 .rm-assistant-new-chat:hover {
@@ -825,14 +811,14 @@ shiny-user-message {
 
 shiny-chat-input textarea,
 shiny-chat-input .form-control {
-  background: #ffffff;
+  background: var(--ui-surface);
   border: 1px solid var(--lumora-line);
   border-radius: var(--lumora-radius-control);
   color: var(--lumora-foreground);
 }
 
 shiny-chat-input textarea:focus {
-  border-color: rgba(17, 17, 17, 0.30);
+  border-color: var(--ui-border-strong);
   outline: 2px solid var(--lumora-accent);
   outline-offset: 1px;
   box-shadow: none;
@@ -846,30 +832,36 @@ shiny-chat-input textarea:focus {
    deterministic table it read from. */
 .psa-verified-card {
   border-radius: var(--lumora-radius-card-sm);
-  border: none;
-  background: var(--lumora-ink);
-  color: #ffffff;
+  /* The artifact draws the verified-classification card as an ELEVATED
+     panel with a brighter-than-usual edge (1l), not as an inverted plate:
+     on this ground the inverted plate is the primary BUTTON, and the two
+     must not read as the same object. It is still the most emphatic thing
+     on screen -- heavier border, own ground, own shadow -- so it keeps its
+     standing against the surrounding prose. */
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text);
   box-shadow: var(--elev-2);
 }
 
-/* Everything inside inverts with it. Stated explicitly rather than relying
-   on inheritance, because several descendants set their own colour. */
+/* Descendants that set their own colour are restated against the card's
+   own ground rather than left to inherit. */
 .psa-verified-card .psa-verified-code,
-.psa-verified-card .mono { color: #ffffff; }
+.psa-verified-card .mono { color: var(--ui-text); }
 
 .psa-verified-card .psa-eyebrow { color: var(--lumora-accent-from); }
 
 .psa-verified-card .lucide { color: var(--lumora-accent-from); }
 
-/* Secondary copy on ink, at the handoff's recommended weight but raised to
-   a measured 8.6:1 rather than its .55 alpha, which lands under AA. */
+/* Secondary copy inside the card, at a measured 7.1:1 rather than the
+   artifact's own low-alpha grey, which lands under AA. */
 .psa-verified-card .psa-detail-meta,
-.psa-verified-card .text-muted { color: var(--lumora-muted-on-dark) !important; }
+.psa-verified-card .text-muted { color: var(--ui-text-muted) !important; }
 
 .psa-verified-card .psa-tag {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  background: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
+  box-shadow: none;
 }
 
 .psa-rm-badge-row .psa-tag { background: var(--lumora-surface); }
@@ -889,7 +881,7 @@ shiny-chat-input textarea:focus {
 .psa-source-card {
   border-radius: var(--lumora-radius-card);
   border: none;
-  background: #ffffff;
+  background: var(--ui-surface);
   padding: 1.5rem;
 }
 
@@ -953,24 +945,24 @@ shiny-chat-input textarea:focus {
 
 .btn-primary,
 .psa-dialog__btn--primary {
-  background: var(--lumora-ink);
-  border-color: var(--lumora-ink);
-  color: #ffffff;
+  background: var(--ui-primary-bg);
+  border-color: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
   font-weight: var(--weight-semibold);
 }
 
 .btn-primary:hover,
 .psa-dialog__btn--primary:hover {
-  background: #000000;
-  border-color: #000000;
-  color: #ffffff;
+  background: var(--ui-primary-bg-hover);
+  border-color: var(--ui-primary-bg-hover);
+  color: var(--ui-primary-text);
 }
 
 .btn-outline-secondary,
 .btn-secondary,
 .psa-dialog-open,
 .psa-dialog__btn--ghost {
-  background: #ffffff;
+  background: var(--ui-surface);
   border: 1px solid var(--lumora-line);
   color: var(--lumora-foreground);
 }
@@ -993,7 +985,7 @@ shiny-chat-input textarea:focus {
   border-radius: var(--lumora-radius-pill);
   border: 1px solid var(--lumora-line);
   color: var(--lumora-foreground);
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 
 /* Spring-like hover, within the handoff's budget (§20): scale <= 1.03,
@@ -1017,7 +1009,7 @@ shiny-chat-input textarea:focus {
 .popover,
 .tooltip-inner,
 .dropdown-menu {
-  background: #ffffff;
+  background: var(--ui-surface);
   color: var(--lumora-foreground);
   border: 1px solid var(--lumora-line);
   border-radius: var(--lumora-radius-control);
@@ -1033,10 +1025,10 @@ shiny-chat-input textarea:focus {
 
 .popover .popover-body { color: var(--lumora-muted-text); }
 
-.popover .popover-arrow::after { border-top-color: #ffffff; }
+.popover .popover-arrow::after { border-top-color: var(--ui-surface); }
 
 .modal-content {
-  background: #ffffff;
+  background: var(--ui-surface);
   color: var(--lumora-foreground);
   border: 1px solid var(--lumora-line);
 }
@@ -1055,7 +1047,7 @@ shiny-chat-input textarea:focus {
    keeps the ring around the whole control the user actually perceives
    rather than around an invisible inner box. */
 .psa-hero-field.psa-liquid-glass {
-  background: #ffffff;
+  background: var(--ui-surface);
   transition: box-shadow 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
@@ -1107,7 +1099,7 @@ shiny-chat-input textarea:focus {
    Handoff §14 asks for exactly that ("no bleed-through from page content"),
    and §24 forbids text whose contrast depends on a transparent background. */
 .psa-dialog__content.psa-liquid-glass {
-  background: #ffffff;
+  background: var(--ui-surface);
   box-shadow: var(--elev-2);
 }
 
@@ -1176,14 +1168,14 @@ table.dataTable.table-hover > tbody > tr.selected:hover > *:first-child {
 /* Row hover: DT's own hover flood is keyed to --dt-row-hover. Restated as a
    very quiet warm wash so hover and selection stay distinguishable. */
 table.dataTable.table-hover > tbody > tr:hover > * {
-  box-shadow: inset 0 0 0 9999px rgba(241, 240, 238, 0.55) !important;
+  box-shadow: inset 0 0 0 9999px var(--ui-hover-bg) !important;
 }
 
 /* Keep any remaining DT chrome that reads these variables on-palette. */
 :root {
-  --dt-row-selected: 241, 240, 238;
-  --dt-row-selected-text: 17, 17, 17;
-  --dt-row-hover: 241, 240, 238;
+  --dt-row-selected: 255, 255, 255;
+  --dt-row-selected-text: 250, 250, 250;
+  --dt-row-hover: 255, 255, 255;
 }
 
 /* -------------------------------------------------------------------------
@@ -1219,7 +1211,7 @@ table.dataTable.table-hover > tbody > tr:hover > * {
    default plate at an unusual size. */
 .psa-corr-filter .selectize-input,
 .psa-corr-filter input.form-control {
-  background-color: #ffffff;
+  background-color: var(--ui-surface);
   border-color: var(--lumora-line);
   color: var(--lumora-foreground);
 }
@@ -1227,7 +1219,7 @@ table.dataTable.table-hover > tbody > tr:hover > * {
 .psa-corr-filter .selectize-input.focus,
 .psa-corr-filter .selectize-input.input-active,
 .psa-corr-filter input.form-control:focus {
-  border-color: rgba(17, 17, 17, 0.30);
+  border-color: var(--ui-border-strong);
   outline: 2px solid var(--lumora-accent);
   outline-offset: 1px;
   box-shadow: none;
@@ -1295,23 +1287,18 @@ table.dataTable.table-hover > tbody > tr:hover > * {
    The classification code is INK, not accent
    -------------------------------------------------------------------------
    app.css paints `.psa-detail-code` in `--color-primary`, which the token
-   layer now maps to burnt orange. Measured in the comparison dialog at
-   320px: `rgb(177, 95, 44)` on the `#f1f0ee` column, 32px / weight 600 =
-   4.06:1. That is compliant -- WCAG treats >=24px, or >=18.7px bold, as
-   large text at a 3:1 threshold -- but it is the least legible treatment in
-   the app applied to the single most important datum in it.
-
-   The handoff scopes the accent to "focus, active markers, small icons,
-   accent rails, selected relationships" (§2) and reserves ink for
-   high-emphasis surfaces. A 32px headline code is not a marker. Ink takes
-   it to 16.58:1 and leaves the accent doing the job it was given. */
+   layer maps to the accent. The design artifact is explicit that the accent
+   is a STATE colour -- selection rails, eyebrows, focus -- and draws every
+   headline code in plain --ui-text instead. A headline code is not a state
+   marker, and full-strength text takes it to 18.1:1 while leaving the
+   accent doing the job the artifact gave it. */
 .psa-detail-code,
 .psa-verified-code {
   color: var(--lumora-foreground);
 }
 
-/* Inside the ink card the same code inverts with its surface. */
+/* Inside the verified card the same code sits on the elevated ground. */
 .psa-verified-card .psa-verified-code,
 .psa-verified-card .psa-detail-code {
-  color: #ffffff;
+  color: var(--ui-text);
 }

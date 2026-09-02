@@ -15,11 +15,18 @@
 #   2. the level control
 #   3. blank-query browse (an empty query lists the selected level)
 #
-# The edition control is a radio group rather than a select so that every
-# available edition and its current/archived status are visible at a
-# glance, per the approved design. The input ID and the value it yields are
-# unchanged; only the widget type differs, so app.R updates it with
-# updateRadioButtons() instead of updateSelectInput().
+# EDITION CONTROL (imported design, surface 1a).
+#
+# The edition control used to be a permanently expanded radio list, so a
+# system with thirteen PSGC releases pushed Level off the bottom of the
+# rail. It is now a COLLAPSED control that states the selected release and
+# its CURRENT / ARCHIVED status on one line and discloses the full grouped
+# list on demand -- a popover on desktop, a sheet at phone width.
+#
+# The radio group itself is unchanged and merely MOVED inside that panel:
+# same `classification_version` id, same widget type, same
+# `updateRadioButtons()` update path, same raw canonical values. The
+# disclosure layer lives in R/ui/ui_pickers.R.
 
 # ---- System selector: acronym + full official title (UI-01) ---------------
 #
@@ -82,6 +89,15 @@ system_selector_render <- function() {
 #' Current/Archived is carried by `status_badge()`, which spells the word
 #' out; the row never relies on colour to say which is which.
 #'
+#' GROUPING (imported design, surface 1a). The disclosed list is grouped
+#' into Current and Archived, with the archived group carrying its own
+#' count. The headers ride inside the first choice of each group rather
+#' than being separate DOM nodes, because `radioButtons()` owns the
+#' structure between the choices and interleaving markup there would mean
+#' hand-building the group and losing the Shiny input binding. Ordering is
+#' untouched: the header follows the group, the group does not follow the
+#' header.
+#'
 #' @param versions character vector of canonical edition identifiers, in
 #'   repository order.
 #' @param current character(1). The registry's current edition for this
@@ -91,13 +107,26 @@ system_selector_render <- function() {
 #'   character(1)>, selected = character(1)).
 edition_choice_spec <- function(versions, current) {
   ordered <- release_newest_first(versions, current)
+  is_current <- vapply(ordered, function(v) identical(v, current), logical(1))
+  n_archived <- sum(!is_current)
+  first_archived <- if (n_archived > 0L) which(!is_current)[[1]] else NA_integer_
 
-  names_html <- lapply(ordered, function(v) {
-    is_current <- identical(v, current)
+  names_html <- lapply(seq_along(ordered), function(i) {
+    v <- ordered[[i]]
+    cur <- is_current[[i]]
+    header <- if (i == 1L && cur) {
+      shiny::tags$span(class = "psa-edition-group-head", "Current")
+    } else if (!is.na(first_archived) && i == first_archived) {
+      shiny::tags$span(
+        class = "psa-edition-group-head",
+        sprintf("Archived · %d", n_archived)
+      )
+    }
     shiny::tags$span(
-      class = if (is_current) "psa-edition-row psa-edition-row-current" else "psa-edition-row",
+      class = if (cur) "psa-edition-row psa-edition-row-current" else "psa-edition-row",
+      header,
       shiny::tags$span(class = "psa-edition-name", release_display_label(v)),
-      status_badge(if (is_current) "current" else "archived")
+      status_badge(if (cur) "current" else "archived")
     )
   })
 
@@ -110,26 +139,41 @@ edition_choice_spec <- function(versions, current) {
 
 search_ui <- function() {
   shiny::tagList(
-    # --- Hero search (HANDOFF §4) -----------------------------------------
-    # Same `classification_query` input as before; only its size and
-    # position change. The <label> stays in the DOM for assistive tech and
-    # is visually hidden by .psa-hero-field label -- never placeholder-only
-    # labelling (docs/UI_CONTRACT.md §10).
+    # Disclosure behaviour for the collapsed System / Edition controls, and
+    # the shared dialog shell the mobile System sheet opens into. Both are
+    # idempotent.
+    psa_picker_deps(),
+    psa_dialog_deps(),
+
+    # --- Page head + search field (design surface 1a) ---------------------
+    #
+    # The design removes the hero BAND: there is no eyebrow, no wash and no
+    # centred display treatment. What is left is a page title, one line of
+    # help, and a single full-width search field directly beneath -- the
+    # widest control on the page, which is what marks it as the primary
+    # action. The `classification_query` input, its visually-hidden
+    # <label> and its placeholder are unchanged.
     shiny::tags$div(
-      # The centred editorial treatment is scoped to THIS hero by the
-      # --editorial modifier. Compare Editions and Sources reuse .psa-hero
-      # as a plain page-intro band and must stay left-aligned and compact.
-      class = "psa-hero psa-hero--editorial",
-      # Editorial hero (LIQUID_GLASS handoff section 9): eyebrow, display
-      # serif heading, one large search field, one explanatory line. The
-      # heading is now VISIBLE rather than visually-hidden -- the document
-      # keeps the same first heading rung it always had, and a sighted
-      # user gains the page title a screen-reader user already received.
-      shiny::tags$p(class = "psa-hero-eyebrow",
-                    "Philippine Statistical Classifications"),
-      shiny::tags$h2(
-        class = "psa-hero-title",
-        "Find the ", shiny::tags$em("official"), " code"
+      class = "psa-hero psa-hero--page",
+      shiny::tags$div(
+        class = "psa-hero-head",
+        shiny::tags$div(
+          class = "psa-hero-headings",
+          shiny::tags$h2(
+            class = "psa-hero-title",
+            "Find the ", shiny::tags$em("official"), " code"
+          ),
+          shiny::tags$p(
+            class = "psa-hero-help",
+            "Search one classification system at a time. Leave the field ",
+            "blank to browse the selected system and edition."
+          )
+        ),
+        # Contextual assistant entry point for the selected record lives in
+        # the selected-entry card (below); this one is page-level.
+        shiny::tags$div(class = "psa-hero-actions", rm_ask_button_ui(
+          "search_ask_rm_page", "Ask RM about a code"
+        ))
       ),
       shiny::tags$div(
         class = "psa-hero-field psa-liquid-glass",
@@ -140,14 +184,10 @@ search_ui <- function() {
           placeholder = "Search a code or keyword",
           width = "100%"
         )
-      ),
-      shiny::tags$p(
-        class = "psa-hero-help",
-        "Leave blank to browse the selected system and edition below."
       )
     ),
 
-    # --- Sidebar + results/detail (HANDOFF §4) ----------------------------
+    # --- Filter rail + results/detail (design surface 1a) -----------------
     shiny::tags$div(
       class = "psa-search-body",
       shiny::tags$aside(
@@ -155,24 +195,12 @@ search_ui <- function() {
         `aria-label` = "Classification filters",
         # UI-01: the System control keeps its stable id and its plain
         # `choices` contract; only the renderer changes, so
-        # updateSelectInput() from app.R still drives it.
-        shiny::div(
-          class = "psa-system-field",
-          shiny::selectizeInput(
-            "classification_system", "System",
-            choices = NULL, width = "100%",
-            options = list(render = system_selector_render())
-          )
-        ),
-        shiny::tags$div(
-          class = "psa-edition-group",
-          shiny::radioButtons(
-            "classification_version",
-            "Edition / release",
-            choices = character(0),
-            selected = character(0)
-          )
-        ),
+        # updateSelectizeInput() from app.R still drives it. The phone-width
+        # sheet trigger travels with it (R/ui/ui_pickers.R).
+        system_field_ui(),
+        # Collapsed Edition / release control. The radio group it discloses
+        # is the same `classification_version` input as before.
+        edition_field_ui(),
         # Component control for composite/thematic systems (UI-05).
         #
         # Shown ONLY when the registry reports the selected system as
@@ -214,25 +242,34 @@ search_ui <- function() {
       shiny::tags$div(
         class = "psa-results-split",
         shiny::tags$div(
-          shiny::uiOutput("classification_result_count"),
+          class = "psa-results-col",
+          # RESULTS TOOLBAR (design surface 1a).
+          #
+          # Browse hierarchy leaves the bottom of the filter rail and joins
+          # the count it scopes. Only the MOUNT POINT moves: the slot, the
+          # trigger it renders, the dialog, lazy expansion and View in
+          # Search are all the existing hierarchy feature, wired by the one
+          # unchanged `hierarchy_browser_server()` call in app.R.
+          shiny::tags$div(
+            class = "psa-results-toolbar",
+            shiny::uiOutput("classification_result_count"),
+            hierarchy_browse_slot_ui()
+          ),
           DT::DTOutput("classification_results")
         ),
         shiny::tags$div(
+          class = "psa-detail-col",
           shiny::tags$div(
             class = "psa-detail-head",
-            shiny::tags$h6("Selected entry"),
-            # Reserved layout slot (HANDOFF §12) -- inert placeholder, NOT a
-            # control. A <span>, aria-hidden, not focusable, no hover or
-            # cursor affordance. Wiring it later means swapping this span
-            # for a real control in the same position; nothing else moves.
-            shiny::tags$span(
-              class = "psa-askrm-reserved",
-              `aria-hidden` = "true",
-              lucide_icon("sparkles", 14),
-              "Ask RM about this"
-            )
+            shiny::tags$h6("Selected entry")
           ),
-          shiny::uiOutput("selected_entry")
+          shiny::uiOutput("selected_entry"),
+          # Contextual assistant entry point for the selected record. This
+          # replaces the inert `.psa-askrm-reserved` placeholder the
+          # previous pass left here: the reserved slot is now a real
+          # control in the same position, and it opens the global assistant
+          # with this record attached rather than navigating anywhere.
+          shiny::uiOutput("selected_entry_actions")
         )
       )
     )

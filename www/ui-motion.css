@@ -71,6 +71,29 @@
   animation: psa-rise-in 480ms cubic-bezier(.22, 1, .36, 1) 60ms backwards;
 }
 
+/* ENTRANCE ANIMATIONS ARE SUSPENDED WHILE A PICKER SHEET IS OPEN.
+   -------------------------------------------------------------------------
+   MEASURED, not defensive. The phone-width System/Edition sheets are
+   `position: fixed`, and a fixed element resolves against the nearest
+   ancestor carrying a transform rather than against the viewport. The
+   reveal above puts a `translateY(12px)` on exactly the containers those
+   controls live in, for the whole 480ms it runs -- and indefinitely in a
+   throttled or background tab, where the animation never advances past
+   frame 0. The sheet then docks to the filter rail instead of to the
+   bottom of the screen: measured at 375px, where it landed 2600px down
+   the document.
+
+   Owned here rather than in ui-design.css because this sheet owns motion
+   and loads after it -- an `animation` override anywhere earlier would
+   lose to the rule above. */
+body.psa-picker-open .psa-search-body,
+body.psa-picker-open .psa-dual-grid,
+body.psa-picker-open .psa-corr-workspace,
+body.psa-picker-open .psa-hero {
+  animation: none;
+  transform: none;
+}
+
 /* -------------------------------------------------------------------------
    Dialogs and sheets (handoff §11, §17)
    -------------------------------------------------------------------------

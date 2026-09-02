@@ -32,7 +32,53 @@ assistant_new_turn_state <- function() {
   st$latest_packet <- NULL
   st$batch <- NULL
   st$last_batch <- NULL
+  # Records the user attached in the UI, as IDENTIFIER-ONLY descriptors,
+  # newest last. Never a classification decision and never a snapshot of
+  # one: see R/assistant/assistant_attached_context.R.
+  st$attached_context <- list()
   st
+}
+
+
+# --- attached context (UI selection bridge) --------------------------------
+#
+# Per session, like everything else in this environment: one visitor's
+# attached record can never be visible to another's turn.
+
+#' Replace the session's attached-context descriptors.
+#'
+#' @param descriptors a list of descriptors from
+#'   `assistant_context_descriptor_entry()` /
+#'   `assistant_context_descriptor_correspondence()`, newest LAST. An empty
+#'   list clears the context, which is what removing the last chip does.
+assistant_turn_set_attached_context <- function(state, descriptors) {
+  if (is.null(state) || !is.environment(state)) return(invisible(NULL))
+  if (is.null(descriptors)) descriptors <- list()
+  if (!is.list(descriptors)) descriptors <- list(descriptors)
+  # Keep only well-formed descriptors, so a malformed one can never reach
+  # the verification step and can never be counted as "context exists".
+  keep <- Filter(function(d) {
+    is.list(d) && !is.null(d$kind) && d$kind %in% ASSISTANT_CONTEXT_KINDS
+  }, descriptors)
+  state$attached_context <- keep
+  invisible(NULL)
+}
+
+#' The session's attached-context descriptors, newest last.
+assistant_turn_attached_context <- function(state) {
+  if (is.null(state) || !is.environment(state)) return(list())
+  d <- state$attached_context
+  if (is.null(d)) list() else d
+}
+
+#' Drop every attached descriptor.
+#'
+#' Called by New chat. NOT called by closing the panel: closing hides a
+#' panel, it does not discard what the user attached.
+assistant_turn_clear_attached_context <- function(state) {
+  if (is.null(state) || !is.environment(state)) return(invisible(NULL))
+  state$attached_context <- list()
+  invisible(NULL)
 }
 
 #' Record the route determined for the CURRENT turn (H1).

@@ -48,28 +48,29 @@ nav_label <- function(icon, text) {
 
 ui <- bslib::page_navbar(
   title = "PSA Statistical Classifications",
-  # Lumora light editorial theme (UI_LUMORA_LIGHT_DESIGN_INTEGRATION_HANDOFF
-  # sections 1-3), which supersedes the dark liquid-glass system.
+  # The imported Claude Design appearance ("PSA Classifications Redesign").
+  # These five values are the same ones declared as --ui-* tokens at the top
+  # of www/ui-tokens.css, and the two must agree.
   #
   # Setting bg/fg/primary on bs_theme rather than overriding Bootstrap in
   # CSS is what makes every Bootstrap component -- form controls, cards,
-  # tables, DT -- inherit the palette coherently. It is also why the
-  # dark-to-light inversion has to happen HERE and not only in the CSS: a
+  # tables, DT -- inherit the palette coherently. It is also why an
+  # appearance change has to happen HERE and not only in the CSS: a
   # stylesheet override alone would leave DT, selectize and the navbar
-  # rendering dark chrome under light content. It is also what regenerates
-  # the .btn-close and hamburger data-URI glyphs, which are compiled from
-  # `fg` -- two passes have now learned that inverting them by hand in CSS
-  # is what breaks them.
+  # rendering the previous chrome under the new content. It is also what
+  # regenerates the .btn-close and hamburger data-URI glyphs, which are
+  # compiled from `fg` -- three passes have now learned that inverting them
+  # by hand in CSS is what breaks them.
   theme = bslib::bs_theme(
     version = 5,
-    bg = "#ffffff",
-    fg = "#111111",
-    primary = "#b15f2c",
-    "body-bg" = "#ffffff",
-    "card-bg" = "#ffffff",
-    "border-color" = "#e6e5e2",
-    "link-color" = "#1f5c99",
-    "link-hover-color" = "#17456f",
+    bg = "#0c0c0c",
+    fg = "#fafafa",
+    primary = "#78d0cd",
+    "body-bg" = "#0c0c0c",
+    "card-bg" = "#111111",
+    "border-color" = "rgba(255,255,255,0.065)",
+    "link-color" = "#78d0cd",
+    "link-hover-color" = "#a6e2df",
     # UI face: Onest, named first so Bootstrap's own compiled rules use the
     # same family as the stylesheets. The webfont itself is imported once in
     # ui-tokens.css; naming it here downloads nothing extra. Every machine
@@ -95,15 +96,20 @@ ui <- bslib::page_navbar(
   # Compare PSIC Editions / About outputs below) is the robust fix used
   # throughout this server function instead.
   id = "main_nav",
-  # Stylesheet order is a contract, and it is the whole reason the dark
-  # "liquid glass" system needed no rewrite of the UI-01..UI-05 sheets:
+  # Stylesheet order is a contract, and it is the whole reason a whole-
+  # appearance replacement needed no rewrite of the UI-01..UI-05 sheets:
   #   app.css        base rules, almost entirely token-driven
-  #   ui-tokens.css  RETARGETS those tokens to the dark palette, sets the
-  #                  display/UI faces and the global canvas
+  #   ui-tokens.css  DECLARES the --ui-* design tokens and retargets the
+  #                  older alias layer at them; sets the UI face and canvas
   #   ui-dialog.css  shared dialog/drawer shell (UI-02/03/04/05)
   #   ui-filters.css search sidebar + correspondence guidance (UI-01/04/05)
-  #   ui-glass.css   liquid-glass primitives, applied to major surfaces;
+  #   ui-glass.css   surface primitives, applied to major surfaces;
   #                  after the two UI sheets so it wins over their plates
+  #   ui-design.css  layout introduced/moved by the imported Claude Design
+  #                  artifact -- pickers, results toolbar, page-level dual
+  #                  action, matched-height correspondence row, and the RM
+  #                  sidecar. After the surface sheets so it wins on
+  #                  PLACEMENT; before motion so it cannot re-enable it.
   #   ui-motion.css  transitions, and the reduced-motion escape LAST, so
   #                  nothing loaded later can re-enable animation
   header = shiny::tags$head(
@@ -112,50 +118,60 @@ ui <- bslib::page_navbar(
     shiny::tags$link(rel = "stylesheet", href = "ui-dialog.css"),
     shiny::tags$link(rel = "stylesheet", href = "ui-filters.css"),
     shiny::tags$link(rel = "stylesheet", href = "ui-glass.css"),
+    shiny::tags$link(rel = "stylesheet", href = "ui-design.css"),
     shiny::tags$link(rel = "stylesheet", href = "ui-motion.css")
   ),
-  # Visible tab LABELS change per HANDOFF §2; the `value =` identities that
-  # drive input$main_nav are deliberately untouched, so every existing
+  # FOUR WORKSPACE DESTINATIONS (imported design, surface 1l).
+  #
+  # RM Assistant is no longer one of them. It is not a place you navigate
+  # to any more: it is a contextual panel that opens OVER or BESIDE
+  # whichever destination you are already on, mounted once per page in
+  # `footer` below and launched from the header. Removing it from the
+  # navigation is what makes "Ask RM about this entry" keep the user on the
+  # record they are asking about.
+  #
+  # The `value =` identities that drive input$main_nav are deliberately
+  # untouched for the four that remain, so every existing
   # req(input$main_nav == ...) gate below keeps working unchanged.
   #
-  # nav_label() pairs each label with its Phosphor glyph. The icon is
+  # nav_label() pairs each label with its Lucide glyph. The icon is
   # aria-hidden -- the visible text is the accessible name, so the tab is
   # never announced as an icon and never relies on the glyph loading.
-  # UI-02. The Browse-hierarchy affordance is composed HERE rather than
-  # inside search_ui(), so the hierarchy feature and the search filters
-  # stay in separate modules: the slot renders its own button (and nothing
-  # at all for a system with no canonical hierarchy), and
-  # hierarchy_browser_server() below wires the whole feature in one call.
+  #
+  # UI-02. The Browse-hierarchy slot has MOVED inside search_ui(), into the
+  # results toolbar beside the count it scopes (design surface 1a). Only
+  # its mount point moved: it still renders its own button (and nothing at
+  # all for a system with no canonical hierarchy), and
+  # hierarchy_browser_server() below still wires the whole feature in one
+  # unchanged call.
   bslib::nav_panel(nav_label("search", "Search"),
                    value = "search",
-                   search_ui(),
-                   hierarchy_browse_slot_ui()),
+                   search_ui()),
   bslib::nav_panel(nav_label("arrow-left-right", "PSOC + PSIC"),
                    value = "dual_search", dual_search_ui()),
   bslib::nav_panel(nav_label("split", "Compare Editions"),
                    value = "correspondence", correspondence_ui()),
-  # RM Assistant. Which panel body is built is decided ONCE at startup from
-  # the deployment's provider configuration: a deployment either has a
-  # working assistant configuration or it does not (spec 21). When it does
-  # not, the deterministic Search/Browse/Dual/Correspondence tabs are
-  # completely unaffected -- that independence is the whole point, and is
-  # asserted by tests/testthat/test-assistant-integration.R.
-  bslib::nav_panel(
-    nav_label("sparkles", "RM Assistant"), value = "rm_assistant",
-    local({
-      st <- rm_assistant_status()
-      if (isTRUE(st$enabled) && isTRUE(st$available)) {
-        rm_assistant_ui()
-      } else {
-        rm_assistant_unavailable_ui(st$reason)
-      }
-    })
-  ),
   bslib::nav_panel(nav_label("info", "Sources"),
                    value = "about", shiny::uiOutput("sources_panel")),
-  footer = shiny::tags$footer(
-    class = "text-muted small p-2 border-top mt-2",
-    "Source: Philippine Statistics Authority (PSA). This is a read-only reference tool; PSA is the authoritative classification source."
+  # The global Ask RM launcher, header-right on every destination. Pure
+  # client-side disclosure of a panel that is already in the DOM -- no
+  # server round-trip stands between the click and the panel.
+  bslib::nav_spacer(),
+  bslib::nav_item(rm_ask_button_ui("rm_open_global", "Ask RM")),
+  # `footer` renders once, outside the navset, on every destination -- which
+  # is exactly the mount a global panel needs. Which body it gets is decided
+  # ONCE at startup from the deployment's provider configuration: a
+  # deployment either has a working assistant configuration or it does not
+  # (spec 21). When it does not, the deterministic Search / PSOC + PSIC /
+  # Compare Editions / Sources destinations are completely unaffected --
+  # that independence is the whole point, and is asserted by
+  # tests/testthat/test-assistant-integration.R.
+  footer = shiny::tagList(
+    rm_sidecar_ui(rm_assistant_status()),
+    shiny::tags$footer(
+      class = "text-muted small p-2 border-top mt-2",
+      "Source: Philippine Statistics Authority (PSA). This is a read-only reference tool; PSA is the authoritative classification source."
+    )
   )
 )
 
@@ -164,8 +180,19 @@ server <- function(input, output, session) {
 
   # --- Classification system choices (populated once; registry is static
   # for the lifetime of an R process). ---
+  # The COMPLETE registry-supported set, on every surface that offers a
+  # system. Built from the registry, never from a hand-written list, so a
+  # system the registry gains or loses appears or disappears here with no
+  # edit. The design artifact's mobile sheet illustrates five systems; that
+  # is a drawing, not a scope, and `search_pickers_server()` below feeds the
+  # sheet from this same registry.
   system_choices <- stats::setNames(registry$id, paste0(registry$short_name, " — ", registry$display_name))
   updateSelectInput(session, "classification_system", choices = system_choices, selected = system_choices[[1]])
+
+  # Collapsed System / Edition summaries and the phone-width System sheet
+  # (R/ui/ui_pickers.R). It writes only `classification_system`, and only a
+  # registry id the user chose.
+  search_pickers_server(input, output, session, registry)
 
   # --- Edition/release choices follow the selected system. ---
   #
@@ -533,6 +560,27 @@ server <- function(input, output, session) {
     }
   })
 
+  # The record-level assistant action (design surface 1a). This is the
+  # activation of the inert `.psa-askrm-reserved` slot the previous pass
+  # reserved in this exact position: it opens the global assistant panel
+  # with this record attached as a visible, removable context chip, and it
+  # never navigates. Rendered only when a record is selected AND the
+  # deployment actually has a working assistant -- an action that promises
+  # record-specific help must not be offered where it cannot be delivered.
+  output$selected_entry_actions <- renderUI({
+    st <- rm_assistant_status()
+    if (!isTRUE(st$enabled) || !isTRUE(st$available)) return(NULL)
+    entry <- selected_entry()
+    if (is.null(entry) || nrow(entry) == 0L) return(NULL)
+    entry <- entry[1, , drop = FALSE]
+    rm_context_button_ui(
+      "search_ask_rm_entry",
+      "Ask RM about this entry",
+      aria_label = paste("Ask RM about", entry$code, entry$label)
+    )
+  })
+  outputOptions(output, "selected_entry_actions", suspendWhenHidden = FALSE)
+
   output$sources_panel <- renderUI({
     req(input$main_nav == "about")
     sources_ui()
@@ -771,7 +819,11 @@ server <- function(input, output, session) {
 
   output$correspondence_detail <- renderUI({
     req(input$main_nav == "correspondence")
-    correspondence_detail_ui(correspondence_selected())
+    st <- rm_assistant_status()
+    correspondence_detail_ui(
+      correspondence_selected(),
+      ask_rm = isTRUE(st$enabled) && isTRUE(st$available)
+    )
   })
   outputOptions(output, "correspondence_detail", suspendWhenHidden = FALSE)
 
@@ -802,6 +854,23 @@ server <- function(input, output, session) {
   # its very first invocation, before `ignoreInit` would otherwise have let
   # anything through) or fails.
   rm_client <- create_rm_chat_client(tools = rm_assistant_tools(turn_state = rm_turn_state))
+
+  # The assistant SIDECAR's own wiring (R/ui/ui_sidecar.R): the attached
+  # context chips and the two contextual launchers. Deliberately separate
+  # from the chat/tool pipeline below -- it opens the existing panel and
+  # records which verified application object the user pressed the button
+  # from. It never calls a classification service, never composes a prompt
+  # and never bypasses assistant_handle_turn().
+  rm_sidecar_server(
+    input, output, session,
+    entry_selection = selected_entry,
+    correspondence_selection = correspondence_selected,
+    # The bridge. Chip changes are mirrored into THIS session's turn state
+    # as identifier-only descriptors; `assistant_handle_turn()` decides
+    # whether a given turn may use them and re-reads them canonically.
+    turn_state = rm_turn_state,
+    available = !is.null(rm_client)
+  )
 
   # H2: let the process-global content-rendering override (assistant_render.R)
   # find THIS session's turn-state. Harmless no-op if `rm_client` ends up
@@ -879,6 +948,34 @@ server <- function(input, output, session) {
           }
         )
         rm_server_result$current <- res
+
+        # ATTACHED-CONTEXT GROUNDING.
+        #
+        # On a turn where `assistant_handle_turn()` decided the user's
+        # "this" means a record they attached in the UI, the verified block
+        # it built is added to the provider's history BEFORE the model is
+        # called, so the referential question lands against a record the
+        # conversation has established rather than against nothing.
+        #
+        # The block is assembled in R from a canonical repository read
+        # (R/assistant/assistant_attached_context.R) -- never from the chip
+        # text, never from the DOM. Best-effort: a failure here costs the
+        # model its context, and the response guard still refuses any code
+        # the read did not authorise, so the failure mode is a vaguer
+        # answer rather than an unverified one.
+        ctx_note <- if (is.null(res)) NULL else res$context_note
+        if (is.character(ctx_note) && length(ctx_note) == 1L &&
+            !is.na(ctx_note) && nzchar(trimws(ctx_note))) {
+          tryCatch(
+            rm_client$set_turns(
+              assistant_append_context_turn(rm_client$get_turns(), ctx_note)
+            ),
+            error = function(e) {
+              message(sprintf("[rm-assistant] could not ground attached context: %s",
+                              conditionMessage(e)))
+            }
+          )
+        }
 
         # TOOL SURFACE.
         #
@@ -1009,6 +1106,11 @@ server <- function(input, output, session) {
       assistant_turn_set_route(rm_turn_state, "contextual_coding")
       assistant_turn_set_requested_systems(rm_turn_state, c("psoc", "psic"))
       assistant_turn_set_latest_packet(rm_turn_state, NULL)
+      # Nor may it inherit the records attached to the conversation that was
+      # just discarded. `rm_sidecar_server()` clears the chips the user sees
+      # on the same event; this clears what RM can reach, so the two can
+      # never disagree about what is attached.
+      assistant_turn_clear_attached_context(rm_turn_state)
       # The previous turn's deterministic result must not survive into the
       # new conversation and be re-rendered against an unrelated turn.
       rm_server_result$current <- NULL

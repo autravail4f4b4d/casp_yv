@@ -412,3 +412,214 @@ ordinary English ("that is clear"), and rejecting a reply for containing it
 would discard sound explanations. It cannot appear from this application's
 side, because the deterministic renderer never emits it — which is the
 property actually asserted.
+
+---
+
+## 16. Presentation move — RM as a global contextual panel
+
+This section records a **presentation-only** change made for the imported
+Claude Design layout (surface 1l). Nothing under `R/assistant/` or
+`R/retrieval/` was modified for it, and no assistant behaviour changed.
+
+### 16.1 RM is no longer a navigation destination
+
+RM used to be a fifth `nav_panel` — a page you navigated *to*, which meant
+leaving whichever record you were asking about. It is now mounted once per
+page in `page_navbar(footer =)` as a sidecar / drawer / sheet, and opened
+from a header launcher and from two record-level launchers.
+
+`main_nav` therefore has four values (`search`, `dual_search`,
+`correspondence`, `about`). `rm_assistant` is no longer one of them.
+
+Unchanged, and deliberately so:
+
+* the `shinychat` module id is still `"rm_assistant"`;
+* the chat element is still `rm_assistant-chat`;
+* New chat is still `rm_assistant-new_chat`, observed by the same handler;
+* the static greeting is still baked into the initial HTML;
+* `assistant_handle_turn()` still performs route determination, slot
+  extraction, the coding-service call and authoritative rendering before
+  any provider round-trip;
+* the tool interlock, the render suppression and the grounding of the
+  provider's own history are untouched.
+
+`rm_assistant_chat_ui()` is now the single definition of the mount, used by
+both the card form (`rm_assistant_ui()`, retained for the standalone and
+degraded cases and for tests) and the sidecar form
+(`rm_assistant_panel_ui()`). **Exactly one may be mounted in a running
+page** — two would mean a duplicate chat element and two transcripts of one
+conversation.
+
+### 16.2 Conversation persistence
+
+Closing the panel sets `hidden` on an element that is never removed and
+never re-rendered. The transcript, the scroll position and the ellmer
+client's turn history all survive close/reopen and navigation between
+destinations. Only **New chat** clears the conversation, and it still does
+so through the existing observer, which also clears the pending
+clarification, the route, the requested systems and the latest packet.
+
+### 16.3 Attached context — visible, removable, and NOT prompt state
+
+A contextual "Ask RM" action attaches a **context chip**: a visible,
+removable marker of which verified application object the user pressed the
+button from.
+
+| Property | Guarantee |
+|---|---|
+| Source | Only fields a deterministic service already returned — the canonical row for an entry, `correspondence_ask_rm_context()` for a relationship |
+| Visibility | Rendered as a chip above the conversation, with a gradient dot marking it as retrieved data rather than user text |
+| Removability | Each chip has a real button with an accessible name naming what it removes |
+| Isolation | A `reactiveVal` created inside the server function — per session, never global, no `<<-` |
+| Replacement | Keyed by record, so pressing Ask RM twice on the same record does not stack duplicates, and a different record adds a second chip rather than silently replacing the first |
+| Navigation | Navigating between destinations never adds, removes or replaces a chip |
+
+> **Superseded by §17.** In the presentation pass the chips were visible
+> state only and were deliberately not reachable by RM — that was a
+> presentation milestone with a no-behaviour-change constraint, and wiring
+> them in was called out as a separate, testable change to the assistant
+> layer. That change has since been made. §17 records what the bridge
+> does, the precedence rules that keep an attached record the weakest
+> referent in the system, and what the bridge is forbidden to do.
+>
+> The property this paragraph was protecting still holds and is now
+> asserted directly: the named regression matrix produces identical codes
+> with a record attached throughout.
+
+### 16.4 Degradation
+
+Unchanged in substance. `rm_assistant_status()` is still evaluated once at
+UI-build time, and a deployment without a working provider configuration
+still gets `rm_assistant_unavailable_ui()` while Search, PSOC + PSIC,
+Compare Editions and Sources are entirely unaffected.
+
+Two presentation refinements:
+
+* inside the sidecar the degraded card is rendered with `heading = FALSE`,
+  because the panel header already carries the "RM Assistant" heading and
+  the card announcing it again gave the panel two identical H2s;
+* the two **record-level** launchers are not rendered at all when the
+  assistant is unavailable. The header launcher is, so the state stays
+  discoverable rather than the assistant vanishing without explanation.
+
+`rm_sidecar_server()` installs nothing when the assistant is unavailable:
+there is no panel body for a context chip to attach to.
+
+### 16.5 What the sidecar layer may not do
+
+`R/ui/ui_sidecar.R` contains no LLM client construction, no tool
+definitions, no prompt text and no classification logic, and it is asserted
+by test not to reference `assistant_handle_turn`, `create_rm_chat_client`,
+`rm_assistant_tools`, `set_turns`, `chat_append` or any search service. It
+opens a panel and records which verified object the user opened it from.
+
+---
+
+## 17. The attached-context bridge
+
+Section 16.3 recorded that attached context was visible, removable state
+*about* the conversation and deliberately not reachable by RM. That gap is
+now closed. This section replaces 16.3's final paragraph; everything else
+in §16 stands.
+
+### 17.1 What it does
+
+A user who attaches a record and asks a referential question —
+"Why is this classified here?", "Explain this relationship." — now has
+"this" resolve to that record. Before the bridge, such a turn had no
+referent and was coded as if the words themselves described somebody's job.
+
+### 17.2 Identifier-only descriptors
+
+The UI stores, and the turn state carries, **identifiers only**:
+
+```r
+list(kind = "entry", system = , version = , code = )
+list(kind = "correspondence", from_version = , from_code = ,
+     to_version = , to_code = )
+```
+
+No label, level, status or relationship fact is carried across turns. Those
+are re-read from the canonical repository on the turn that uses them, by
+`get_classification_entry()` and `get_psic_correspondence()` — the same
+readers Search and Compare Editions use.
+
+This is the point of the design, not an implementation detail. A row held
+across turns is a **snapshot**, and presenting classification facts that
+were true earlier is the one thing this application must never do. Carrying
+identifiers forces a fresh read, which also makes "the edition moved
+underneath you" fail closed: an unreadable descriptor yields nothing at
+all, never a degraded answer.
+
+### 17.3 Precedence — attached context is the weakest referent
+
+It applies only when **all** of these hold:
+
+1. the turn is a short referential/explanation question
+   (`assistant_explanation_requested()`, unchanged);
+2. there is **no pending clarification** — an outstanding bounded question
+   owns the next reply, whatever is attached to the panel;
+3. there is **no latest packet** — an answer RM itself just produced is a
+   nearer referent for "this" than a chip attached earlier.
+
+An explicit new coding request is not a referential turn, so it never
+reaches the bridge and routes and codes exactly as before. All three rules
+live in one function, `assistant_attached_context_for_turn()`, so the
+ordering cannot drift between the execution path and the tests.
+
+### 17.4 What RM is allowed to say
+
+The verified read is wrapped as a coding-service-shaped packet with
+`request_type = "attached_context"`, and that packet becomes the turn's
+retained packet. Two consequences, both deliberate:
+
+* `assistant_guard_response()` authorises **only** the codes the repository
+  just returned. A model that reaches for any other code is rejected and
+  replaced by the deterministic rendering, exactly as on a coding turn.
+* the existing explanation path takes over unchanged — the route stays
+  `contextual_coding`, live model text is suppressed, and the guarded
+  append lets the model speak.
+
+`allowed_codes` gains a third slot, `context`, beside `psoc` and `psic`. It
+exists because an attached record may belong to any registered system — a
+PSGC province, a PSCED programme — and filing such a code under `psoc` or
+`psic` to get it authorised would be a false statement inside the packet.
+Coding-service packets carry no `context` slot, so the union is a no-op for
+every pre-existing caller.
+
+### 17.5 Grounding
+
+`assistant_render_attached_context()` builds the block the model sees, in
+R, from the canonical read. `app.R` appends it to the provider's turn
+history **before** the round-trip, so the referential question lands
+against a record the conversation has established. The chip's own label
+text never reaches the model, and neither does anything from the DOM.
+
+Grounding is best-effort: if it fails, the model loses its context and the
+guard still refuses any code the read did not authorise, so the failure
+mode is a vaguer answer rather than an unverified one.
+
+### 17.6 Lifecycle
+
+| Event | Effect |
+|---|---|
+| Attach | Descriptor appended (newest last); re-attaching the same record moves it to the end rather than duplicating it |
+| Remove chip | Descriptor dropped from **subsequent turns**, not just from the display |
+| Close panel | Nothing. Closing hides a panel; it does not discard what the user attached |
+| Reopen panel | Conversation and attached records both intact |
+| New chat | Chips and descriptors both cleared, alongside the pending question, route and packet — a chip pointing into a discarded conversation would make "this" refer to something no longer on screen |
+
+The descriptors live in the per-session turn-state environment, so one
+visitor's attached record can never be visible in another's turn.
+
+### 17.7 What the bridge may not do
+
+Asserted by test over the file's own source: it may call
+`get_classification_entry()` and `get_psic_correspondence()` and nothing
+else. No `search_classification`, no `assistant_coding_service`, no
+retrieval, no semantic anything, no slot extraction. It opens no second
+classification path and it does not bypass `assistant_handle_turn()` — it
+is consulted from inside it.
+
+Semantic authority remains **off**; this milestone did not touch
+`R/retrieval/`.

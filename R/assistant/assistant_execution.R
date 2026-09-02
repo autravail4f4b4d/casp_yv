@@ -347,7 +347,10 @@ assistant_handle_turn <- function(text, turn_state) {
     render = NA_character_,
     allowed_codes = character(0),
     explanation_context = NA_character_,
-    explanation_requested = FALSE
+    explanation_requested = FALSE,
+    # Set only by the attached-context bridge below. app.R grounds the
+    # provider's history with it before the model speaks.
+    context_note = NA_character_
   )
 
   # EXPLANATION TURNS (spec 21). "why?" / "explain this" is a question
@@ -363,6 +366,42 @@ assistant_handle_turn <- function(text, turn_state) {
       !is.null(assistant_turn_latest_packet(turn_state))) {
     out$explanation_requested <- TRUE
     out$route <- "contextual_coding"
+    return(out)
+  }
+
+  # ATTACHED-CONTEXT TURNS. Same shape as the branch above and reached only
+  # where that branch could not fire: a referential question with no
+  # pending clarification and no retained packet -- which, before the
+  # bridge existed, fell through to routing and coded the words "why is
+  # this classified here" as if they described somebody's job.
+  #
+  # `assistant_attached_context_for_turn()` owns every precedence rule and
+  # performs the canonical re-read; it returns NULL unless the record is
+  # readable from the repository right now. The packet it yields authorises
+  # ONLY the codes that read returned, so the response guard is doing the
+  # same job here that it does on a coding turn.
+  attached <- tryCatch(
+    assistant_attached_context_for_turn(
+      raw,
+      pending = pending,
+      latest_packet = assistant_turn_latest_packet(turn_state),
+      descriptors = assistant_turn_attached_context(turn_state)
+    ),
+    error = function(e) {
+      message(sprintf("[rm-assistant] attached context could not be verified: %s",
+                      conditionMessage(e)))
+      NULL
+    }
+  )
+  if (!is.null(attached)) {
+    packet <- assistant_attached_context_packet(attached)
+    assistant_turn_set_latest_packet(turn_state, packet)
+    out$explanation_requested <- TRUE
+    out$route <- "contextual_coding"
+    out$packet <- packet
+    out$allowed_codes <- assistant_allowed_codes(packet)
+    out$context_note <- assistant_render_attached_context(attached)
+    out$explanation_context <- out$context_note
     return(out)
   }
 
@@ -406,7 +445,12 @@ assistant_handle_turn <- function(text, turn_state) {
     render = assistant_render_coding_result(packet),
     allowed_codes = assistant_allowed_codes(packet),
     explanation_context = assistant_render_coding_result(packet),
-    explanation_requested = FALSE
+    explanation_requested = FALSE,
+    # Present and NA on every result, not only on the ones the bridge
+    # produces. A field that exists on some shapes and is absent on others
+    # makes `is.na(res$context_note)` return `logical(0)` at the call site,
+    # which is not FALSE -- it is an error inside `if`.
+    context_note = NA_character_
   )
 }
 
@@ -582,6 +626,9 @@ assistant_ground_turns <- function(turns, text) {
     render = assistant_render_batch_results(res$resolved, res$unresolved),
     allowed_codes = assistant_allowed_codes(merged),
     explanation_context = NA_character_,
-    explanation_requested = FALSE
+    explanation_requested = FALSE,
+    # Same reason as `.assistant_single_result()`: the field is present and
+    # NA on every result shape, never absent on some of them.
+    context_note = NA_character_
   )
 }

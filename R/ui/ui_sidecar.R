@@ -1,0 +1,568 @@
+# RM Assistant sidecar / drawer / sheet (design surface 1l).
+#
+# PRESENTATION AND DISCLOSURE ONLY. No LLM client, no tools, no prompt, no
+# classification logic, and no second conversation path: the chat mounted
+# inside this shell is the SAME `shinychat` module, with the same
+# "rm_assistant" id, the same static greeting and the same
+# `assistant_handle_turn()` server pipeline it has always had. This file
+# changes WHERE that panel lives and HOW it is opened, and nothing else.
+#
+# ---------------------------------------------------------------------------
+# WHAT MOVED
+#
+# RM used to be an ordinary `nav_panel` — a fifth destination you navigated
+# TO, which meant leaving whatever record you were asking about. The design
+# removes it from the navigation entirely (four workspace destinations
+# remain: Search, PSOC + PSIC, Compare Editions, Sources) and makes the
+# assistant a contextual surface that opens OVER or BESIDE the page you are
+# already on.
+#
+# Three breakpoints, one DOM node:
+#
+#   >= 1280px   docked sidecar, 440px. NON-MODAL: no backdrop, no focus
+#               trap, no `aria-modal`, page content reflows to make room and
+#               stays fully interactive while the panel is open.
+#   1024-1279   overlay drawer, 420px, over a dimmed backdrop. Modal
+#               semantics; page content does not reflow.
+#   <= 1023     near-full-height bottom sheet. Modal semantics.
+#
+# There is ONE panel element and ONE chat instance across all three. That is
+# deliberate: a second copy would mean a duplicate `rm_assistant-chat` id,
+# two transcripts, and a conversation that changed depending on the window
+# width.
+#
+# ---------------------------------------------------------------------------
+# WHY THE SHARED DIALOG SHELL IS NOT USED FOR THE DOCKED STATE
+#
+# `psa_dialog_ui(variant = "drawer")` is a Bootstrap modal: it always emits
+# `role="dialog"`, `aria-modal="true"` and a backdrop, and Bootstrap locks
+# page scroll behind it. That is correct for the two narrow breakpoints and
+# WRONG for the docked one, where the page beside the panel must remain a
+# live, reachable, scrollable part of the same document. Announcing a
+# non-modal side panel as `aria-modal` tells a screen-reader user the rest
+# of the page is inert when it is not.
+#
+# So the docked state gets the minimum additional shell it needs, and the
+# ARIA is switched at the breakpoint by `matchMedia` rather than being
+# guessed once at render time (CSS cannot set ARIA, and a media query cannot
+# reach the accessibility tree).
+#
+# ---------------------------------------------------------------------------
+# CONVERSATION PERSISTENCE
+#
+# Closing the panel sets `hidden` on an element that is never removed and
+# never re-rendered, so the transcript, the scroll position and the ellmer
+# client's turn history all survive close/reopen and page navigation
+# untouched. Only "New chat" clears the conversation, and it does so
+# through the existing `rm_assistant-new_chat` observer in app.R.
+#
+# ---------------------------------------------------------------------------
+# PUBLIC CONTRACT (this file)
+#
+#   rm_sidecar_deps()                         behaviour, idempotent
+#   rm_sidecar_ui(status)                     the panel + scrim
+#   rm_ask_button_ui(id, label, ...)          client-side launcher
+#   rm_context_button_ui(input_id, label, ..) contextual launcher (Shiny)
+#   rm_context_chip_ui(items)                 attached-context chips
+#   rm_sidecar_open(session)                  open it from the server
+#   rm_sidecar_server(input, output, session, ...)
+#
+# Stable DOM ids:
+#   rm-sidecar          the panel
+#   rm-sidecar-title    its accessible name
+#
+# Stable Shiny ids added here:
+#   rm_context_remove   JS input — key of a chip the user dismissed
+#   rm_attached_context uiOutput — the chip row
+
+
+RM_SIDECAR_ID <- "rm-sidecar"
+RM_SIDECAR_TITLE_ID <- "rm-sidecar-title"
+RM_CONTEXT_OUTPUT <- "rm_attached_context"
+RM_CONTEXT_REMOVE <- "rm_context_remove"
+
+# The docked breakpoint. Kept in one place because BOTH the stylesheet and
+# the ARIA switch below have to agree on it; they are asserted against each
+# other in tests/testthat/test-ui-sidecar.R.
+RM_SIDECAR_DOCKED_MIN_PX <- 1280
+
+
+.RM_SIDECAR_JS <- '
+(function () {
+  if (window.__psaRmSidecarInstalled) { return; }
+  window.__psaRmSidecarInstalled = true;
+
+  var DOCKED = window.matchMedia("(min-width: 1280px)");
+  var opener = null;
+
+  function panel() { return document.getElementById("rm-sidecar"); }
+  function scrim() { return document.getElementById("rm-sidecar-scrim"); }
+
+  function isOpen() {
+    var p = panel();
+    return !!p && p.getAttribute("data-open") === "true";
+  }
+
+  // The ARIA a side panel gets depends entirely on whether the rest of the
+  // page is still usable while it is open, and that is a BREAKPOINT fact.
+  // Docked: a complementary landmark beside the content. Overlay/sheet: a
+  // modal dialog over inert content.
+  function syncSemantics() {
+    var p = panel();
+    if (!p) { return; }
+    if (DOCKED.matches) {
+      p.setAttribute("role", "complementary");
+      p.removeAttribute("aria-modal");
+    } else {
+      p.setAttribute("role", "dialog");
+      p.setAttribute("aria-modal", "true");
+    }
+    document.body.classList.toggle(
+      "psa-rm-docked", DOCKED.matches && isOpen()
+    );
+    document.body.classList.toggle(
+      "psa-rm-overlay", !DOCKED.matches && isOpen()
+    );
+    // The backdrop belongs to the two MODAL modes only, and it has to
+    // follow the breakpoint rather than only the open/close action: a
+    // window narrowed while the panel is open crosses from docked to
+    // overlay, and an overlay with no backdrop over live content is
+    // exactly the "modal that lies about being modal" case.
+    var s = scrim();
+    if (s) { s.hidden = DOCKED.matches || !isOpen(); }
+  }
+
+  function focusables(root) {
+    var nodes = root.querySelectorAll(
+      "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), " +
+      "select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\'-1\'])"
+    );
+    return Array.prototype.filter.call(nodes, function (el) {
+      return el.offsetWidth > 0 || el.offsetHeight > 0;
+    });
+  }
+
+  function open(trigger) {
+    var p = panel();
+    if (!p) { return; }
+    if (trigger) { opener = trigger; }
+    p.hidden = false;
+    p.setAttribute("data-open", "true");
+    syncSemantics();
+    var target = p.querySelector("textarea, input, button");
+    if (target) { try { target.focus(); } catch (e) { /* non-fatal */ } }
+  }
+
+  function close() {
+    var p = panel();
+    if (!p) { return; }
+    p.setAttribute("data-open", "false");
+    p.hidden = true;
+    var s = scrim();
+    if (s) { s.hidden = true; }
+    document.body.classList.remove("psa-rm-docked", "psa-rm-overlay");
+    if (opener && document.contains(opener)) {
+      try { opener.focus(); } catch (e) { /* non-fatal */ }
+    }
+    opener = null;
+  }
+
+  document.addEventListener("click", function (e) {
+    // Re-derive the breakpoint state before acting on anything. A viewport
+    // that changed without delivering a resize event (see the listener
+    // block at the bottom) is corrected here, so the panel can never be
+    // ACTED on while its ARIA still describes the previous breakpoint.
+    if (isOpen()) { syncSemantics(); }
+    var t = e.target.closest ? e.target.closest("[data-psa-rm-open]") : null;
+    if (t) { e.preventDefault(); open(t); return; }
+    var c = e.target.closest ? e.target.closest("[data-psa-rm-close]") : null;
+    if (c) { e.preventDefault(); close(); return; }
+  });
+
+  // Escape closes in every mode. In the docked, non-modal mode this is a
+  // convenience rather than a modal contract, and it is safe because the
+  // panel is only ever opened deliberately.
+  document.addEventListener("keydown", function (e) {
+    if (isOpen()) { syncSemantics(); }
+    if (e.key !== "Escape" && e.key !== "Esc") { return; }
+    if (isOpen()) { close(); }
+  });
+
+  // Focus containment applies ONLY to the two modal breakpoints. Docked,
+  // Tab must be free to leave the panel and reach the page beside it --
+  // trapping focus there would be the accessibility bug, not the fix.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab" || DOCKED.matches || !isOpen()) { return; }
+    var p = panel();
+    var items = focusables(p);
+    if (!items.length) { return; }
+    var first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    } else if (!p.contains(document.activeElement)) {
+      e.preventDefault(); first.focus();
+    }
+  });
+
+  if (DOCKED.addEventListener) { DOCKED.addEventListener("change", syncSemantics); }
+  else if (DOCKED.addListener) { DOCKED.addListener(syncSemantics); }
+  // FOUR signals for one fact, deliberately.
+  //
+  // The media-query change event is the correct signal and the one that
+  // fires in an ordinary browser. Under the viewport emulation used for
+  // UAT none of the three passive signals fired, while the CSS breakpoint
+  // itself switched -- which left the panel drawn at its 420px overlay
+  // width while still announcing itself as a non-modal docked sidecar. A
+  // panel whose ARIA and whose layout disagree about whether the rest of
+  // the page is reachable is the exact failure this file exists to avoid.
+  // The fourth signal is the interaction handlers above, which re-derive
+  // the state before acting; between them the panel cannot be USED in a
+  // stale mode even where no passive signal ever arrives.
+  window.addEventListener("resize", syncSemantics);
+  if (typeof ResizeObserver !== "undefined") {
+    try {
+      new ResizeObserver(syncSemantics).observe(document.documentElement);
+    } catch (e) { /* non-fatal: the two listeners above still apply */ }
+  }
+
+  // Contextual "Ask RM" actions are Shiny inputs (the server has to build
+  // the verified context first), so the server opens the panel.
+  if (window.Shiny && Shiny.addCustomMessageHandler) {
+    Shiny.addCustomMessageHandler("psa-rm-open", function (_msg) { open(null); });
+  }
+
+  if (document.readyState !== "loading") { syncSemantics(); }
+  else { document.addEventListener("DOMContentLoaded", syncSemantics); }
+})();
+'
+
+#' Install the sidecar behaviour. Idempotent.
+rm_sidecar_deps <- function() {
+  shiny::tags$script(shiny::HTML(.RM_SIDECAR_JS))
+}
+
+
+# ---- Launchers -------------------------------------------------------------
+
+#' The global "Ask RM" launcher.
+#'
+#' Deliberately NOT a Shiny input: opening a panel that is already in the
+#' DOM needs no server round-trip, and making it one would put a network
+#' hop between the click and the panel on every page.
+#'
+#' @param id character(1). DOM id (not a Shiny input id).
+#' @param label character(1). Visible text. Never omit it.
+#' @param class character(1) or NULL. Extra classes.
+rm_ask_button_ui <- function(id, label = "Ask RM", class = NULL) {
+  shiny::tags$button(
+    id = id,
+    type = "button",
+    class = paste(c("psa-askrm", class), collapse = " "),
+    `data-psa-rm-open` = "",
+    lucide_icon("sparkles", 14),
+    shiny::tags$span(class = "psa-askrm__text", label)
+  )
+}
+
+#' A CONTEXTUAL "Ask RM" launcher.
+#'
+#' A real Shiny `actionButton`, because the server has to derive the
+#' verified context for the current record before the panel opens. It opens
+#' the same single assistant; it never navigates.
+#'
+#' @param input_id character(1). Shiny input id.
+#' @param label character(1). Visible text.
+#' @param class character(1) or NULL. Extra classes.
+#' @param aria_label character(1) or NULL.
+rm_context_button_ui <- function(input_id, label, class = NULL, aria_label = NULL) {
+  btn <- shiny::actionButton(
+    input_id,
+    label = shiny::tagList(
+      lucide_icon("sparkles", 14),
+      shiny::tags$span(class = "psa-askrm__text", label)
+    ),
+    class = paste(c("psa-askrm psa-askrm--context", class), collapse = " ")
+  )
+  if (!is.null(aria_label)) {
+    btn$attribs[["aria-label"]] <- aria_label
+  }
+  btn
+}
+
+
+# ---- Attached context ------------------------------------------------------
+
+#' Render the attached-context chips.
+#'
+#' WHAT AN ATTACHED CONTEXT IS, AND IS NOT.
+#'
+#' It is a VISIBLE, REMOVABLE marker of the verified application record the
+#' user pressed "Ask RM" from. It is built only from fields a deterministic
+#' service already returned (`correspondence_ask_rm_context()` for a
+#' relationship; the canonical row itself for an entry), so nothing here can
+#' introduce a code the application did not retrieve.
+#'
+#' It is NOT part of the conversation, and it is deliberately not injected
+#' into the model's prompt in this pass: the assistant's grounding, routing
+#' and execution path (`assistant_handle_turn()`) is unchanged, and silently
+#' prepending text to a user's turn would change RM's behaviour on the very
+#' turns the acceptance matrix pins down. See docs/ASSISTANT_CONTRACT.md.
+#'
+#' @param items A named list of contexts: key -> list(label=, detail=).
+rm_context_chip_ui <- function(items) {
+  if (is.null(items) || length(items) == 0L) {
+    return(NULL)
+  }
+  shiny::tagList(
+    shiny::tags$span(class = "psa-rm-context-label", "Attached context"),
+    shiny::tags$div(
+      class = "psa-rm-context-chips",
+      lapply(names(items), function(key) {
+        it <- items[[key]]
+        shiny::tags$span(
+          class = "psa-rm-context-chip",
+          # The dot marks the chip as retrieved data rather than user text.
+          shiny::tags$span(class = "psa-rm-context-dot", `aria-hidden` = "true"),
+          shiny::tags$span(class = "psa-rm-context-text", it$label),
+          shiny::tags$button(
+            type = "button",
+            class = "psa-rm-context-remove",
+            `aria-label` = paste("Remove attached context:", it$label),
+            onclick = sprintf(
+              "Shiny.setInputValue('%s', {key: '%s', nonce: Math.random()}, {priority: 'event'});",
+              RM_CONTEXT_REMOVE, key
+            ),
+            lucide_icon("x", 11)
+          )
+        )
+      })
+    )
+  )
+}
+
+
+# ---- The panel -------------------------------------------------------------
+
+#' The assistant panel itself.
+#'
+#' Mounted ONCE per page, outside the navigation, so it is reachable from
+#' every destination and survives navigating between them.
+#'
+#' @param status The `rm_assistant_status()` list. Decided once at
+#'   UI-build time, exactly as the previous nav-panel mount did.
+rm_sidecar_ui <- function(status = NULL) {
+  available <- isTRUE(status$enabled) && isTRUE(status$available)
+
+  shiny::tagList(
+    rm_sidecar_deps(),
+    # The backdrop for the two modal breakpoints. Hidden at >= 1280 by CSS
+    # AND by the script, so the docked panel can never dim the page it is
+    # meant to sit beside.
+    shiny::tags$div(
+      id = "rm-sidecar-scrim",
+      class = "psa-rm-scrim",
+      `data-psa-rm-close` = "",
+      hidden = NA,
+      `aria-hidden` = "true"
+    ),
+    shiny::tags$aside(
+      id = RM_SIDECAR_ID,
+      class = "psa-rm-sidecar",
+      # role / aria-modal are set by the script at the current breakpoint;
+      # the static value is the non-modal one, which is the safe default if
+      # scripting is unavailable.
+      role = "complementary",
+      `aria-labelledby` = RM_SIDECAR_TITLE_ID,
+      `data-open` = "false",
+      hidden = NA,
+
+      shiny::tags$div(
+        class = "psa-rm-sidecar-head",
+        shiny::tags$div(
+          class = "psa-rm-sidecar-heading",
+          shiny::tags$h2(id = RM_SIDECAR_TITLE_ID, class = "psa-rm-sidecar-title",
+                         "RM Assistant"),
+          shiny::tags$span(class = "psa-rm-sidecar-standing",
+                           "Reads verified data only")
+        ),
+        shiny::tags$div(
+          class = "psa-rm-sidecar-actions",
+          if (available) rm_assistant_new_chat_ui(),
+          shiny::tags$button(
+            type = "button",
+            class = "psa-rm-sidecar-close",
+            `data-psa-rm-close` = "",
+            `aria-label` = "Close the RM Assistant panel",
+            lucide_icon("x", 14)
+          )
+        )
+      ),
+
+      if (available) {
+        shiny::tags$div(
+          class = "psa-rm-context",
+          shiny::uiOutput(RM_CONTEXT_OUTPUT)
+        )
+      },
+
+      shiny::tags$div(
+        class = "psa-rm-sidecar-body",
+        # `heading = FALSE`: the panel header above already carries the
+        # "RM Assistant" heading, and the degraded card announcing it again
+        # gives the panel two identical H2s in a row.
+        if (available) {
+          rm_assistant_panel_ui()
+        } else {
+          rm_assistant_unavailable_ui(status$reason, heading = FALSE)
+        }
+      )
+    )
+  )
+}
+
+#' Open the panel from the server.
+#'
+#' Used by the contextual launchers, which must attach their verified
+#' context before the panel appears.
+rm_sidecar_open <- function(session = shiny::getDefaultReactiveDomain()) {
+  session$sendCustomMessage("psa-rm-open", list())
+  invisible(NULL)
+}
+
+
+# ---- Server ----------------------------------------------------------------
+
+#' Wire the attached-context state and every contextual launcher.
+#'
+#' All state is local to this function, so it is per-session by
+#' construction -- one visitor's attached record can never appear in
+#' another's panel.
+#'
+#' Contexts are keyed, so pressing "Ask RM" twice on the SAME record does
+#' not stack duplicates, while a different record adds a second chip rather
+#' than silently replacing the first. Navigation never touches them: only an
+#' explicit attach or an explicit remove changes this list.
+#'
+#' @param entry_selection Reactive returning the Search screen's selected
+#'   canonical row (zero or one row).
+#' @param correspondence_selection Reactive returning the Compare Editions
+#'   selected relationship row (zero or one row).
+#' @param turn_state The session's assistant turn state
+#'   (`assistant_new_turn_state()`). When supplied, every change to the
+#'   chips is mirrored into it as IDENTIFIER-ONLY descriptors, which is what
+#'   makes an attached record actually reachable by RM. See
+#'   R/assistant/assistant_attached_context.R for what the bridge may and
+#'   may not do with them.
+#' @param available logical(1). Whether the assistant is configured. When
+#'   FALSE this installs nothing: there is no panel body to attach to.
+rm_sidecar_server <- function(input, output, session,
+                              entry_selection = NULL,
+                              correspondence_selection = NULL,
+                              turn_state = NULL,
+                              available = TRUE) {
+  if (!isTRUE(available)) {
+    return(invisible(NULL))
+  }
+
+  attached <- shiny::reactiveVal(list())
+
+  # ONE writer, so the chips the user can see and the descriptors RM can
+  # reach cannot diverge. Every mutation below goes through this.
+  sync_turn_state <- function(items) {
+    if (is.null(turn_state)) return(invisible(NULL))
+    assistant_turn_set_attached_context(
+      turn_state,
+      lapply(unname(items), function(it) it$descriptor)
+    )
+    invisible(NULL)
+  }
+
+  attach <- function(key, label, descriptor) {
+    if (is.null(descriptor)) return(invisible(NULL))
+    cur <- attached()
+    # Re-attaching the same record moves it to the END of the list rather
+    # than duplicating it: newest-last is what the bridge reads as "the
+    # thing the user is pointing at".
+    cur[[key]] <- NULL
+    cur[[key]] <- list(label = label, descriptor = descriptor)
+    attached(cur)
+    sync_turn_state(cur)
+  }
+
+  output[[RM_CONTEXT_OUTPUT]] <- shiny::renderUI({
+    rm_context_chip_ui(attached())
+  })
+  shiny::outputOptions(output, RM_CONTEXT_OUTPUT, suspendWhenHidden = FALSE)
+
+  shiny::observeEvent(input[[RM_CONTEXT_REMOVE]], {
+    key <- input[[RM_CONTEXT_REMOVE]]$key
+    shiny::req(is.character(key), nzchar(key))
+    cur <- attached()
+    cur[[key]] <- NULL
+    attached(cur)
+    # Removing the chip removes the context from every SUBSEQUENT turn,
+    # not just from the display.
+    sync_turn_state(cur)
+  })
+
+  # New chat discards the conversation, and the records attached to it go
+  # with it -- leaving a chip pointing into a conversation the user just
+  # threw away would make "this" refer to something no longer on screen.
+  shiny::observeEvent(input[["rm_assistant-new_chat"]], {
+    attached(list())
+    sync_turn_state(list())
+  })
+
+  # --- Search: "Ask RM about this entry" ---------------------------------
+  if (!is.null(entry_selection)) {
+    shiny::observeEvent(input$search_ask_rm_entry, {
+      entry <- entry_selection()
+      shiny::req(!is.null(entry), nrow(entry) > 0L)
+      entry <- entry[1, , drop = FALSE]
+      attach(
+        key = paste0("entry:", entry$system, ":", entry$version, ":", entry$code),
+        label = paste(entry$code, "·", entry$label, "·",
+                      toupper(entry$system), release_display_label(entry$version)),
+        # IDENTIFIERS ONLY. The label above is for the chip the user reads;
+        # what RM is allowed to see is re-read from the repository on the
+        # turn that uses it, so a record cannot be described from a stale
+        # snapshot taken when the button was pressed.
+        descriptor = assistant_context_descriptor_entry(
+          system = entry$system, version = entry$version, code = entry$code
+        )
+      )
+      rm_sidecar_open(session)
+    })
+  }
+
+  # --- Compare Editions: "Ask RM to explain this relationship" -----------
+  #
+  # Uses the EXISTING `correspondence_ask_rm_context()` whitelist rather
+  # than a second, parallel extraction.
+  if (!is.null(correspondence_selection)) {
+    shiny::observeEvent(input$correspondence_ask_rm, {
+      row <- correspondence_selection()
+      shiny::req(!is.null(row), nrow(row) > 0L)
+      ctx <- correspondence_ask_rm_context(row)
+      shiny::req(!is.null(ctx))
+      attach(
+        key = paste0("corr:", ctx$from_version, ":", ctx$from_code,
+                     ":", ctx$to_version, ":", ctx$to_code),
+        label = paste0(ctx$from_code, " → ", ctx$to_code, " · ",
+                       tools::toTitleCase(ctx$relation_type)),
+        # Identifiers only, for the same reason as the entry above: the
+        # relationship's facts are re-read from the correspondence artifact
+        # on the turn that uses them.
+        descriptor = assistant_context_descriptor_correspondence(
+          from_version = ctx$from_version, from_code = ctx$from_code,
+          to_version = ctx$to_version, to_code = ctx$to_code
+        )
+      )
+      rm_sidecar_open(session)
+    })
+  }
+
+  invisible(NULL)
+}
