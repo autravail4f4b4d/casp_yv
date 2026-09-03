@@ -161,6 +161,32 @@
   min-width: 0;
 }
 
+/* Overlay stacking inside the filter rail.
+   `.psa-liquid-glass > *` (ui-glass.css) gives every direct child of the rail
+   `position: relative; z-index: 1` so glass CONTENT sits above the blur layer
+   painted by `::before`. A side effect is that each child becomes its own
+   stacking context: an overlay opened by one child -- the fixed Edition
+   panel, the absolutely positioned System dropdown -- is trapped in that
+   context and can no longer outrank a SIBLING, whatever its own z-index says.
+   Painting order fell back to DOM order, so the controls below an open
+   overlay were drawn on top of it: Level over the Edition list, and -- the
+   damaging one -- the Edition trigger over the middle of the open System
+   list, where it also swallowed the clicks meant for the options behind it.
+
+   Raising the two fields by a fixed order is NOT the fix. It cures the
+   desktop rail and breaks the phone one, where the Edition panel becomes a
+   full-width bottom sheet that has to clear every field including the one
+   above it; a static order can only ever be right in one direction.
+
+   Only the field that is currently OPEN needs to be raised, and only one can
+   be. `aria-expanded="true"` is what both controls already publish while
+   open -- the picker sets it on its trigger, selectize sets it on its input
+   -- so the state is read from the accessibility contract rather than
+   mirrored into a second class that could drift out of step with it. When
+   nothing is open every field sits back at z-index 1 and DOM order is
+   irrelevant again. */
+.psa-sidebar > *:has([aria-expanded="true"]) { z-index: 5; }
+
 .psa-picker-label {
   font-size: 10.5px;
   font-weight: var(--weight-medium);
@@ -235,23 +261,34 @@
 }
 
 /* ---- The disclosed panel ------------------------------------------------
-   Desktop: a popover anchored under the trigger. It is `position: absolute`
-   inside the field, so it can never displace Level -- which is the whole
-   reason the release list stopped being permanently expanded. */
+   A TRUE OVERLAY (UAT-UI-01).
+
+   It used to be `position: absolute` inside the field. An absolutely
+   positioned box is still laid out inside its ancestor's clipping and
+   stacking context, so the disclosed release list collided with the
+   controls below it instead of cleanly covering them.
+
+   `position: fixed` puts it outside every ancestor's clipping context by
+   construction -- no z-index escalation and no margins involved. It cannot
+   be anchored to its trigger by CSS alone, so the picker script measures
+   the trigger and writes top/left/width/max-height in viewport
+   coordinates, flipping above the trigger when there is more room there.
+
+   Opaque ground and a real border are load-bearing, not decoration: a
+   translucent overlay over a filter rail is unreadable, and the whole
+   defect was the reader not being able to tell panel from page. */
 .psa-picker-panel {
-  position: absolute;
-  z-index: 1050;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
+  position: fixed;
+  z-index: 1080;
   display: flex;
   flex-direction: column;
+  /* Fallbacks for the first paint, before the script anchors it. */
   max-height: 340px;
   padding: 8px;
   border-radius: var(--lumora-radius-card-sm);
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-surface);
-  box-shadow: var(--elev-2);
+  box-shadow: var(--elev-3);
   overflow: hidden;
 }
 
@@ -619,6 +656,80 @@
 
 
 /* =========================================================================
+   4b. Sources cards — row rhythm and anchored actions        (UAT-UI-04)
+   ========================================================================= */
+
+/* THE DEFECT. `.psa-card-deck` is a grid with `align-items: start`, so
+   every card took its natural height and the archive control and the PSA
+   reference link landed at a different vertical position in each column.
+   `.psa-card-link` already carried `margin-top: auto` -- it could never
+   take effect, because a card that is only as tall as its content has no
+   free space for `auto` to consume.
+
+   The fix is at the ROW, not the card: stretch the grid items so each card
+   fills its row's height, then let the card's own flex column do the work
+   it was already written for. No global fixed height is introduced, so a
+   tall row is still as tall as its tallest card. */
+@media (min-width: 768px) {
+  .psa-card-deck,
+  .psa-card-deck-2 { align-items: stretch; }
+
+  .psa-card-deck > .psa-source-card,
+  .psa-card-deck-2 > .psa-source-card { height: 100%; }
+
+  /* The flexible middle. Everything after the metadata list -- the
+     archived-editions disclosure and the PSA reference -- is pushed toward
+     the bottom edge together, so the actions line up across the row. */
+  .psa-source-card .psa-card-dl { flex: 1 1 auto; }
+}
+
+/* Mobile keeps natural card heights: a stacked column has no row to align
+   to, and stretching there only pads cards out with dead space. */
+@media (max-width: 767.98px) {
+  .psa-card-deck,
+  .psa-card-deck-2 { align-items: start; }
+
+  .psa-card-deck > .psa-source-card,
+  .psa-card-deck-2 > .psa-source-card { height: auto; }
+}
+
+/* A long LEVELS value ("Bgy, City, Mun, Prov, Reg…") wraps rather than
+   widening the card or clipping. */
+.psa-source-card .psa-card-dl dd {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+
+/* =========================================================================
+   4c. Navigation — restrained active state                   (UAT-UI-05)
+   ========================================================================= */
+
+/* THE DEFECT. The active destination was a filled white pill: the single
+   brightest object on the page, competing with the primary action it is
+   supposed to sit quietly beside, and visibly taller than its neighbours
+   because the fill exposed its padding.
+
+   The replacement keeps THREE non-colour signals, so the state is never
+   carried by colour alone:
+     1. weight        -- the active label is heavier than its neighbours;
+     2. an indicator  -- a thin accent rule under the label;
+     3. aria-selected -- emitted by bslib and never touched here.
+
+   Geometry is deliberately identical to an inactive item: same height,
+   same padding, same radius. Nothing about the item's box changes, so the
+   navbar cannot bulge or reflow as the destination changes.
+
+   The selector matches ui-glass.css's own two-selector form, which is a
+   specificity step above a plain class and would otherwise win regardless
+   of load order. */
+/* The restrained active state lives in ui-glass.css, which owns the
+   navbar chrome. A competing block here was measured losing to the four
+   `.navbar .nav-link` !important colour rules that sit between the two
+   sheets, so the rule is fixed at its owner instead of out-cascaded. */
+
+
+/* =========================================================================
    5. RM Assistant — sidecar / drawer / sheet               (surface 1l)
    ========================================================================= */
 
@@ -840,14 +951,36 @@
   outline-offset: 2px;
 }
 
-/* ---- Breakpoint 1: >= 1280 — DOCKED, NON-MODAL -------------------------- */
-@media (min-width: 1280px) {
+/* ---- Breakpoint 1: >= 1464 — DOCKED, NON-MODAL --------------------------
+   CONTENT-AWARE (UAT-UI-02). 1464 = 1024px of usable Search workspace +
+   the panel's own 440px. Docking used to start at 1280, which left 840px
+   for the filter rail, the results table AND the selected-entry column --
+   less than the workspace needs on its own, so result labels and the
+   selected entry clipped. Below this width the panel overlays instead of
+   compressing. The number is derived in R/ui/ui_sidecar.R and the two are
+   asserted against each other by test. */
+@media (min-width: 1464px) {
   .psa-rm-sidecar {
     top: 0;
     right: 0;
     bottom: 0;
     width: 440px;
     border-left: 1px solid var(--ui-border);
+  }
+
+  /* Even with the minimum workspace guaranteed, four columns is one too
+     many: Filters + Results + Selected entry + RM. While docked the
+     selected entry reflows BELOW the results as a full-width card, so the
+     two things the processor is working with -- filters and results --
+     keep their width and their labels stay readable. */
+  body.psa-rm-docked .psa-results-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.psa-rm-docked .psa-detail-col {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 
   /* The page reflows to make room rather than being covered, which is what
@@ -874,8 +1007,8 @@
   .psa-rm-scrim { display: none !important; }
 }
 
-/* ---- Breakpoint 2: 1024–1279 — OVERLAY DRAWER, MODAL -------------------- */
-@media (min-width: 1024px) and (max-width: 1279.98px) {
+/* ---- Breakpoint 2: 1024–1463 — OVERLAY DRAWER, MODAL -------------------- */
+@media (min-width: 1024px) and (max-width: 1463.98px) {
   .psa-rm-sidecar {
     top: 0;
     right: 0;
@@ -923,4 +1056,150 @@ body.psa-rm-overlay { overflow: hidden; }
   .psa-hero-actions .psa-askrm { width: 100%; justify-content: center; }
 
   .psa-results-toolbar { align-items: flex-start; }
+}
+
+
+/* =========================================================================
+   6. Official PSOC descriptive sections               (descriptive metadata)
+   =========================================================================
+   The reference content in View details: definition, lettered tasks,
+   examples, related occupations, exclusions/notes and the historical
+   crosswalks. Every string is official source text served through
+   `get_psoc_descriptive_metadata()` for an already-verified code -- this
+   sheet only decides how it reads.
+
+   Sections with no source content are not rendered at all, so there are no
+   empty-state rules here by design. */
+
+.psa-psoc-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.psa-psoc-desc__head {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+.psa-psoc-desc__para {
+  margin: 0 0 8px;
+  /* A readable measure. Measured in the xl dialog at 1280: the definition
+     ran 737px at 13.5px, about 100 characters a line, which is past the
+     point where the eye reliably finds the next line. Capped in `ch` so it
+     tracks the font rather than a pixel guess, and it never widens a
+     narrow viewport because `max-width` only ever removes width. */
+  max-width: 78ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ui-text-body);
+}
+
+.psa-psoc-desc__para:last-child { margin-bottom: 0; }
+
+/* The workbook letters its tasks (a), (b), (c) -- that letter is part of
+   the official text, so the list carries it rather than letting the
+   browser impose its own numbering. */
+.psa-psoc-desc__tasks,
+.psa-psoc-desc__examples,
+.psa-psoc-desc__related {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.psa-psoc-desc__task {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ui-text-body);
+}
+
+.psa-psoc-desc__task-label {
+  color: var(--ui-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.psa-psoc-desc__examples li,
+.psa-psoc-desc__related li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-text-body);
+  overflow-wrap: anywhere;
+}
+
+.psa-psoc-desc__examples li::before,
+.psa-psoc-desc__related li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.65em;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ui-text-subtle);
+}
+
+.psa-psoc-desc__related-code { color: var(--ui-text-muted); }
+
+/* A partial mapping is stated, never rounded up to a full one. */
+.psa-psoc-desc__partial {
+  color: var(--ui-text-subtle);
+  font-style: normal;
+}
+
+.psa-psoc-desc__note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-subtle);
+}
+
+.psa-psoc-desc__crosswalk {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.psa-psoc-desc__crosswalk dt { color: var(--ui-text-subtle); }
+.psa-psoc-desc__crosswalk dd { margin: 0; color: var(--ui-text-body); }
+
+.psa-psoc-desc__provenance {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-subtle);
+}
+
+/* Exclusions and notes are methodological cautions, not failures: quiet
+   left rule, never an error colour. */
+.psa-psoc-desc__section--exclusions,
+.psa-psoc-desc__section--notes {
+  padding-left: 12px;
+  border-left: 2px solid var(--ui-border-strong);
+}
+
+/* The Search card's one-line preview. Kept short on purpose: the card must
+   not grow into a second details panel. */
+.psa-detail-preview {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ui-text-muted);
 }

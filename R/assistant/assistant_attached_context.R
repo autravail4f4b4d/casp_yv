@@ -66,7 +66,80 @@
 #   assistant_append_context_turn(turns, text)      -> ellmer turns
 
 
-ASSISTANT_CONTEXT_KINDS <- c("entry", "correspondence")
+ASSISTANT_CONTEXT_KINDS <- c("entry", "correspondence", "coding_pair")
+
+# WHAT A CONTEXTUAL EXPLANATION MAY BE BUILT FROM (UAT-RM-02).
+#
+# Live UAT produced generalised prose about PSOC 1112 -- duties, scope,
+# rationale -- none of which exists in this deployment's runtime data. The
+# assistant's standing claim is "reads verified data only", so the fix is
+# not better phrasing: it is stating the boundary to the model and saying
+# out loud that the descriptive fields are absent.
+#
+# Permitted, because the repository actually returns them:
+ASSISTANT_CONTEXT_VERIFIED_FIELDS <- c(
+  "system", "edition", "code", "title", "level", "hierarchy",
+  "status", "issuing authority", "source reference"
+)
+# Withheld, because no runtime artifact carries them yet. Descriptive
+# metadata integration is explicitly out of scope for this pass.
+ASSISTANT_CONTEXT_ABSENT_FIELDS <- c(
+  "definitions", "duties or main tasks", "inclusions or exclusions",
+  "examples", "scope notes", "the rationale for the classification"
+)
+
+# The instruction appended to every contextual grounding block. Generic by
+# construction: no code, system or edition is named in it, so it cannot
+# become hard-coded prose about one record.
+#' @param descriptive The record's official descriptive metadata, or NULL.
+#'   When present, the fields it supplies are no longer "absent" and the
+#'   boundary must not claim they are -- a model told the definition is
+#'   unavailable while being handed the definition is being given
+#'   contradictory instructions.
+.assistant_context_boundary <- function(descriptive = NULL) {
+  absent <- ASSISTANT_CONTEXT_ABSENT_FIELDS
+  if (!is.null(descriptive)) {
+    supplied <- character(0)
+    if (length(descriptive$definition) > 0L) supplied <- c(supplied, "definitions")
+    if (length(descriptive$tasks) > 0L ||
+        length(descriptive$task_summary) > 0L) {
+      supplied <- c(supplied, "duties or main tasks")
+    }
+    if (length(descriptive$examples) > 0L) supplied <- c(supplied, "examples")
+    if (length(descriptive$exclusions) > 0L) {
+      supplied <- c(supplied, "inclusions or exclusions")
+    }
+    if (length(descriptive$notes) > 0L) supplied <- c(supplied, "scope notes")
+    absent <- setdiff(absent, supplied)
+  }
+
+  head <- if (is.null(descriptive)) {
+    "Only the fields listed above are available for this record. "
+  } else {
+    paste0(
+      "Everything above is official published text for this exact code. ",
+      "Quote or paraphrase it faithfully and do not extend it. "
+    )
+  }
+
+  if (length(absent) == 0L) {
+    return(paste0(
+      head,
+      "Do not add scope, rationale or relationships that the text above ",
+      "does not state, and do not offer any other classification code."
+    ))
+  }
+
+  paste0(
+    head,
+    "This application does not currently load ",
+    paste(absent, collapse = ", "), " for this record. ",
+    "Do not supply any of them from general knowledge, and do not infer ",
+    "why the classification is structured as it is. If the user asks for ",
+    "something in that list, say plainly that it is not available in this ",
+    "application and offer the verified fields above instead."
+  )
+}
 
 
 # ---- Descriptors -----------------------------------------------------------
@@ -82,6 +155,27 @@ assistant_context_descriptor_entry <- function(system, version, code) {
   cd <- .assistant_scalar_chr(code)
   if (is.null(sys) || is.null(ver) || is.null(cd)) return(NULL)
   list(kind = "entry", system = sys, version = ver, code = cd)
+}
+
+#' A PSOC + PSIC coding-pair reference: identifiers only.
+#'
+#' The processor-facing case (UAT-UI-03): two independently selected
+#' records reviewed together. It is a PAIR, never a mapping -- the two
+#' halves stay separately identified all the way through, because the one
+#' thing this review must not imply is that either code follows from the
+#' other.
+assistant_context_descriptor_coding_pair <- function(psoc_version, psoc_code,
+                                                     psic_version, psic_code) {
+  ov <- .assistant_scalar_chr(psoc_version)
+  oc <- .assistant_scalar_chr(psoc_code)
+  iv <- .assistant_scalar_chr(psic_version)
+  ic <- .assistant_scalar_chr(psic_code)
+  if (is.null(ov) || is.null(oc) || is.null(iv) || is.null(ic)) return(NULL)
+  list(
+    kind = "coding_pair",
+    psoc_version = ov, psoc_code = oc,
+    psic_version = iv, psic_code = ic
+  )
 }
 
 #' A PSIC edition-correspondence reference: identifiers only.
@@ -119,8 +213,38 @@ assistant_verify_attached_context <- function(descriptor) {
   switch(kind,
     entry = .assistant_verify_entry_context(descriptor),
     correspondence = .assistant_verify_correspondence_context(descriptor),
+    coding_pair = .assistant_verify_coding_pair_context(descriptor),
     NULL
   )
+}
+
+#' The verified ancestor chain for a record, or character(0).
+#'
+#' Hierarchy is on the permitted-fields list because the repository really
+#' does return it. Read through the same `hierarchy_ancestors()` service
+#' the Search detail card uses -- not a second traversal.
+.assistant_context_hierarchy <- function(system, version, code) {
+  eligible <- tryCatch(hierarchy_is_eligible(system, version),
+                       error = function(e) FALSE)
+  if (!isTRUE(eligible)) return(character(0))
+  chain <- tryCatch(hierarchy_ancestors(system, version, code),
+                    error = function(e) character(0))
+  if (is.null(chain)) character(0) else as.character(chain)
+}
+
+.assistant_verify_coding_pair_context <- function(d) {
+  # Each half is verified INDEPENDENTLY, through the same single-entry path
+  # as any other attached record. If either fails to verify there is no
+  # pair to review, and the turn falls through rather than reviewing half
+  # of one.
+  occ <- .assistant_verify_entry_context(
+    list(kind = "entry", system = "psoc", version = d$psoc_version, code = d$psoc_code)
+  )
+  ind <- .assistant_verify_entry_context(
+    list(kind = "entry", system = "psic", version = d$psic_version, code = d$psic_code)
+  )
+  if (is.null(occ) || is.null(ind)) return(NULL)
+  list(kind = "coding_pair", psoc = occ, psic = ind)
 }
 
 .assistant_verify_entry_context <- function(d) {
@@ -136,7 +260,7 @@ assistant_verify_attached_context <- function(descriptor) {
     if (length(v) == 0L || is.na(v)) NA_character_ else v
   }
 
-  list(
+  out <- list(
     kind = "entry",
     system = chr(row$system),
     version = chr(row$version),
@@ -147,6 +271,20 @@ assistant_verify_attached_context <- function(descriptor) {
     parent_code = if ("parent_code" %in% names(row)) chr(row$parent_code) else NA_character_,
     source = if ("source" %in% names(row)) chr(row$source) else NA_character_
   )
+  out$hierarchy <- .assistant_context_hierarchy(out$system, out$version, out$code)
+
+  # OFFICIAL DESCRIPTIVE METADATA, AFTER canonical verification.
+  #
+  # The order here is the authority chain and is not incidental: the record
+  # above was just re-read from the repository, and only then is the code
+  # used to fetch the official description. The descriptive layer never
+  # selects, verifies or authorises anything -- `allowed_codes` is still
+  # built from the canonical read alone, so text found here can explain a
+  # code but can never make one utterable.
+  out$descriptive <- get_psoc_descriptive_metadata(
+    version = out$version, code = out$code, level = out$level
+  )
+  out
 }
 
 .assistant_verify_correspondence_context <- function(d) {
@@ -232,6 +370,28 @@ assistant_attached_context_packet <- function(verified) {
   } else if (identical(verified$kind, "correspondence")) {
     codes <- c(verified$from_code, verified$to_code)
     codes <- codes[!is.na(codes)]
+  } else if (identical(verified$kind, "coding_pair")) {
+    # Both halves are authorised, and they are filed under their OWN
+    # systems rather than lumped together -- the packet must not be the
+    # place where the PSOC/PSIC distinction quietly disappears.
+    codes <- c(verified$psoc$code, verified$psic$code)
+    codes <- codes[!is.na(codes)]
+    occupation <- list(
+      status = "resolved",
+      selected_code = verified$psoc$code, selected_label = verified$psoc$label,
+      classification_level = verified$psoc$level,
+      level_display = verified$psoc$level, coding_role = NA_character_,
+      version = verified$psoc$version, status_current = verified$psoc$status,
+      evidence_source = "attached_context"
+    )
+    industry <- list(
+      status = "resolved",
+      selected_code = verified$psic$code, selected_label = verified$psic$label,
+      classification_level = verified$psic$level,
+      level_display = verified$psic$level, coding_role = NA_character_,
+      version = verified$psic$version, status_current = verified$psic$status,
+      evidence_source = "attached_context"
+    )
   }
 
   list(
@@ -264,6 +424,104 @@ assistant_attached_context_packet <- function(verified) {
 #'
 #' Deterministic, assembled in R from the canonical read. The model never
 #' sees the chip's label text, only this.
+#' The verified field lines for one entry. Shared by the single-record and
+#' coding-pair blocks so the two cannot state a record differently.
+.assistant_context_entry_lines <- function(v) {
+  lines <- c(
+    sprintf("- System: %s", toupper(v$system)),
+    sprintf("- Code: %s", v$code),
+    sprintf("- Title: %s", v$label)
+  )
+  if (!is.na(v$level)) lines <- c(lines, sprintf("- Level: %s", v$level))
+  if (!is.na(v$version)) lines <- c(lines, sprintf("- Edition: %s", v$version))
+  if (!is.na(v$status)) lines <- c(lines, sprintf("- Status: %s", v$status))
+  if (length(v$hierarchy) > 0L) {
+    lines <- c(lines, sprintf("- Hierarchy: %s › %s",
+                              paste(v$hierarchy, collapse = " › "), v$code))
+  } else if (!is.na(v$parent_code)) {
+    lines <- c(lines, sprintf("- Parent: %s", v$parent_code))
+  }
+  c(lines, "- Issuing authority: Philippine Statistics Authority")
+}
+
+#' The official descriptive lines for a verified record, or character(0).
+#'
+#' Bounded on purpose. RM is not a second Details panel: it gets the
+#' definition, a capped slice of the lettered tasks and of the examples,
+#' and the exclusions/notes -- enough to judge whether a supplied
+#' occupation fits, not the whole reference page. The full text is in View
+#' details, which is where the product rule says it belongs, and sending
+#' all of it on every turn would also be a standing token cost for content
+#' the user can already read.
+.ASSISTANT_CONTEXT_MAX_TASKS <- 8L
+.ASSISTANT_CONTEXT_MAX_EXAMPLES <- 12L
+
+.assistant_context_descriptive_lines <- function(d) {
+  if (is.null(d)) return(character(0))
+  out <- character(0)
+
+  if (length(d$definition) > 0L) {
+    out <- c(out, "", "*Official definition*", paste(d$definition, collapse = " "))
+  }
+  if (length(d$tasks) > 0L) {
+    n <- min(length(d$tasks), .ASSISTANT_CONTEXT_MAX_TASKS)
+    out <- c(out, "", "*Official tasks*",
+             vapply(d$tasks[seq_len(n)], function(t) {
+               if (is.na(t$label)) paste0("- ", t$text)
+               else sprintf("- (%s) %s", t$label, t$text)
+             }, character(1)))
+    if (length(d$tasks) > n) {
+      out <- c(out, sprintf("- ...and %d more, shown in View details.",
+                            length(d$tasks) - n))
+    }
+  }
+  if (length(d$task_summary) > 0L) {
+    out <- c(out, "", "*Task summary*", paste(d$task_summary, collapse = " "))
+  }
+  if (length(d$examples) > 0L) {
+    n <- min(length(d$examples), .ASSISTANT_CONTEXT_MAX_EXAMPLES)
+    out <- c(out, "", "*Official example occupations*",
+             paste0("- ", d$examples[seq_len(n)]))
+    if (length(d$examples) > n) {
+      out <- c(out, sprintf("- ...and %d more, shown in View details.",
+                            length(d$examples) - n))
+    }
+  }
+  if (length(d$exclusions) > 0L) {
+    out <- c(out, "", "*Official exclusions*", paste0("- ", d$exclusions))
+  }
+  if (length(d$notes) > 0L) {
+    out <- c(out, "", "*Official notes*", paste0("- ", d$notes))
+  }
+  out
+}
+
+#' What RM is FOR on a turn about a verified record (W5).
+#'
+#' The user can already read the official reference in View details, so
+#' repeating it back is the one unhelpful thing RM can do here. This states
+#' the job: interpret, distinguish, and ask the question that would settle
+#' the coding.
+.assistant_context_role <- function(d) {
+  base <- paste(
+    "The user can already read the full official definition, tasks and",
+    "examples in View details. Do NOT simply repeat them. Be useful for",
+    "coding instead: say what kind of work this code covers, what would",
+    "distinguish it from a neighbouring code, and whether the duties the",
+    "user has described actually fit it."
+  )
+  if (is.null(d)) {
+    return(paste(base,
+      "No official descriptive text is available for this code, so say that",
+      "plainly and work from the verified identity and hierarchy above."))
+  }
+  paste(base,
+    "If a decision needs information the user has not given, ask ONE short",
+    "question for it -- the main duties, or the employer and what the",
+    "establishment does. An official example may be cited ONLY if it",
+    "appears in the list above.")
+}
+
 assistant_render_attached_context <- function(verified) {
   if (is.null(verified)) return(NA_character_)
 
@@ -271,22 +529,57 @@ assistant_render_attached_context <- function(verified) {
     lines <- c(
       "**Record attached by the user (verified from the classification repository)**",
       "",
-      sprintf("- System: %s", toupper(verified$system)),
-      sprintf("- Code: %s", verified$code),
-      sprintf("- Label: %s", verified$label)
-    )
-    if (!is.na(verified$level)) lines <- c(lines, sprintf("- Level: %s", verified$level))
-    if (!is.na(verified$version)) lines <- c(lines, sprintf("- Edition: %s", verified$version))
-    if (!is.na(verified$status)) lines <- c(lines, sprintf("- Status: %s", verified$status))
-    if (!is.na(verified$parent_code)) {
-      lines <- c(lines, sprintf("- Parent: %s", verified$parent_code))
-    }
-    lines <- c(
-      lines,
-      "- Source: Philippine Statistics Authority",
+      .assistant_context_entry_lines(verified),
+      .assistant_context_descriptive_lines(verified$descriptive),
       "",
       paste("When the user says \"this\", they mean this record. Explain it",
-            "using only the fields above; do not offer any other code.")
+            "using only the fields above; do not offer any other code."),
+      "",
+      .assistant_context_role(verified$descriptive),
+      "",
+      .assistant_context_boundary(verified$descriptive)
+    )
+    return(paste(lines, collapse = "\n"))
+  }
+
+  if (identical(verified$kind, "coding_pair")) {
+    lines <- c(
+      "**Coding pair attached by the user (both halves verified from the classification repository)**",
+      "",
+      "PSOC describes the OCCUPATION -- the kind of work the person does.",
+      "PSIC describes the ESTABLISHMENT's principal economic activity.",
+      "They are separate classifications: neither code implies the other,",
+      "and this pair is not a mapping between them.",
+      "",
+      "*Occupation — PSOC*",
+      .assistant_context_entry_lines(verified$psoc),
+      # The occupation side gets its official description; the industry
+      # side does not, because PSIC descriptive metadata is not part of
+      # this milestone. Asymmetry is stated rather than hidden, so the
+      # model does not treat a richer PSOC half as the stronger evidence.
+      .assistant_context_descriptive_lines(verified$psoc$descriptive),
+      "",
+      "*Industry — PSIC*",
+      .assistant_context_entry_lines(verified$psic),
+      "",
+      if (!is.null(verified$psoc$descriptive)) {
+        paste("Official descriptive text is available for the PSOC side only.",
+              "That is a difference in what this application has loaded, NOT",
+              "evidence that the occupation is better established than the",
+              "industry.")
+      },
+      "",
+      paste("Review these two selections for a coding processor. State each",
+            "verified identity, edition and status, and say whether either",
+            "is archived rather than current. Do NOT state that the pair is",
+            "correct, equivalent, consistent or matched -- you have not been",
+            "given the establishment or the person, only the two codes."),
+      "",
+      paste("If more information would be needed to check the pair, ask only",
+            "for: the occupation title and main duties, and the employer or",
+            "establishment and its principal economic activity."),
+      "",
+      .assistant_context_boundary(verified$psoc$descriptive)
     )
     return(paste(lines, collapse = "\n"))
   }
@@ -308,7 +601,9 @@ assistant_render_attached_context <- function(verified) {
             "above. A correspondence relationship does not by itself justify",
             "redistributing historical statistical values between the two",
             "categories; say so if the user asks about using it that way.",
-            "Do not offer any other code.")
+            "Do not offer any other code."),
+      "",
+      .assistant_context_boundary()
     )
     return(paste(lines, collapse = "\n"))
   }

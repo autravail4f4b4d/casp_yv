@@ -192,14 +192,44 @@
    `.nav-underline .nav-link:not(:empty).active` (four classes), which
    otherwise wins on specificity and pins the active tab back to weight 500.
    Measured in the browser before this was added. */
+/* RESTRAINED ACTIVE STATE (UAT-UI-05).
+   The filled white pill was the brightest object on the page, competing
+   with the primary action it is meant to sit beside, and visibly taller
+   than its neighbours because the fill exposed its padding.
+   Three non-colour signals remain, so the state is never carried by colour
+   alone: a heavier label, a thin accent indicator below it, and the
+   aria-selected/aria-current attributes bslib emits and this sheet never
+   touches. Geometry is untouched -- same height, padding and radius as an
+   inactive item -- so the navbar cannot bulge as the destination changes.
+   Owned HERE rather than in ui-design.css: this sheet already governs the
+   navbar chrome, and a competing block in a later sheet was measured
+   losing to the four `.navbar .nav-link` !important colour rules that sit
+   between them. One rule, one owner. */
 .navbar .nav-link.active,
 .navbar .nav-link:not(:empty).active {
-  color: var(--ui-primary-text) !important;
-  background: var(--lumora-ink) !important;
+  position: relative;
+  color: var(--ui-text) !important;
+  background: var(--ui-selected-bg) !important;
   border-bottom-color: transparent;
   font-weight: var(--weight-semibold);
   box-shadow: none;
 }
+
+.navbar .nav-link.active::after,
+.navbar .nav-link:not(:empty).active::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ui-accent-rail);
+}
+
+/* The glyph follows the label, so icon and text agree about which
+   destination is current. */
+.navbar .nav-link.active .psa-nav-icon { color: var(--ui-accent) !important; }
 
 /* app.css underlines every `a:hover`. On a pill navbar that reads as a
    stray text link crossing the pill, so the pill's own hover fill is the

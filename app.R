@@ -568,18 +568,45 @@ server <- function(input, output, session) {
   # deployment actually has a working assistant -- an action that promises
   # record-specific help must not be offered where it cannot be delivered.
   output$selected_entry_actions <- renderUI({
-    st <- rm_assistant_status()
-    if (!isTRUE(st$enabled) || !isTRUE(st$available)) return(NULL)
     entry <- selected_entry()
     if (is.null(entry) || nrow(entry) == 0L) return(NULL)
     entry <- entry[1, , drop = FALSE]
-    rm_context_button_ui(
-      "search_ask_rm_entry",
-      "Ask RM about this entry",
-      aria_label = paste("Ask RM about", entry$code, entry$label)
+
+    st <- rm_assistant_status()
+    rm_ready <- isTRUE(st$enabled) && isTRUE(st$available)
+
+    shiny::tagList(
+      # VIEW DETAILS IS THE REFERENCE SURFACE, and Search is the path the
+      # user actually arrives on. Found in browser UAT: the selected-entry
+      # card offered "Ask RM about this entry" and nothing else, so the
+      # official definition, tasks, examples and crosswalks were reachable
+      # only from the PSOC + PSIC screen or the hierarchy browser. That
+      # inverts the product rule -- nobody should need the assistant to
+      # read what the official reference already says.
+      psa_dialog_open_button(
+        SEARCH_VIEW_DETAILS_INPUT,
+        "View details",
+        aria_label = paste("View full details for", entry$code, entry$label)
+      ),
+      if (rm_ready) {
+        rm_context_button_ui(
+          "search_ask_rm_entry",
+          "Ask RM about this entry",
+          aria_label = paste("Ask RM about", entry$code, entry$label)
+        )
+      }
     )
   })
   outputOptions(output, "selected_entry_actions", suspendWhenHidden = FALSE)
+
+  # The Search screen's own details dialog. `view_input_id` is deliberately
+  # NULL: "View in Search" would be a no-op here, because Search is where
+  # the user already is.
+  observeEvent(input[[SEARCH_VIEW_DETAILS_INPUT]], {
+    entry <- selected_entry()
+    req(!is.null(entry), nrow(entry) > 0L)
+    psa_dialog_show(entry_detail_dialog_ui(entry), session = session)
+  })
 
   output$sources_panel <- renderUI({
     req(input$main_nav == "about")
@@ -759,7 +786,7 @@ server <- function(input, output, session) {
   # the dual panel. Row CLICK still only selects -- opening a dialog is a
   # deliberate second action -- and the comparison always carries the
   # safeguard that a PSOC code does not imply an equivalent PSIC code.
-  dual_search_details_server(input, output, session, dual_psoc, dual_psic)
+  dual_pair <- dual_search_details_server(input, output, session, dual_psoc, dual_psic)
 
   # UI-02. One call wires the whole hierarchy browser: the slot button, the
   # dialog, lazy expansion, hierarchy-local search and "View in Search".
@@ -865,6 +892,9 @@ server <- function(input, output, session) {
     input, output, session,
     entry_selection = selected_entry,
     correspondence_selection = correspondence_selected,
+    # The SAME pair the Review coding pair dialog shows, returned by
+    # `dual_search_details_server()` rather than re-derived here.
+    coding_pair_selection = dual_pair$coding_pair,
     # The bridge. Chip changes are mirrored into THIS session's turn state
     # as identifier-only descriptors; `assistant_handle_turn()` decides
     # whether a given turn may use them and re-reads them canonically.

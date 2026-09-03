@@ -71,6 +71,18 @@ DUAL_SEARCH_COMPARE_OUTPUT <- "dual_search_compare"
 DUAL_SEARCH_COMPARE_INPUT <- "dual_search_compare_open"
 DUAL_SEARCH_VIEW_IN_SEARCH <- "dual_search_view_in_search"
 
+# UAT-UI-03. The coding-pair review's own actions. The OUTPUT and OPEN ids
+# above are deliberately unchanged -- the control was renamed, not
+# replaced, and every existing observer and test keys off those ids.
+DUAL_SEARCH_CHANGE_PSOC_INPUT <- "dual_search_change_psoc"
+DUAL_SEARCH_CHANGE_PSIC_INPUT <- "dual_search_change_psic"
+DUAL_SEARCH_ASK_RM_INPUT <- "dual_search_ask_rm_pair"
+
+# The visible label, in one place. The old wording invited the reading the
+# independence safeguard exists to prevent: two things "compared" are two
+# things a reader expects to line up.
+DUAL_SEARCH_REVIEW_LABEL <- "Review coding pair"
+
 #' Build ONE independent search panel.
 #'
 #' Pure: returns a tag object, reads nothing, mutates nothing. The panel is
@@ -354,19 +366,19 @@ dual_search_compare_ui <- function(psoc_entry, psic_entry) {
   ready <- has_psoc && has_psic
 
   hint <- if (ready) {
-    "Shown side by side for reference only."
+    "Reviewed together for coding; neither code implies the other."
   } else if (has_psoc) {
-    "Select a PSIC row as well to compare."
+    "Select a PSIC row as well to review the pair."
   } else if (has_psic) {
-    "Select a PSOC row as well to compare."
+    "Select a PSOC row as well to review the pair."
   } else {
-    "Select one PSOC row and one PSIC row to compare."
+    "Select one PSOC row and one PSIC row to review the pair."
   }
 
   shiny::tagList(
     psa_dialog_open_button(
       DUAL_SEARCH_COMPARE_INPUT,
-      "Compare selected details",
+      DUAL_SEARCH_REVIEW_LABEL,
       disabled = !ready
     ),
     shiny::tags$p(class = "psa-dual-compare__hint", hint)
@@ -441,10 +453,25 @@ dual_search_details_server <- function(input, output, session,
 
   shiny::observeEvent(input[[DUAL_SEARCH_COMPARE_INPUT]], {
     open_system(NULL)
+    st <- rm_assistant_status()
     psa_dialog_show(
-      entry_comparison_dialog_ui(psoc_selection(), psic_selection()),
+      entry_comparison_dialog_ui(
+        psoc_selection(), psic_selection(),
+        ask_rm = isTRUE(st$enabled) && isTRUE(st$available)
+      ),
       session = session
     )
+  })
+
+  # UAT-UI-03. "Change PSOC" / "Change PSIC" close the review and hand the
+  # processor back to the side they need to re-pick. Both panels and both
+  # selections are already on the page behind the dialog, so closing IS the
+  # return path -- no navigation, and neither side's state is touched.
+  shiny::observeEvent(input[[DUAL_SEARCH_CHANGE_PSOC_INPUT]], {
+    psa_dialog_close(session)
+  })
+  shiny::observeEvent(input[[DUAL_SEARCH_CHANGE_PSIC_INPUT]], {
+    psa_dialog_close(session)
   })
 
   shiny::observeEvent(input[[DUAL_SEARCH_VIEW_IN_SEARCH]], {
@@ -454,5 +481,28 @@ dual_search_details_server <- function(input, output, session,
     view_in_search_apply(entry, session = session, results = results)
   })
 
-  invisible(NULL)
+  # Returned so the assistant sidecar can be asked to review THE SAME pair
+  # the dialog shows, derived from the same two per-side selections rather
+  # than from a second copy of the selection logic in app.R.
+  invisible(list(
+    psoc_selection = psoc_selection,
+    psic_selection = psic_selection,
+    coding_pair = dual_search_coding_pair(psoc_selection, psic_selection)
+  ))
+}
+
+#' The current coding pair, as the sidecar's RM review action needs it.
+#'
+#' A thin named accessor rather than two more reactives in app.R, so the
+#' pair the dialog shows and the pair RM is asked to review are derived
+#' from the same per-side selections. Returns NULL until BOTH sides have
+#' one -- there is no such thing as half a coding pair.
+dual_search_coding_pair <- function(psoc_selection, psic_selection) {
+  shiny::reactive({
+    occ <- psoc_selection()
+    ind <- psic_selection()
+    if (is.null(occ) || nrow(occ) == 0L) return(NULL)
+    if (is.null(ind) || nrow(ind) == 0L) return(NULL)
+    list(psoc = occ[1, , drop = FALSE], psic = ind[1, , drop = FALSE])
+  })
 }

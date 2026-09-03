@@ -52,10 +52,39 @@ test_that("the safeguard survives every incomplete-selection path", {
 test_that("the safeguard is informational, never error-styled", {
   # A methodological caution is not a failure (handoff section 2).
   html <- .render(entry_comparison_dialog_ui(.psoc_row(), .psic_row()))
-  expect_true(grepl("psa-compare-note", html, fixed = TRUE))
+  # In the populated review the safeguard is the first item of the coding
+  # check rather than a trailing note; the SENTENCE is what matters and it
+  # is asserted here as well as in the incomplete-state test above.
+  expect_true(grepl(PSOC_PSIC_INDEPENDENCE_NOTE, html, fixed = TRUE))
+  expect_true(grepl("psa-coding-check", html, fixed = TRUE))
   expect_false(grepl("status-error", html, fixed = TRUE))
   expect_false(grepl("alert-danger", html, fixed = TRUE))
   expect_false(grepl("text-danger", html, fixed = TRUE))
+})
+
+test_that("the coding check never claims the pair is correct", {
+  # UAT-UI-03. Nothing in this application knows the establishment or the
+  # person, so nothing here may validate the pair against them. A green
+  # tick on an unvalidated pair is exactly the false assurance a
+  # statistical utility must not give.
+  html <- .render(entry_comparison_dialog_ui(.psoc_row(), .psic_row()))
+
+  # AFFIRMATIVE claims only. A bare substring scan is wrong here: the
+  # dialog says "does not claim the pair is correct or equivalent", and
+  # "does not imply an equivalent PSIC code" -- both NEGATIONS, and both
+  # exactly what this test wants to see.
+  # Phrasings that could only ever be affirmative. "the pair is correct" is
+  # deliberately NOT in this list: it is a substring of the dialog's own
+  # disclaimer, "does not claim the pair is correct or equivalent", which
+  # the positive assertions below pin instead.
+  for (claim in c("codes are equivalent", "correctly coded",
+                  "this pair is valid", "the pair matches",
+                  "pair is consistent", "appears correct", "looks correct")) {
+    expect_false(grepl(claim, html, ignore.case = TRUE), info = claim)
+  }
+  # And it says so explicitly rather than merely omitting the claim.
+  expect_true(grepl("has not been told who the person is", html, fixed = TRUE))
+  expect_true(grepl("does not claim the pair is correct", html, fixed = TRUE))
 })
 
 
@@ -84,8 +113,27 @@ test_that("the comparison keeps PSOC and PSIC as distinct, named things", {
 test_that("the comparison is an accessible dialog", {
   html <- .render(entry_comparison_dialog_ui(.psoc_row(), .psic_row()))
   expect_true(grepl('aria-modal="true"', html, fixed = TRUE))
-  expect_true(grepl('aria-label="Close the comparison"', html, fixed = TRUE))
-  expect_true(grepl("Compare selected details", html, fixed = TRUE))
+  expect_true(grepl('aria-label="Close the coding pair review"', html, fixed = TRUE))
+  expect_true(grepl("Review coding pair", html, fixed = TRUE))
+
+  # UAT-UI-03 renamed it. "Compare" invited the reading the independence
+  # safeguard exists to prevent -- two things compared are two things a
+  # reader expects to line up -- so the old wording must be gone, not just
+  # supplemented.
+  expect_false(grepl("Compare selected details", html, fixed = TRUE))
+})
+
+test_that("the review offers the processor's three actions", {
+  html <- .render(entry_comparison_dialog_ui(.psoc_row(), .psic_row()))
+  expect_true(grepl("Change PSOC", html, fixed = TRUE))
+  expect_true(grepl("Change PSIC", html, fixed = TRUE))
+  expect_true(grepl("Ask RM to review this coding pair", html, fixed = TRUE))
+  expect_true(grepl(DUAL_SEARCH_ASK_RM_INPUT, html, fixed = TRUE))
+
+  # The RM action is withheld where the deployment cannot deliver it.
+  off <- .render(entry_comparison_dialog_ui(.psoc_row(), .psic_row(), ask_rm = FALSE))
+  expect_false(grepl(DUAL_SEARCH_ASK_RM_INPUT, off, fixed = TRUE))
+  expect_true(grepl("Change PSOC", off, fixed = TRUE))
 })
 
 

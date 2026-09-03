@@ -212,7 +212,25 @@ test_that("the Edition popover is positioned inside its own field", {
   # reason it stopped being permanently expanded.
   css <- .read_file("www", "ui-design.css")
   expect_true(grepl(".psa-picker-field {\n  position: relative;", css, fixed = TRUE))
-  expect_true(grepl(".psa-picker-panel {\n  position: absolute;", css, fixed = TRUE))
+
+  # UAT-UI-01. `absolute` was the defect: an absolutely-positioned box is
+  # still laid out inside its ancestors' clipping and stacking context, so
+  # the disclosed release list collided with the controls below it. `fixed`
+  # escapes every ancestor by construction -- no z-index escalation, no
+  # margins -- and the picker script anchors it to its trigger in viewport
+  # coordinates, which CSS alone cannot do.
+  expect_true(grepl(".psa-picker-panel {\n  position: fixed;", css, fixed = TRUE))
+
+  src <- .read_file("R", "ui", "ui_pickers.R")
+  expect_true(grepl("function anchor(trigger, panel)", src, fixed = TRUE))
+  expect_true(grepl("trigger.getBoundingClientRect()", src, fixed = TRUE))
+  # Anchored overlays must follow their trigger, and be re-anchored on any
+  # scroll -- captured, so a scroll inside the filter rail counts too.
+  expect_true(grepl('window.addEventListener("resize", anchorOpen)', src, fixed = TRUE))
+  expect_true(grepl('window.addEventListener("scroll", anchorOpen, true)', src, fixed = TRUE))
+  # Viewport-constrained and internally scrollable rather than clipped.
+  expect_true(grepl("panel.style.maxHeight", src, fixed = TRUE))
+  expect_true(grepl(".psa-picker-panel-body {\n  overflow-y: auto;", css, fixed = TRUE))
 
   # AND the panel is a DESCENDANT of that positioned field, not a sibling
   # of it. Found in browser UAT: as siblings the popover resolved against
@@ -325,4 +343,47 @@ test_that("Browse hierarchy is mounted in the results toolbar", {
   # The feature itself is wired by the same single unchanged call.
   expect_true(grepl("hierarchy_browser_server(input, output, session",
                     app, fixed = TRUE))
+})
+
+test_that("the rail raises whichever filter field is currently open", {
+  # UAT-UI-11, found in browser UAT of the descriptive-metadata pass.
+  #
+  # `position: fixed` on the panel escapes CLIPPING, but it does not escape
+  # STACKING: ui-glass.css gives every direct child of a glass surface
+  # `position: relative; z-index: 1` so glass content clears the blur layer,
+  # and that turns each filter field into its own stacking context. A trapped
+  # overlay cannot outrank a sibling however high its own z-index is, so
+  # painting order fell back to DOM order and the controls around an open
+  # overlay were drawn on top of it: Level over the Edition list, and -- the
+  # damaging one -- the Edition trigger over the middle of the open System
+  # list, where it also took the clicks aimed at the options behind it.
+  #
+  # Raising the two fields by a FIXED ORDER is not the fix, and was rejected
+  # in UAT for a reason worth recording: it cures the desktop rail and breaks
+  # the phone one, where the Edition panel becomes a full-width bottom sheet
+  # that has to clear every field including the one above it. A static order
+  # can only be right in one direction.
+  #
+  # So the rule keys on open state, which only one field can hold at a time,
+  # and reads that state from `aria-expanded` -- already published by the
+  # picker trigger and by selectize -- rather than from a second class that
+  # could drift out of step with the accessibility contract.
+  glass <- .read_file("www", "ui-glass.css")
+  expect_true(grepl(".psa-liquid-glass > * { position: relative; z-index: 1; }",
+                    glass, fixed = TRUE))
+
+  css <- .read_file("www", "ui-design.css")
+  expect_true(grepl('.psa-sidebar > *:has([aria-expanded="true"]) { z-index: 5; }',
+                    css, fixed = TRUE))
+
+  # The raise must be CONDITIONAL. A bare z-index on either field class is
+  # the rejected fixed-order fix returning, so fail on it explicitly.
+  expect_false(grepl(".psa-sidebar > .psa-system-field { z-index:", css, fixed = TRUE))
+  expect_false(grepl(".psa-sidebar > .psa-picker-field { z-index:", css, fixed = TRUE))
+
+  # And the state the rule keys on is really the state the trigger publishes.
+  src <- .read_file("R", "ui", "ui_pickers.R")
+  expect_true(grepl('aria-expanded', src, fixed = TRUE))
+  html <- .render(edition_field_ui())
+  expect_true(grepl('aria-expanded="false"', html, fixed = TRUE))
 })

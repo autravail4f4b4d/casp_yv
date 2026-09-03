@@ -75,6 +75,16 @@ entry_detail_ui <- function(entry) {
     shiny::tags$div(class = "psa-detail-meta", entry$description)
   }
 
+  # DEFINITION PREVIEW (W3). The first official definition paragraph only,
+  # trimmed -- enough to tell the reader whether this is the right record
+  # without turning the selected-entry card into the reference itself. The
+  # full definition, tasks and examples live in View details.
+  #
+  # It reads the same verified descriptive record the dialog does, and it
+  # is nothing to do with retrieval: no descriptive text is indexed, ranked
+  # or matched against anywhere.
+  preview <- psoc_descriptive_preview(entry)
+
   shiny::tagList(
     shiny::tags$div(
       class = "psa-eyebrow",
@@ -84,6 +94,9 @@ entry_detail_ui <- function(entry) {
     shiny::tags$h3(class = "psa-detail-title", entry$label),
     hierarchy,
     description,
+    if (!is.null(preview)) {
+      shiny::tags$p(class = "psa-detail-preview", preview)
+    },
     shiny::tags$div(
       style = "margin-top: 14px;",
       status_badge(entry$status)
@@ -175,9 +188,18 @@ entry_detail_body_ui <- function(entry) {
         class = "psa-detail-dialog__facts",
         shiny::tags$dt("Classification hierarchy")
       ),
+      # HIERARCHY STAYS CANONICAL. The descriptive artifact carries its own
+      # parent ids, and they are deliberately not used here: the repository
+      # is the authority on structure, and the descriptive layer is the
+      # authority on nothing at all.
       .detail_hierarchy_ui(entry) %||%
-        shiny::tags$p(class = "text-muted small", "Top-level entry.")
+        shiny::tags$p(class = "text-muted small", "Top-level entry."),
     ),
+    # OFFICIAL DESCRIPTIVE SECTIONS (PSOC 2022). Rendered only for a
+    # verified PSOC record that the artifact actually describes; every
+    # other system, edition or undescribed code renders nothing here and
+    # the dialog looks exactly as it did before.
+    psoc_descriptive_sections_ui(entry),
     source_line_ui(entry)
   )
 }
@@ -233,7 +255,73 @@ entry_detail_dialog_ui <- function(entry, view_input_id = NULL) {
   )
 }
 
-#' PSOC + PSIC comparison dialog (UI-03).
+#' The coding check shown beneath the two records (UAT-UI-03).
+#'
+#' WHAT THIS IS FOR. A coding processor holding one PSOC and one PSIC
+#' selection needs to know which checks the application HAS made and which
+#' it cannot make. It states the separate-concept safeguard, whether either
+#' record is archived, and the detail level of each.
+#'
+#' WHAT IT MUST NEVER SAY. That the pair is correct, equivalent, matched or
+#' consistent. Nothing in this application knows the establishment or the
+#' person, so nothing here can validate the pair against them -- and a
+#' green tick on an unvalidated pair is precisely the false assurance a
+#' statistical utility must not give.
+entry_coding_check_ui <- function(psoc_entry, psic_entry) {
+  archived <- character(0)
+  for (e in list(psoc_entry, psic_entry)) {
+    st <- as.character(e$status[[1]])
+    if (!is.na(st) && !identical(tolower(st), "current")) {
+      archived <- c(archived, sprintf("%s %s is from an archived edition (%s)",
+                                      toupper(e$system[[1]]), e$code[[1]],
+                                      release_display_label(e$version[[1]])))
+    }
+  }
+
+  item <- function(...) shiny::tags$li(class = "psa-coding-check__item", ...)
+
+  shiny::tags$section(
+    class = "psa-coding-check",
+    `aria-label` = "Coding check",
+    shiny::tags$h4(class = "psa-coding-check__head", "Coding check"),
+    shiny::tags$ul(
+      class = "psa-coding-check__list",
+      item(
+        shiny::tags$strong("Separate concepts. "),
+        PSOC_PSIC_INDEPENDENCE_NOTE
+      ),
+      item(
+        shiny::tags$strong("Edition status. "),
+        if (length(archived) == 0L) {
+          "Both records are from the current edition of their own system."
+        } else {
+          paste0(paste(archived, collapse = "; "),
+                 ". An archived code is a historical reference, not a current assignment.")
+        }
+      ),
+      item(
+        shiny::tags$strong("Detail level. "),
+        sprintf("PSOC is coded at %s; PSIC is coded at %s.",
+                level_display_label("psoc", as.character(psoc_entry$level[[1]])),
+                level_display_label("psic", as.character(psic_entry$level[[1]])))
+      )
+    ),
+    shiny::tags$p(
+      class = "psa-coding-check__limit",
+      shiny::tags$strong("Not checked. "),
+      "This application has not been told who the person is or what the ",
+      "establishment does, so it cannot confirm that either code is right ",
+      "for them, and it does not claim the pair is correct or equivalent."
+    )
+  )
+}
+
+#' PSOC + PSIC coding-pair review dialog (UI-03, reworked by UAT-UI-03).
+#'
+#' Renamed from "Compare selected details": the processor-facing task is a
+#' REVIEW of two selections, not a comparison of two things that might be
+#' the same. The old wording invited exactly the reading the independence
+#' safeguard exists to prevent.
 #'
 #' Desktop shows PSOC left / PSIC right; the same markup stacks at <=768px
 #' (www/ui-dialog.css) rather than squeezing two columns onto a phone.
@@ -241,14 +329,17 @@ entry_detail_dialog_ui <- function(entry, view_input_id = NULL) {
 #' The independence sentence is ALWAYS rendered, including in the
 #' incomplete-selection state -- there is no path through this function
 #' that shows two codes together without it.
-entry_comparison_dialog_ui <- function(psoc_entry, psic_entry) {
+#'
+#' @param ask_rm logical(1). Whether to offer the RM review action. FALSE
+#'   where the deployment has no working assistant configuration.
+entry_comparison_dialog_ui <- function(psoc_entry, psic_entry, ask_rm = TRUE) {
   has_psoc <- !is.null(psoc_entry) && nrow(psoc_entry) > 0L
   has_psic <- !is.null(psic_entry) && nrow(psic_entry) > 0L
 
   body <- if (!has_psoc || !has_psic) {
     shiny::tagList(
       psa_dialog_empty_ui(paste(
-        "Select one PSOC row and one PSIC row to compare them side by side.",
+        "Select one PSOC row and one PSIC row to review them as a coding pair.",
         if (has_psoc) "A PSIC row is still needed."
         else if (has_psic) "A PSOC row is still needed."
         else ""
@@ -257,6 +348,14 @@ entry_comparison_dialog_ui <- function(psoc_entry, psic_entry) {
     )
   } else {
     shiny::tagList(
+      # States what the two systems ARE before showing either, so the
+      # reader meets the distinction before the codes.
+      shiny::tags$p(
+        class = "psa-compare-intro",
+        shiny::tags$strong("PSOC"), " is the occupation — the kind of work the ",
+        "person does. ", shiny::tags$strong("PSIC"), " is the establishment's ",
+        "principal economic activity. One does not imply the other."
+      ),
       shiny::tags$div(
         class = "psa-compare-grid",
         shiny::tags$section(
@@ -278,8 +377,27 @@ entry_comparison_dialog_ui <- function(psoc_entry, psic_entry) {
           entry_detail_body_ui(psic_entry)
         )
       ),
-      shiny::tags$p(class = "psa-compare-note", PSOC_PSIC_INDEPENDENCE_NOTE)
+      entry_coding_check_ui(psoc_entry, psic_entry)
     )
+  }
+
+  footer <- if (has_psoc && has_psic) {
+    shiny::tagList(
+      psa_dialog_close_button(),
+      # Change PSOC / Change PSIC close the dialog and return the processor
+      # to the side they need to re-pick. No queue, no adjudication: this
+      # pass reviews one pair.
+      psa_dialog_action_button(DUAL_SEARCH_CHANGE_PSOC_INPUT, "Change PSOC",
+                               class = "psa-dialog__btn--ghost"),
+      psa_dialog_action_button(DUAL_SEARCH_CHANGE_PSIC_INPUT, "Change PSIC",
+                               class = "psa-dialog__btn--ghost"),
+      if (isTRUE(ask_rm)) {
+        psa_dialog_action_button(DUAL_SEARCH_ASK_RM_INPUT,
+                                 "Ask RM to review this coding pair")
+      }
+    )
+  } else {
+    psa_dialog_close_button()
   }
 
   psa_dialog_ui(
@@ -287,11 +405,11 @@ entry_comparison_dialog_ui <- function(psoc_entry, psic_entry) {
     variant = "modal",
     size = "xl",
     eyebrow = "PSOC + PSIC",
-    title = "Compare selected details",
-    description = "Two separate classifications, shown together for reference only.",
-    close_label = "Close the comparison",
+    title = "Review coding pair",
+    description = "Two separate classifications, reviewed together for coding.",
+    close_label = "Close the coding pair review",
     body = body,
-    footer = psa_dialog_close_button()
+    footer = footer
   )
 }
 

@@ -19,10 +19,11 @@
 #
 # Three breakpoints, one DOM node:
 #
-#   >= 1280px   docked sidecar, 440px. NON-MODAL: no backdrop, no focus
+#   >= 1464px   docked sidecar, 440px. NON-MODAL: no backdrop, no focus
 #               trap, no `aria-modal`, page content reflows to make room and
-#               stays fully interactive while the panel is open.
-#   1024-1279   overlay drawer, 420px, over a dimmed backdrop. Modal
+#               stays fully interactive while the panel is open. The
+#               threshold is CONTENT-AWARE -- see RM_SIDECAR_DOCKED_MIN_PX.
+#   1024-1463   overlay drawer, 420px, over a dimmed backdrop. Modal
 #               semantics; page content does not reflow.
 #   <= 1023     near-full-height bottom sheet. Modal semantics.
 #
@@ -76,6 +77,31 @@
 #   rm_attached_context uiOutput — the chip row
 
 
+# THE AUTOMATIC CONTEXTUAL TURNS (UAT-RM-01).
+#
+# One per contextual action, and referential by construction: each opens
+# with "Explain"/"Review this", which is what `assistant_explanation_
+# requested()` recognises, so `assistant_handle_turn()` resolves it against
+# the record just attached instead of trying to code the sentence itself.
+#
+# They are written as the user's own question because that is exactly what
+# they become: the text is submitted through the ordinary composer and
+# appears in the transcript as the user's turn.
+# Each string is checked against that detector by test, because a wording
+# it does not recognise would silently route the automatic turn into the
+# CODING path -- classifying the sentence instead of answering about the
+# record. "Review this coding pair." is not recognised and is therefore not
+# used; the coding-pair intent opens with "Explain" and carries the review
+# instruction after it, rather than widening the detector for one button.
+RM_INTENT_ENTRY <- "Explain this classification entry."
+RM_INTENT_CORRESPONDENCE <- "Explain this relationship."
+RM_INTENT_CODING_PAIR <-
+  "Explain this coding pair: review the PSOC and PSIC selections."
+
+# The shinychat element the module mounts: NS("rm_assistant")("chat"). The
+# same namespaced id the New chat contract in R/ui/ui_assistant.R uses.
+RM_CHAT_ELEMENT_ID <- "rm_assistant-chat"
+
 RM_SIDECAR_ID <- "rm-sidecar"
 RM_SIDECAR_TITLE_ID <- "rm-sidecar-title"
 RM_CONTEXT_OUTPUT <- "rm_attached_context"
@@ -84,7 +110,22 @@ RM_CONTEXT_REMOVE <- "rm_context_remove"
 # The docked breakpoint. Kept in one place because BOTH the stylesheet and
 # the ARIA switch below have to agree on it; they are asserted against each
 # other in tests/testthat/test-ui-sidecar.R.
-RM_SIDECAR_DOCKED_MIN_PX <- 1280
+RM_SIDECAR_WIDTH_PX <- 440
+# The width at which the Search workspace itself is still usable: the
+# 312px filter rail, a results table wide enough to keep four readable
+# columns, and its gutters. Below this the labels start truncating, which
+# is the defect UAT-UI-02 reported.
+RM_SIDECAR_MIN_WORKSPACE_PX <- 1024
+# CONTENT-AWARE DOCKING (UAT-UI-02).
+#
+# Docking used to begin at 1280, which left 840px of page beside the
+# panel -- filters, results AND selected entry squeezed into less room
+# than the workspace needs on its own, so result labels and the selected
+# entry clipped. The threshold is now DERIVED: dock only where the
+# workspace keeps its minimum after the panel takes its width. Anything
+# narrower gets the overlay drawer, which covers the page instead of
+# compressing it.
+RM_SIDECAR_DOCKED_MIN_PX <- RM_SIDECAR_MIN_WORKSPACE_PX + RM_SIDECAR_WIDTH_PX
 
 
 .RM_SIDECAR_JS <- '
@@ -92,7 +133,7 @@ RM_SIDECAR_DOCKED_MIN_PX <- 1280
   if (window.__psaRmSidecarInstalled) { return; }
   window.__psaRmSidecarInstalled = true;
 
-  var DOCKED = window.matchMedia("(min-width: 1280px)");
+  var DOCKED = window.matchMedia("(min-width: 1464px)");
   var opener = null;
 
   function panel() { return document.getElementById("rm-sidecar"); }
@@ -460,6 +501,7 @@ rm_sidecar_open <- function(session = shiny::getDefaultReactiveDomain()) {
 rm_sidecar_server <- function(input, output, session,
                               entry_selection = NULL,
                               correspondence_selection = NULL,
+                              coding_pair_selection = NULL,
                               turn_state = NULL,
                               available = TRUE) {
   if (!isTRUE(available)) {
@@ -489,6 +531,42 @@ rm_sidecar_server <- function(input, output, session,
     cur[[key]] <- list(label = label, descriptor = descriptor)
     attached(cur)
     sync_turn_state(cur)
+  }
+
+  # --- "Ask RM" actually asks (UAT-RM-01) ---------------------------------
+  #
+  # Attaching a chip and stopping was the defect: the user pressed a button
+  # named "Ask RM" and RM said nothing. The action now attaches, opens the
+  # panel, and initiates EXACTLY ONE contextual turn.
+  #
+  # THE TURN GOES THROUGH THE ORDINARY COMPOSER, deliberately.
+  # `shinychat::update_chat_user_input(submit = TRUE)` fills and submits the
+  # real composer, so the message arrives on the same
+  # `rm_assistant-chat_user_input` input as anything the user types. That
+  # means one entry point, one `assistant_handle_turn()`, one route
+  # decision, one response guard -- and the user's own turn visible in the
+  # transcript. Appending a synthesised exchange instead would have been a
+  # second assistant path, which is the thing this design most needs not to
+  # have.
+  #
+  # The wording is referential on purpose ("Explain this ..."): that is what
+  # `assistant_explanation_requested()` recognises, so the bridge resolves
+  # it against the record just attached rather than coding the sentence.
+  ask <- function(prompt) {
+    shiny::req(is.character(prompt), nzchar(prompt))
+    rm_sidecar_open(session)
+    # THE CHAT ELEMENT ID, not the module id. `chat_mod_ui("rm_assistant")`
+    # mounts its chat as `NS(id)("chat")`, and this call is made from the
+    # app's own session rather than the module's, so the un-namespaced
+    # "rm_assistant" addresses nothing and the turn is silently never sent
+    # -- which is exactly what browser UAT saw: panel opened, chip
+    # attached, no question asked. Same namespaced form the New chat
+    # contract in R/ui/ui_assistant.R already documents.
+    shinychat::update_chat_user_input(
+      RM_CHAT_ELEMENT_ID, value = prompt, submit = TRUE, focus = FALSE,
+      session = session
+    )
+    invisible(NULL)
   }
 
   output[[RM_CONTEXT_OUTPUT]] <- shiny::renderUI({
@@ -533,7 +611,7 @@ rm_sidecar_server <- function(input, output, session,
           system = entry$system, version = entry$version, code = entry$code
         )
       )
-      rm_sidecar_open(session)
+      ask(RM_INTENT_ENTRY)
     })
   }
 
@@ -560,7 +638,34 @@ rm_sidecar_server <- function(input, output, session,
           to_version = ctx$to_version, to_code = ctx$to_code
         )
       )
-      rm_sidecar_open(session)
+      ask(RM_INTENT_CORRESPONDENCE)
+    })
+  }
+
+  # --- PSOC + PSIC: "Ask RM to review this coding pair" -------------------
+  #
+  # The processor-facing action from the Review coding pair dialog. Both
+  # halves are attached as ONE coding-pair descriptor rather than two
+  # separate records, so the review turn can state the PSOC/PSIC separation
+  # as a property of the pair instead of describing two unrelated codes.
+  if (!is.null(coding_pair_selection)) {
+    shiny::observeEvent(input[[DUAL_SEARCH_ASK_RM_INPUT]], {
+      pair <- coding_pair_selection()
+      shiny::req(!is.null(pair))
+      shiny::req(!is.null(pair$psoc), nrow(pair$psoc) > 0L)
+      shiny::req(!is.null(pair$psic), nrow(pair$psic) > 0L)
+      occ <- pair$psoc[1, , drop = FALSE]
+      ind <- pair$psic[1, , drop = FALSE]
+      attach(
+        key = paste0("pair:", occ$version, ":", occ$code, ":",
+                     ind$version, ":", ind$code),
+        label = paste0("PSOC ", occ$code, " + PSIC ", ind$code),
+        descriptor = assistant_context_descriptor_coding_pair(
+          psoc_version = occ$version, psoc_code = occ$code,
+          psic_version = ind$version, psic_code = ind$code
+        )
+      )
+      ask(RM_INTENT_CODING_PAIR)
     })
   }
 

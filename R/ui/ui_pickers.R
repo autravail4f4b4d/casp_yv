@@ -70,10 +70,77 @@
     return id ? document.getElementById(id) : null;
   }
 
+  // ---- Viewport anchoring (UAT-UI-01) ---------------------------------
+  //
+  // THE DEFECT. The panel used to be `position: absolute` inside the
+  // filter card. An absolutely-positioned box is still laid out inside the
+  // clipping and stacking context of its ancestors, so the release list
+  // collided with the controls below it instead of cleanly covering them.
+  //
+  // THE FIX IS STRUCTURAL, not a z-index or margin escalation: the panel is
+  // `position: fixed` and anchored to its trigger in VIEWPORT coordinates,
+  // which puts it outside every ancestor clipping context by
+  // construction. It is measured here rather than guessed in CSS because a
+  // fixed box cannot be positioned relative to its trigger by CSS alone.
+  //
+  // Anchoring rules: below the trigger by default; flipped above when the
+  // space below is smaller and the space above is usable; clamped to the
+  // viewport horizontally; height capped to the space actually available
+  // with the panel body scrolling inside it.
+  var GAP = 6;
+  var MARGIN = 8;
+
+  function anchor(trigger, panel) {
+    // Phone width uses the docked sheet, which owns its own geometry.
+    if (window.matchMedia("(max-width: 767.98px)").matches) {
+      panel.style.top = "";
+      panel.style.left = "";
+      panel.style.width = "";
+      panel.style.maxHeight = "";
+      return;
+    }
+    var r = trigger.getBoundingClientRect();
+    var vh = window.innerHeight;
+    var vw = window.innerWidth;
+    var below = vh - r.bottom - GAP - MARGIN;
+    var above = r.top - GAP - MARGIN;
+    var flip = below < 200 && above > below;
+    var space = Math.max(120, flip ? above : below);
+
+    panel.style.width = Math.round(r.width) + "px";
+    panel.style.maxHeight = Math.round(space) + "px";
+
+    var left = Math.min(Math.max(MARGIN, r.left), vw - r.width - MARGIN);
+    panel.style.left = Math.round(left) + "px";
+
+    if (flip) {
+      // Measured after the width/max-height are applied, so the flipped
+      // position accounts for the height the panel actually takes.
+      var h = panel.getBoundingClientRect().height;
+      panel.style.top = Math.round(Math.max(MARGIN, r.top - GAP - h)) + "px";
+    } else {
+      panel.style.top = Math.round(r.bottom + GAP) + "px";
+    }
+  }
+
+  function anchorOpen() {
+    var triggers = document.querySelectorAll("[data-psa-picker-toggle][aria-expanded=\'true\']");
+    Array.prototype.forEach.call(triggers, function (t) {
+      var p = panelFor(t);
+      if (p && !p.hidden) { anchor(t, p); }
+    });
+  }
+
   function close(trigger, refocus) {
     var panel = panelFor(trigger);
     if (!panel) { return; }
     panel.hidden = true;
+    // Inline anchoring is cleared on close so a reopen at a different
+    // scroll position or width never inherits stale coordinates.
+    panel.style.top = "";
+    panel.style.left = "";
+    panel.style.width = "";
+    panel.style.maxHeight = "";
     trigger.setAttribute("aria-expanded", "false");
     document.body.classList.remove("psa-picker-open");
     if (refocus) { try { trigger.focus(); } catch (e) { /* non-fatal */ } }
@@ -92,6 +159,7 @@
     closeAll(trigger, false);
     panel.hidden = false;
     trigger.setAttribute("aria-expanded", "true");
+    anchor(trigger, panel);
     // Marks the phone-width sheet state so the page behind it can be
     // locked. Harmless on desktop, where the panel is a popover.
     document.body.classList.add("psa-picker-open");
@@ -151,6 +219,11 @@
     }
     closeAll(null, false);
   });
+
+  // An anchored overlay has to follow its trigger. Scroll is captured so a
+  // scroll inside the filter rail counts too, not only the page scroll.
+  window.addEventListener("resize", anchorOpen);
+  window.addEventListener("scroll", anchorOpen, true);
 })();
 '
 

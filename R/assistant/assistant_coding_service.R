@@ -119,6 +119,42 @@ ASSISTANT_CODING_SLOTS <- c("wage_payer", "establishment_activity", "occupation"
   sel
 }
 
+# --- employment arrangement vs. occupation title (UAT-RM-03) ---------------
+#
+# Wording that describes how a person is ENGAGED, not what work they do. No
+# PSOC title contains any of it: it is establishment-side information, and
+# the outsourcing precondition above is where it belongs.
+#
+# Deliberately short and whole-word. "contractor" is NOT here -- it is a
+# real occupational head ("labour contractor") and stripping it would be
+# the kind of silent title mangling this project forbids.
+.ASSISTANT_OCCUPATION_ARRANGEMENT <- paste0(
+  "\\b(outsourced|out-sourced|subcontracted|sub-contracted|contractual|",
+  "contractualized|contractualised|job\\s*order|agency[- ]hired|",
+  "agency[- ]based|casual|probationary|seconded)\\b"
+)
+
+#' The occupation title with employment-arrangement wording removed.
+#'
+#' Returns NULL when nothing was removed, or when removal would leave no
+#' title at all -- "outsourced" on its own names no occupation, and must
+#' keep asking rather than silently becoming a different question.
+.assistant_occupation_without_arrangement <- function(occupation) {
+  o <- .assistant_scalar_chr(occupation)
+  if (is.null(o)) return(NULL)
+  stripped <- gsub(.ASSISTANT_OCCUPATION_ARRANGEMENT, " ", tolower(o), perl = TRUE)
+  stripped <- trimws(gsub("\\s+", " ", stripped))
+  if (!nzchar(stripped)) return(NULL)
+  if (identical(stripped, trimws(tolower(o)))) return(NULL)
+  stripped
+}
+
+#' Did a slot selection fail to produce a verified code?
+.assistant_slot_unresolved <- function(sel) {
+  is.null(sel) || identical(sel$status, "no_verified_match") ||
+    is.null(sel$selected_code) || is.na(sel$selected_code)
+}
+
 #' The authoritative coding service.
 #'
 #' @param occupation,establishment_activity character(1) or NULL.
@@ -152,12 +188,42 @@ assistant_coding_service <- function(occupation = NULL,
             tolower(payer))
 
     # ---- occupation half ----------------------------------------------
+    #
+    # PARTIAL-STATE PRESERVATION (UAT-RM-03). "outsourced janitor" used to
+    # lose the occupation entirely: the same word that correctly raises the
+    # PSIC wage-payer question above -- "outsourced" -- is not part of any
+    # PSOC title, so the PSOC lookup was handed a string it could never
+    # match and the user was told no occupation could be verified, for an
+    # occupation the system resolves perfectly well one word shorter
+    # (`janitor` -> 5153 BUILDING CARETAKERS).
+    #
+    # That is the PSOC/PSIC separation showing up as a defect: how a person
+    # is ENGAGED is an employment arrangement and belongs to the industry
+    # dimension; what they DO is the occupation. The arrangement wording is
+    # therefore retried out of the occupation TITLE only.
+    #
+    # Written as a FALLBACK, not as unconditional stripping: the raw
+    # wording is tried first and any string that resolves today resolves
+    # identically, so only the no-verified-match path gains a second,
+    # narrower attempt. `outsourced` is computed ABOVE from the raw
+    # `occ_txt`, so the wage-payer precondition cannot be weakened by this.
     occ_sel <- if ("psoc" %in% systems && !is.null(occ_txt)) {
-      .assistant_enforce_current(
+      first <- .assistant_enforce_current(
         .assistant_select_from_slot(
           assistant_slot_candidates("psoc", occ_txt, prefer_detailed = TRUE)
         ), "psoc", allow_archived
       )
+      retry_txt <- .assistant_occupation_without_arrangement(occ_txt)
+      if (.assistant_slot_unresolved(first) && !is.null(retry_txt)) {
+        second <- .assistant_enforce_current(
+          .assistant_select_from_slot(
+            assistant_slot_candidates("psoc", retry_txt, prefer_detailed = TRUE)
+          ), "psoc", allow_archived
+        )
+        if (!.assistant_slot_unresolved(second)) second else first
+      } else {
+        first
+      }
     } else {
       NULL
     }

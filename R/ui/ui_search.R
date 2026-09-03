@@ -105,6 +105,10 @@ system_selector_render <- function() {
 #'
 #' @return list(choiceNames = <list of tags>, choiceValues = <list of
 #'   character(1)>, selected = character(1)).
+# The Search screen's own "View details" trigger. Named here rather than in
+# app.R so the id has one owner, like every other Search input in this file.
+SEARCH_VIEW_DETAILS_INPUT <- "search_view_details"
+
 edition_choice_spec <- function(versions, current) {
   ordered <- release_newest_first(versions, current)
   is_current <- vapply(ordered, function(v) identical(v, current), logical(1))
@@ -264,6 +268,9 @@ search_ui <- function() {
             shiny::tags$h6("Selected entry")
           ),
           shiny::uiOutput("selected_entry"),
+          # Actions for the selected record: View details (the official
+          # reference) and, where the deployment has an assistant, Ask RM.
+          # Rendered as one slot so the pair cannot drift apart.
           # Contextual assistant entry point for the selected record. This
           # replaces the inert `.psa-askrm-reserved` placeholder the
           # previous pass left here: the reserved slot is now a real

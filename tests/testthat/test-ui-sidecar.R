@@ -98,7 +98,7 @@ test_that("the panel's static semantics are the NON-modal ones", {
 
 test_that("ARIA is switched at the docked breakpoint, not guessed once", {
   src <- .read_file("R", "ui", "ui_sidecar.R")
-  expect_true(grepl('matchMedia("(min-width: 1280px)")', src, fixed = TRUE))
+  expect_true(grepl('matchMedia("(min-width: 1464px)")', src, fixed = TRUE))
   expect_true(grepl('p.setAttribute("role", "complementary")', src, fixed = TRUE))
   expect_true(grepl('p.removeAttribute("aria-modal")', src, fixed = TRUE))
   expect_true(grepl('p.setAttribute("aria-modal", "true")', src, fixed = TRUE))
@@ -130,7 +130,7 @@ test_that("focus is contained ONLY in the two modal breakpoints", {
 
 test_that("the docked panel reflows the page and never dims it", {
   css <- .read_file("www", "ui-design.css")
-  expect_true(grepl("@media (min-width: 1280px)", css, fixed = TRUE))
+  expect_true(grepl("@media (min-width: 1464px)", css, fixed = TRUE))
   # On <body>, not on the page container: the container's own padding is
   # zeroed by the fill-page rules, so a per-container override loses and
   # the results table runs on underneath the panel. Measured in the
@@ -150,8 +150,8 @@ test_that("the docked panel reflows the page and never dims it", {
 
 test_that("all three breakpoints are implemented on one element", {
   css <- .read_file("www", "ui-design.css")
-  expect_true(grepl("@media (min-width: 1280px)", css, fixed = TRUE))
-  expect_true(grepl("@media (min-width: 1024px) and (max-width: 1279.98px)",
+  expect_true(grepl("@media (min-width: 1464px)", css, fixed = TRUE))
+  expect_true(grepl("@media (min-width: 1024px) and (max-width: 1463.98px)",
                     css, fixed = TRUE))
   expect_true(grepl("@media (max-width: 1023.98px)", css, fixed = TRUE))
   expect_true(grepl("width: 440px;", css, fixed = TRUE))   # docked
@@ -167,11 +167,36 @@ test_that("all three breakpoints are implemented on one element", {
 test_that("the CSS breakpoint and the script breakpoint agree", {
   # These two have to be the same number or the panel announces itself as
   # modal in the width where it is docked, or vice versa.
-  expect_identical(RM_SIDECAR_DOCKED_MIN_PX, 1280)
+  expect_identical(RM_SIDECAR_DOCKED_MIN_PX, 1464)
   src <- .read_file("R", "ui", "ui_sidecar.R")
   css <- .read_file("www", "ui-design.css")
-  expect_true(grepl("(min-width: 1280px)", src, fixed = TRUE))
-  expect_true(grepl("(min-width: 1280px)", css, fixed = TRUE))
+  expect_true(grepl("(min-width: 1464px)", src, fixed = TRUE))
+  expect_true(grepl("(min-width: 1464px)", css, fixed = TRUE))
+})
+
+test_that("the docking threshold is DERIVED from usable workspace", {
+  # UAT-UI-02. Docking used to begin at 1280, which left 840px of page for
+  # the filter rail, the results table AND the selected-entry column --
+  # less than the workspace needs on its own, so labels clipped. The
+  # threshold is a sum, not a taste: workspace minimum + panel width.
+  expect_identical(RM_SIDECAR_WIDTH_PX, 440)
+  expect_identical(RM_SIDECAR_MIN_WORKSPACE_PX, 1024)
+  expect_identical(RM_SIDECAR_DOCKED_MIN_PX,
+                   RM_SIDECAR_MIN_WORKSPACE_PX + RM_SIDECAR_WIDTH_PX)
+
+  # Below the threshold the panel OVERLAYS rather than compressing, so the
+  # workspace is never squeezed under its minimum.
+  expect_gt(RM_SIDECAR_DOCKED_MIN_PX, 1280)
+})
+
+test_that("a docked panel reflows Search to filters + results", {
+  # Even with the minimum workspace guaranteed, four columns is one too
+  # many. While docked the selected entry moves BELOW the results as a
+  # full-width card, so the two things the processor is working with keep
+  # their width and their labels stay readable.
+  css <- .read_file("www", "ui-design.css")
+  expect_true(grepl("body.psa-rm-docked .psa-results-split {", css, fixed = TRUE))
+  expect_true(grepl("body.psa-rm-docked .psa-detail-col {", css, fixed = TRUE))
 })
 
 
@@ -322,8 +347,33 @@ test_that("the server installs nothing when the assistant is unavailable", {
 test_that("contextual actions are not offered where they cannot be delivered", {
   app <- .read_file("app.R")
   expect_true(grepl("st <- rm_assistant_status()", app, fixed = TRUE))
-  expect_true(grepl("if (!isTRUE(st$enabled) || !isTRUE(st$available)) return(NULL)",
+
+  # The guard used to be an early `return(NULL)` for the whole slot. Browser
+  # UAT showed why that was the wrong shape rather than merely a different
+  # one: the slot also carries "View details", so a deployment without an
+  # assistant lost the OFFICIAL REFERENCE along with the assistant button.
+  # The readiness test is therefore computed once and applied only to the
+  # assistant control, and the reference control is rendered unconditionally.
+  expect_true(grepl("rm_ready <- isTRUE(st$enabled) && isTRUE(st$available)",
                     app, fixed = TRUE))
+  expect_true(grepl("if (rm_ready) {", app, fixed = TRUE))
+
+  # Asserted on the RENDERED slot, not just the source, so the two controls
+  # cannot drift back into a shared guard: View details survives an
+  # unavailable assistant, Ask RM does not appear without one.
+  actions <- function(rm_ready) {
+    .render(shiny::tagList(
+      psa_dialog_open_button(SEARCH_VIEW_DETAILS_INPUT, "View details"),
+      if (rm_ready) rm_context_button_ui("search_ask_rm_entry",
+                                         "Ask RM about this entry")
+    ))
+  }
+  with_rm <- actions(TRUE)
+  without_rm <- actions(FALSE)
+  expect_true(grepl(SEARCH_VIEW_DETAILS_INPUT, with_rm, fixed = TRUE))
+  expect_true(grepl(SEARCH_VIEW_DETAILS_INPUT, without_rm, fixed = TRUE))
+  expect_true(grepl("search_ask_rm_entry", with_rm, fixed = TRUE))
+  expect_false(grepl("search_ask_rm_entry", without_rm, fixed = TRUE))
 })
 
 test_that("no new .js asset was added for any of this", {
