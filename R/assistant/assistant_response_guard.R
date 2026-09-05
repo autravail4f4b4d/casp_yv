@@ -14,6 +14,28 @@
 # explanation arguing for the wrong occupation. It rejects wholesale and
 # re-renders from verified facts.
 
+# WHAT THE READER IS TOLD WHEN THERE IS NOTHING VERIFIED TO SHOW
+# (UAT2-RM-01).
+#
+# The guard's fallback is `assistant_render_coding_result(packet)`, and for
+# a packet that carries no coding result -- an attached-context explanation
+# turn, for instance -- that rendering is legitimately the empty string.
+# Appending an empty string ends the turn with a loading indicator and no
+# answer, which is indistinguishable from a hang and is exactly what
+# browser UAT reported.
+#
+# So there is one plain sentence for that case. It states the rule from
+# CLAUDE.md in the reader's terms -- RM could not verify it from this
+# application's classification data -- and points at the deterministic
+# search, which always works. No provider error, no code, no stack trace,
+# no technical vocabulary: this is a public application.
+ASSISTANT_UNVERIFIED_REPLY_TEXT <- paste(
+  "I could not verify an answer to that from the classification data",
+  "available in this application, so I would rather not guess.",
+  "You can search or browse the official classifications directly, or",
+  "give me a little more detail and I will try again."
+)
+
 # Codes are matched by shape, then filtered to ones that plausibly refer to
 # a classification: bare 3-5 digit runs, dotted PSCC commodity codes, and
 # 10-digit PSGC codes. Deliberately shape-based so it also catches a code

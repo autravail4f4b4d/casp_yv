@@ -623,3 +623,43 @@ is consulted from inside it.
 
 Semantic authority remains **off**; this milestone did not touch
 `R/retrieval/`.
+
+### 17.8 Attaching a record never asks a question (UAT2-RM-01)
+
+A contextual launcher attaches, opens the panel, and stops. It submits
+nothing. The reader chooses what — if anything — to spend a provider call
+on, from a deterministic starter rendered in R.
+
+**Why the automatic turn was removed rather than repaired.** Reproduced
+with no provider, from the turn handler alone:
+
+| Step | Observed |
+|---|---|
+| `assistant_handle_turn("Explain this classification entry.", state)` | `handled = FALSE`, `route = "contextual_coding"`, `render = NA` |
+| Live rendering on that route | Every `ContentText` chunk is suppressed to `""` by §12's guard, so nothing streams |
+| End of turn | `assistant_guard_response()` rejects any reply naming a code outside `allowed_codes` (for an attached PSOC 1112 that is `1112` alone — a parent group "111" is already outside it) |
+| The rejection's fallback | `assistant_render_coding_result(packet)` for an attached-context packet is the **empty string** |
+
+So the turn could spend a provider call and append nothing at all: a
+loading indicator, then silence. Two changes close it.
+
+1. **No automatic turn.** Nothing is submitted merely by opening RM.
+2. **A rejection is now said out loud.** Where the guard's fallback is
+   empty, `ASSISTANT_UNVERIFIED_REPLY_TEXT` is appended instead — one plain
+   sentence saying the answer could not be verified from this
+   application's classification data, and pointing at the deterministic
+   search. The guard's *decision* is unchanged: an unauthorised code still
+   never reaches the DOM.
+
+**Starter wording is a routing decision, not a label.** Each action is
+submitted verbatim, so its phrasing picks its route. Every shipped action
+is asserted against the real handler to be `handled = FALSE` — an action
+phrased as the mock's shorthand ("Review with a PSIC code") measures as
+`handled = TRUE`, i.e. RM classifying the button's own sentence. Actions
+are therefore explanation-shaped ("Why…", "Explain…") or plainly
+conversational ("Help me classify a similar occupation.", which routes
+`non_classification` and streams normally).
+
+The action set is chosen from the descriptor's `kind`, and for an entry
+from its `system`: a PSOC record is asked about an occupation, a PSIC
+record about an establishment, and a PSGC or product record about neither.

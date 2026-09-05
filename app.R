@@ -1122,7 +1122,26 @@ server <- function(input, output, session) {
       if (is.null(text) || !nzchar(trimws(text))) return(invisible(NULL))
       packet <- assistant_turn_latest_packet(rm_turn_state)
       guarded <- assistant_guard_response(text, packet)
-      rm_chat$append(guarded$text, role = "assistant")
+
+      # NEVER APPEND SILENCE (UAT2-RM-01).
+      #
+      # The coding-route text guard in assistant_render.R suppresses every
+      # streamed chunk, so this append is the ONLY thing the reader sees on
+      # this route. `assistant_guard_response()` falls back to
+      # `assistant_render_coding_result(packet)` when it rejects a reply,
+      # and for an attached-context packet that rendering is the EMPTY
+      # STRING -- so a rejected explanation used to append nothing at all
+      # and the turn ended with a loading indicator and no answer. That is
+      # the lifecycle browser UAT reported as a hang.
+      #
+      # The guard's decision is untouched: an unauthorised code still never
+      # reaches the DOM. What changes is that the refusal is now SAID.
+      shown <- guarded$text
+      if (is.null(shown) || length(shown) != 1L || is.na(shown) ||
+          !nzchar(trimws(shown))) {
+        shown <- ASSISTANT_UNVERIFIED_REPLY_TEXT
+      }
+      rm_chat$append(shown, role = "assistant")
     })
 
     # New chat. The module's own clear() resets BOTH the visible transcript

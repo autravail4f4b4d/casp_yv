@@ -1258,3 +1258,82 @@ The rules, the precedence order and the limits are in
 `docs/ASSISTANT_CONTRACT.md` §17. The UI's only responsibility is to keep
 the chips and the descriptors in step, which it does through a single
 writer in `rm_sidecar_server()`.
+
+### 23.13 The deterministic contextual starter (UAT2-RM-01)
+
+**Opening RM costs zero provider calls.** A contextual "Ask RM" action
+attaches the chip, opens the panel, and renders a starter block. It does
+not submit anything.
+
+Until UAT Pass 2 the launchers also submitted a turn ("Explain this
+classification entry.") on the reader's behalf. That is removed. **View
+details** already shows the verified definition, tasks and examples, so
+opening RM to be told the same thing spent a provider call nobody asked
+for — and the reply could be suppressed to nothing before it arrived (see
+`ASSISTANT_CONTRACT.md` §17.5).
+
+| Property | Guarantee |
+|---|---|
+| Cost | Rendering the starter makes no provider call and inserts no message into the transcript |
+| Source | Built in R from the newest attached descriptor — its `kind`, and for an entry its `system`. Never from a hard-coded code |
+| Placement | With the chip, not in the transcript: it is not something RM said |
+| Lifetime | Same `reactiveVal` as the chips, so removing the last chip removes the starter and New chat clears both |
+| Actions | Four, on four fixed input ids, so the observer count never grows with the number of records a reader attaches |
+| Submission | A press fills and submits the ordinary composer, so the prompt arrives on `rm_assistant-chat_user_input` exactly as typed text does |
+
+Stable ids added:
+
+| Id | Kind | Purpose |
+|---|---|---|
+| `rm_context_starter` | `uiOutput` | The starter block |
+| `rm_context_starter_1` … `_4` | `actionButton` | One starter action each |
+
+Presentation: `.psa-rm-starter` (block), `.psa-rm-starter-lead` /
+`-record` / `-ask` (the text), `.psa-rm-starter-actions`,
+`.psa-rm-starter-action` (full-width, left-aligned, 40px — 44px at phone
+width). The block carries `role="group"` and an accessible name; every
+action carries its own `aria-label`.
+
+### 23.14 The System control is sized by its text (UAT2-UI-02)
+
+`.selectize-input` holds the rendered `.item` **and** selectize's own 4px
+typing `<input>`. In block flow that input claimed a whole line of its own
+under the item, so the control's height was set by an invisible element and
+the title had only its padding before the border. The control is a **flex
+row**: item and sliver share one line, height follows the text, and one-line
+and two-line titles both keep 10px above and below.
+
+| Property | Contract |
+|---|---|
+| Trigger padding | `padding-block: 10px`; no rule may give it a fixed height |
+| Acronym → subtitle | 4px (`.psa-sys-line { gap }`) |
+| Subtitle | `line-height: 1.3`, `white-space: normal`, `overflow-wrap: anywhere` — wraps, never ellipsises |
+| Dropdown rows | `padding: 9px 12px` on `.psa-sys-opt`, panel `padding: 5px`; rows grow for wrapped names and never clip |
+| Scrolling | Unchanged — `max-height: min(200px, 45vh)` on the panel, never on a row |
+
+**The dropdown rows are `.psa-sys-opt`, not `.option`.** The System control
+uses a custom selectize `render.option`; selectize keeps the renderer's own
+class list and adds only `selected`/`active`, never `option`. Any rule
+written against `.selectize-dropdown .option` is dead for this control —
+that is what left the rows with no padding at all and the vendor default
+painting the keyboard cursor. Style these rows by the class the renderer
+emits.
+
+### 23.15 Decorative icons contribute no accessible text (UAT2-RM-03)
+
+`lucide_icon()` — the only icon factory in this application — emits
+`aria-hidden="true" focusable="false"` on every glyph and no `<title>`, and
+every icon-only control names itself (`aria-label` on the button, not on the
+graphic): **Close the RM Assistant panel**, **Remove attached context: …**,
+**Send message**.
+
+Third-party icons inside the mounted chat are not ours and several ship with
+no `aria-hidden` (`bi-arrow-up-circle-fill`, `bi-stop-circle-fill`,
+`bi-robot`, `bi-x-lg`, the loading dots). An `<svg>` with no role and no
+accessible name is still a node in the accessibility tree, serialised by its
+element name — the literal `svg` that reached accessibility output. The
+sidecar therefore hardens its own subtree at load and on mutation (the chat
+re-renders mid-stream), setting `aria-hidden="true" focusable="false"` on
+any `<svg>` it contains that has **no** name of its own. An `<svg>` carrying
+`aria-label`, `aria-labelledby` or a `<title>` is left untouched, so a
+meaningful graphic can never be hidden by this pass. Nothing visual changes.

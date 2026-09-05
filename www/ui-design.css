@@ -330,6 +330,58 @@
 
 /* ---- Edition rows inside the panel -------------------------------------- */
 
+/* UAT2-UI-01: THE RELEASE LIST IS NORMAL FLOW, NOT A FLEX COLUMN.
+ *
+ * MEASURED ROOT CAUSE, at 1440px with PSGC selected (13 releases), read
+ * off the live DOM rather than inferred:
+ *
+ *   .psa-edition-group .shiny-options-group   display:flex;
+ *                                             flex-direction:column;
+ *                                             max-height:268px; overflow-y:auto
+ *                                             scrollHeight 356px
+ *   .shiny-input-container .radio             min-height:1.5rem  (bootstrap.min.css,
+ *                                             shipped rule, not ours)
+ *
+ * Every release row was therefore a FLEX ITEM with the default
+ * `flex-shrink: 1`, and Bootstrap's explicit `min-height` REPLACED the
+ * automatic content-based minimum size that would otherwise have stopped
+ * it shrinking. With 356px of content in a 268px box the flex algorithm
+ * compressed all thirteen rows to that 24px floor, while each row's
+ * <label> kept its own 40px height (70px on a row that also carries a
+ * group heading) and painted straight across the rows underneath it.
+ * Measured overlaps: row 0 label bottom 567.8 vs row 1 top 523.4
+ * (-44.4px), row 1 label bottom 593.8 vs row 2 top 549.4 (-44.4px),
+ * row 2 label bottom 589.4 vs row 3 top 575.4 (-14.0px).
+ *
+ * That is why the CURRENT heading, the current release, the archived rows
+ * and their badges all sat on top of one another.
+ *
+ * THE FIX IS THE LAYOUT MODE, not a z-index, not a taller row and not a
+ * margin: in normal block flow a row's box IS its content's height by
+ * construction, and the flex shrink algorithm never runs at all. The
+ * scroll behaviour is untouched -- `max-height` and `overflow-y` are
+ * properties of this same box and keep working in block flow, which is
+ * what keeps a 13-release history from running away with the panel. */
+.psa-edition-group .shiny-options-group {
+  display: block;
+}
+
+/* `gap` is a flex/grid property and does nothing in block flow, so the 2px
+   row rhythm ui-filters.css asked for is restated as a margin. */
+.psa-edition-group .shiny-options-group > .radio + .radio {
+  margin-top: 2px;
+}
+
+/* Bootstrap's 24px floor described the row while the row was a shrinkable
+   flex item. It is meaningless now the row is content-sized, and clearing
+   it means no future stylesheet can make the box smaller than the label
+   inside it again. The label keeps the real target size (40px, 44px at
+   phone width). */
+.psa-edition-group .shiny-options-group > .radio {
+  min-height: 0;
+  overflow: visible;
+}
+
 /* Group headers (Current / Archived · N) ride inside the first row of each
    group -- see edition_choice_spec() for why -- and are lifted out of the
    row's flow here so they read as headers rather than as row text. */
@@ -949,6 +1001,73 @@
 .psa-rm-context-remove:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
+}
+
+/* ---- Deterministic contextual starter (UAT2-RM-01) ----------------------
+
+   Opening RM no longer asks the model anything. This block is what the
+   reader sees instead: the record that is attached, and four questions
+   they can choose to spend a provider call on. It is rendered entirely in
+   R from the attached descriptor, so it costs nothing and cannot say
+   anything the application did not retrieve.
+
+   It sits WITH the chip rather than in the transcript on purpose -- it is
+   not something RM said. */
+.psa-rm-starter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-hover-bg);
+}
+
+.psa-rm-starter-lead,
+.psa-rm-starter-ask {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-body);
+}
+
+.psa-rm-starter-record { font-weight: var(--weight-semibold); color: var(--ui-text); }
+
+.psa-rm-starter-ask { color: var(--ui-text-muted); }
+
+.psa-rm-starter-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Full width and left-aligned: these are questions to read, not chips to
+   scan, and several of them wrap to two lines inside a 440px panel. */
+.psa-rm-starter-action {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  text-align: left;
+  border-radius: var(--lumora-radius-card-sm);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ui-text);
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.psa-rm-starter-action:hover { background: var(--ui-hover-bg); }
+
+.psa-rm-starter-action:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767.98px) {
+  .psa-rm-starter-action { min-height: 44px; }
 }
 
 /* ---- Breakpoint 1: >= 1464 — DOCKED, NON-MODAL --------------------------

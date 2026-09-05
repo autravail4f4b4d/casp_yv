@@ -34,26 +34,61 @@
    widths and the page still cannot be pushed sideways (min-width: 0 plus
    overflow-wrap do that job together). */
 .psa-system-field .selectize-input,
-.psa-system-field .selectize-dropdown-content .option {
+.psa-system-field .selectize-dropdown-content .psa-sys-opt {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
   height: auto;
 }
 
+/* UAT2-UI-02: THE SELECTED CONTROL IS A ROW, NOT A STACK.
+ *
+ * MEASURED ROOT CAUSE (1440px, live DOM). `.selectize-input` is an
+ * `inline-block` holding TWO children: the rendered `.item`, and
+ * selectize's own 4px-wide typing `<input>`. In block flow that input
+ * takes a whole line OF ITS OWN, directly under the item:
+ *
+ *   PSGC   item  top 8 -> bottom 40.7 | input top 40.7 -> bottom 59.5
+ *          clientHeight 47, scrollHeight 58   (the input overflows by 11px)
+ *   PSOC   item  top 8 -> bottom 55.7 | input top 55.7 -> bottom 74.4
+ *          clientHeight 62, scrollHeight 73
+ *
+ * So the box was sized by an invisible input rather than by its text, and
+ * the 7px `padding-block` was all the room the title ever got before the
+ * border -- which is the "sits too close to the bottom edge" report.
+ *
+ * Laying the control out as a flex ROW puts the item and the 4px input on
+ * one line, so the height is content-driven (one-line and two-line titles
+ * both fit with the same breathing room) and the padding is real space
+ * under the text instead of being spent on a phantom line. */
 .psa-system-field .selectize-input {
-  padding-block: 7px;
-  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 10px;
+  line-height: 1.3;
 }
 
 .psa-system-field .selectize-input > .item {
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 100%;
 }
 
+/* Selectize measures and resizes this sliver itself; it only ever needed
+   to stop claiming a line. */
+.psa-system-field .selectize-input > input {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* UAT2-UI-02: 4px, measured. The acronym and its title were 1px apart --
+   close enough to read as one wrapped line rather than as a label and its
+   subtitle. */
 .psa-sys-line {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
 }
@@ -82,13 +117,55 @@
   font-size: 11.5px;
 }
 
-.psa-system-field .selectize-dropdown-content .option {
-  padding-block: 8px;
+/* UAT2-UI-02: THE DROPDOWN ROWS NEVER HAD ANY PADDING.
+ *
+ * MEASURED ROOT CAUSE. The System control uses a custom selectize
+ * `render.option`, and the element that renderer returns is the row --
+ * selectize keeps the renderer's own class list and adds only
+ * `selected`/`active`. It never adds `option`. So EVERY rule in this
+ * application written against `.selectize-dropdown .option` (padding,
+ * radius, hover, keyboard-cursor and selected backgrounds, in both
+ * app.css and this file) matched nothing for this control.
+ *
+ * Live measurement of all ten rows before the fix: `padding: 0px`, no
+ * `option` class, text 1px from the panel's inner edge, and 0px between
+ * adjacent rows -- the rows were touching each other and the panel wall.
+ * The visible highlight was selectize's own vendor default, rgb(17,17,17),
+ * which is all but invisible on this surface.
+ *
+ * The rules are therefore re-pointed at the class the renderer actually
+ * emits. Nothing about ordering, ids or selection behaviour moves. */
+.psa-system-field .selectize-dropdown-content .psa-sys-opt {
+  padding: 9px 12px;
   border-bottom: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
-.psa-system-field .selectize-dropdown-content .option.active .psa-sys-title {
+.psa-system-field .selectize-dropdown-content .psa-sys-opt:hover,
+.psa-system-field .selectize-dropdown-content .psa-sys-opt.active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-text);
+}
+
+/* Selectize marks the CURRENT value `.selected`; it stays distinguishable
+   from the keyboard-cursor row rather than the two flooding together. */
+.psa-system-field .selectize-dropdown-content .psa-sys-opt.selected {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.psa-system-field .selectize-dropdown-content .psa-sys-opt.selected.active {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.psa-system-field .selectize-dropdown-content .psa-sys-opt.active .psa-sys-title {
   color: inherit;
+}
+
+/* The panel's own side walls, so a padded row still has a gutter rather
+   than starting flush against the border. */
+.psa-system-field .selectize-dropdown .selectize-dropdown-content {
+  padding: 5px;
 }
 
 /* ---- PSGC / edition release list ---------------------------------------- */

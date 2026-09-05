@@ -67,15 +67,32 @@ test_that("the automatic turn goes through the ordinary composer", {
   expect_false(grepl("assistant_handle_turn", .r_code_only_uat(src), fixed = TRUE))
 })
 
-test_that("all three contextual actions attach AND ask", {
+test_that("all three contextual actions attach AND present the panel", {
+  # SUPERSEDED BY UAT2-RM-01, deliberately rewritten rather than deleted.
+  #
+  # Pass 1 required each launcher to end in `ask(RM_INTENT_*)` -- attach,
+  # open, and submit a turn automatically. UAT Pass 2 measured what that
+  # automatic turn actually did (see tests/testthat/test-uat2-high-repair.R
+  # for the reproduction) and removed it: **View details** already shows
+  # the verified definition, so opening RM to be told the same thing spends
+  # a provider call the reader did not ask for, and the reply could be
+  # suppressed to nothing before it reached them.
+  #
+  # What Pass 1 was really pinning survives unchanged: a launcher must not
+  # attach a chip and then leave the panel shut and silent. It now ends in
+  # `present()`, and the deterministic starter carries the offer.
   src <- .read_file("R", "ui", "ui_sidecar.R")
-  # Each observer ends in ask(), not merely in an attach + open.
+  code <- .r_code_only_uat(src)
+
   for (intent in c("ask(RM_INTENT_ENTRY)", "ask(RM_INTENT_CORRESPONDENCE)",
                    "ask(RM_INTENT_CODING_PAIR)")) {
-    expect_true(grepl(intent, src, fixed = TRUE), info = intent)
+    expect_false(grepl(intent, code, fixed = TRUE), info = intent)
   }
-  # The panel is opened by the same helper, so no action can ask without
-  # showing the answer arriving.
+  # Three launchers, three calls. (The helper's own definition reads
+  # `present <- function()`, so it is not one of these matches.)
+  expect_equal(length(gregexpr("present()", code, fixed = TRUE)[[1]]), 3L)
+  # The panel is still opened by the same helper, so no action can attach
+  # a chip without showing the reader where it landed.
   expect_true(grepl("rm_sidecar_open(session)", src, fixed = TRUE))
 })
 

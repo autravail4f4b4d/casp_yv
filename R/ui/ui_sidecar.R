@@ -65,6 +65,8 @@
 #   rm_ask_button_ui(id, label, ...)          client-side launcher
 #   rm_context_button_ui(input_id, label, ..) contextual launcher (Shiny)
 #   rm_context_chip_ui(items)                 attached-context chips
+#   rm_context_starter_actions(descriptor)    the prompts one context offers
+#   rm_context_starter_ui(items)              deterministic contextual starter
 #   rm_sidecar_open(session)                  open it from the server
 #   rm_sidecar_server(input, output, session, ...)
 #
@@ -73,26 +75,34 @@
 #   rm-sidecar-title    its accessible name
 #
 # Stable Shiny ids added here:
-#   rm_context_remove   JS input — key of a chip the user dismissed
-#   rm_attached_context uiOutput — the chip row
+#   rm_context_remove       JS input — key of a chip the user dismissed
+#   rm_attached_context     uiOutput — the chip row
+#   rm_context_starter      uiOutput — the deterministic starter block
+#   rm_context_starter_1..4 actionButton — one starter action each
 
 
-# THE AUTOMATIC CONTEXTUAL TURNS (UAT-RM-01).
+# THE CONTEXTUAL TURNS (UAT-RM-01, revised by UAT2-RM-01).
 #
 # One per contextual action, and referential by construction: each opens
-# with "Explain"/"Review this", which is what `assistant_explanation_
-# requested()` recognises, so `assistant_handle_turn()` resolves it against
-# the record just attached instead of trying to code the sentence itself.
+# with "Explain"/"Why", which is what `assistant_explanation_requested()`
+# recognises, so `assistant_handle_turn()` resolves it against the record
+# just attached instead of trying to code the sentence itself.
 #
 # They are written as the user's own question because that is exactly what
 # they become: the text is submitted through the ordinary composer and
 # appears in the transcript as the user's turn.
 # Each string is checked against that detector by test, because a wording
-# it does not recognise would silently route the automatic turn into the
-# CODING path -- classifying the sentence instead of answering about the
-# record. "Review this coding pair." is not recognised and is therefore not
-# used; the coding-pair intent opens with "Explain" and carries the review
+# it does not recognise would silently route the turn into the CODING
+# path -- classifying the sentence instead of answering about the record.
+# "Review this coding pair." is not recognised and is therefore not used;
+# the coding-pair intent opens with "Explain" and carries the review
 # instruction after it, rather than widening the detector for one button.
+#
+# WHAT CHANGED IN UAT2. These strings are NO LONGER SUBMITTED
+# AUTOMATICALLY when the panel opens. They are the first action of the
+# deterministic starter below, and reach the provider only when the reader
+# presses one. See `rm_context_starter_actions()` for why, and for why
+# every other starter wording is explanation-shaped too.
 RM_INTENT_ENTRY <- "Explain this classification entry."
 RM_INTENT_CORRESPONDENCE <- "Explain this relationship."
 RM_INTENT_CODING_PAIR <-
@@ -106,6 +116,13 @@ RM_SIDECAR_ID <- "rm-sidecar"
 RM_SIDECAR_TITLE_ID <- "rm-sidecar-title"
 RM_CONTEXT_OUTPUT <- "rm_attached_context"
 RM_CONTEXT_REMOVE <- "rm_context_remove"
+
+# The deterministic contextual starter (UAT2-RM-01). A FIXED number of
+# stable input ids, so pressing "Ask RM" on a hundred records still creates
+# exactly four observers for the life of the session -- no observer is ever
+# built per attached record.
+RM_STARTER_OUTPUT <- "rm_context_starter"
+RM_STARTER_INPUTS <- paste0("rm_context_starter_", 1:4)
 
 # The docked breakpoint. Kept in one place because BOTH the stylesheet and
 # the ARIA switch below have to agree on it; they are asserted against each
@@ -274,8 +291,79 @@ RM_SIDECAR_DOCKED_MIN_PX <- RM_SIDECAR_MIN_WORKSPACE_PX + RM_SIDECAR_WIDTH_PX
     Shiny.addCustomMessageHandler("psa-rm-open", function (_msg) { open(null); });
   }
 
-  if (document.readyState !== "loading") { syncSemantics(); }
-  else { document.addEventListener("DOMContentLoaded", syncSemantics); }
+  // ---- Decorative-SVG hardening (UAT2-RM-03) ---------------------------
+  //
+  // THE DEFECT, read off the live DOM rather than inferred. This
+  // application\'s own icons are already correct: lucide_icon() emits
+  // aria-hidden="true" focusable="false" on every glyph, and each one sits
+  // inside a control that carries its own aria-label. The icons that leak
+  // are SHINYCHAT\'S, shipped inside the chat element we mount:
+  //
+  //   bi-arrow-up-circle-fill   Send message      no aria-hidden
+  //   bi-stop-circle-fill       Cancel/stop       no aria-hidden
+  //   bi-robot                  assistant message no aria-hidden
+  //   bi-x-lg                   close             no aria-hidden
+  //   <svg viewBox="0 0 100 100">  loading dots   no aria-hidden
+  //
+  // An <svg> with no role and no accessible name is still a node in the
+  // accessibility tree, and it is serialised by its element name -- which
+  // is the literal "svg" that reached copied/accessibility output. Every
+  // one of them is decorative: the button around it already has a name.
+  //
+  // shinychat exposes no option for this and we do not fork it, so the
+  // panel hardens its own subtree. It is deliberately CONSERVATIVE: an
+  // <svg> that carries its own accessible name (aria-label,
+  // aria-labelledby, role="img" plus a <title>) is left completely alone,
+  // so a meaningful graphic can never be hidden by this pass. Nothing
+  // visual changes -- aria-hidden and focusable have no rendering effect.
+  function named(svg) {
+    return svg.hasAttribute("aria-label") ||
+           svg.hasAttribute("aria-labelledby") ||
+           !!svg.querySelector("title");
+  }
+
+  function hideDecorativeIcons(root) {
+    if (!root || !root.querySelectorAll) { return; }
+    var svgs = root.querySelectorAll("svg");
+    Array.prototype.forEach.call(svgs, function (s) {
+      if (named(s)) { return; }
+      if (s.getAttribute("aria-hidden") !== "true") {
+        s.setAttribute("aria-hidden", "true");
+      }
+      if (s.getAttribute("focusable") !== "false") {
+        s.setAttribute("focusable", "false");
+      }
+    });
+  }
+
+  // The chat re-renders as it streams -- the stop button replaces the send
+  // button, assistant messages arrive with their own icon -- so one pass at
+  // load would harden only what exists at load.
+  function watchIcons() {
+    var p = panel();
+    if (!p) { return; }
+    hideDecorativeIcons(p);
+    if (!window.MutationObserver) { return; }
+    new MutationObserver(function (records) {
+      for (var i = 0; i < records.length; i++) {
+        var added = records[i].addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          var n = added[j];
+          if (n.nodeType !== 1) { continue; }
+          if (n.tagName && n.tagName.toLowerCase() === "svg") {
+            hideDecorativeIcons(n.parentNode || p);
+          } else {
+            hideDecorativeIcons(n);
+          }
+        }
+      }
+    }).observe(p, {childList: true, subtree: true});
+  }
+
+  function init() { syncSemantics(); watchIcons(); }
+
+  if (document.readyState !== "loading") { init(); }
+  else { document.addEventListener("DOMContentLoaded", init); }
 })();
 '
 
@@ -384,6 +472,152 @@ rm_context_chip_ui <- function(items) {
 }
 
 
+# ---- The deterministic contextual starter (UAT2-RM-01) ---------------------
+#
+# WHAT THIS REPLACES.
+#
+# "Ask RM about this entry" used to attach the record, open the panel and
+# then SUBMIT "Explain this classification entry." on the reader's behalf.
+# Browser UAT saw the loading indicator appear and no reply arrive, and the
+# lifecycle behind that is reproducible with no provider at all:
+#
+#   assistant_handle_turn("Explain this classification entry.", state)
+#     -> handled = FALSE, route = "contextual_coding", render = NA
+#   the ContentText override (assistant_render.R) suppresses EVERY streamed
+#     chunk on that route, so nothing renders while the turn runs
+#   app.R's rm_chat$last_turn() observer then guards the assembled text --
+#     and `assistant_render_coding_result()` for an attached-context packet
+#     is the EMPTY STRING, so a reply naming any code outside allowed_codes
+#     (a parent group, a related PSIC) was replaced by nothing at all.
+#
+# So the automatic first turn could spend a provider call and produce no
+# visible output whatsoever. The product answer is not to make that turn
+# louder: **View details** already shows the verified definition, tasks and
+# examples, so opening RM to be told the same thing is a provider call the
+# reader did not ask for. Opening RM now costs ZERO provider calls, and the
+# reader chooses what to ask.
+#
+# WHY EVERY ACTION IS PHRASED THE WAY IT IS.
+#
+# Each prompt is submitted verbatim through the ordinary composer, so its
+# wording decides its ROUTE. Measured against `assistant_handle_turn()`
+# with a record attached:
+#
+#   "Why might an occupation fit here?"       explanation -> answers ABOUT
+#   "Explain how this compares with ..."      explanation    the record
+#   "Help me classify a similar occupation."  non_classification -> RM asks
+#                                             for a description, streams
+#                                             normally
+#   "Review with a PSIC code"                 CODING (handled = TRUE) --
+#                                             REJECTED, because it makes RM
+#                                             classify the button's own
+#                                             sentence
+#
+# That last line is why the actions are not the mock's shorthand labels:
+# a starter that reads well but routes into the coding path would answer a
+# question nobody asked. The wording is asserted against the detector by
+# test rather than trusted.
+
+#' The four actions offered for one attached context.
+#'
+#' Built from the DESCRIPTOR's kind (and, for an entry, its system), never
+#' from a hard-coded code and never from the chip's display text.
+#'
+#' @param descriptor One `assistant_context_descriptor_*()` list.
+#' @return character vector of prompts, submitted verbatim.
+rm_context_starter_actions <- function(descriptor) {
+  kind <- descriptor$kind %||% "entry"
+  if (identical(kind, "correspondence")) {
+    return(c(
+      RM_INTENT_CORRESPONDENCE,
+      "Why did this category change between editions?",
+      "Explain what this means for a time series.",
+      "Explain how confident this correspondence is."
+    ))
+  }
+  if (identical(kind, "coding_pair")) {
+    return(c(
+      RM_INTENT_CODING_PAIR,
+      "Why are the occupation and the industry coded separately?",
+      "Explain whether these two belong together.",
+      "Help me code a similar case."
+    ))
+  }
+  system <- tolower(descriptor$system %||% "")
+  if (identical(system, "psoc")) {
+    return(c(
+      "Why might an occupation fit here?",
+      "Explain how this compares with another PSOC code.",
+      "Help me classify a similar occupation.",
+      "Explain how a PSIC code would apply here."
+    ))
+  }
+  if (identical(system, "psic")) {
+    return(c(
+      "Why might an establishment fit here?",
+      "Explain how this compares with another PSIC code.",
+      "Help me classify a similar business activity.",
+      "Explain how a PSOC code would apply here."
+    ))
+  }
+  # Every other registry system (PSGC, PSCED, PCOICOP, PCPC, PSCCS, ...).
+  # Deliberately says nothing about occupations or establishments.
+  c(
+    RM_INTENT_ENTRY,
+    "Why would a record be coded here?",
+    "Explain where this sits in the hierarchy.",
+    "Explain what this level covers."
+  )
+}
+
+#' The starter block itself. Deterministic; no provider call to render it.
+#'
+#' Rendered from the NEWEST attachment, which is the record the reader last
+#' pressed "Ask RM" from. Returns NULL when nothing is attached, so removing
+#' the last chip removes the starter with it.
+#'
+#' The buttons are ordinary `actionButton`s on four fixed ids. Pressing one
+#' submits its prompt through `shinychat::update_chat_user_input()` -- the
+#' same composer, the same `rm_assistant-chat_user_input` input and the same
+#' `assistant_handle_turn()` as anything typed by hand. There is no second
+#' execution path here and no message is written into the transcript by this
+#' file.
+#'
+#' @param items The attached-context list, key -> list(label=, descriptor=).
+rm_context_starter_ui <- function(items) {
+  if (is.null(items) || length(items) == 0L) {
+    return(NULL)
+  }
+  it <- items[[length(items)]]
+  actions <- rm_context_starter_actions(it$descriptor)
+
+  shiny::tags$div(
+    class = "psa-rm-starter",
+    role = "group",
+    `aria-label` = "Suggested questions about the attached record",
+    shiny::tags$p(
+      class = "psa-rm-starter-lead",
+      # The chip's own text, so the starter can never name a record the
+      # chip does not show.
+      shiny::tags$span(class = "psa-rm-starter-record", it$label),
+      " is attached."
+    ),
+    shiny::tags$p(class = "psa-rm-starter-ask", "What would you like help with?"),
+    shiny::tags$div(
+      class = "psa-rm-starter-actions",
+      lapply(seq_along(actions), function(i) {
+        shiny::actionButton(
+          RM_STARTER_INPUTS[[i]],
+          label = actions[[i]],
+          class = "psa-rm-starter-action",
+          `aria-label` = paste("Ask RM:", actions[[i]])
+        )
+      })
+    )
+  )
+}
+
+
 # ---- The panel -------------------------------------------------------------
 
 #' The assistant panel itself.
@@ -444,7 +678,11 @@ rm_sidecar_ui <- function(status = NULL) {
       if (available) {
         shiny::tags$div(
           class = "psa-rm-context",
-          shiny::uiOutput(RM_CONTEXT_OUTPUT)
+          shiny::uiOutput(RM_CONTEXT_OUTPUT),
+          # The deterministic starter sits with the chip it describes, not
+          # in the transcript: it is not something RM said, and nothing in
+          # it has cost a provider call.
+          shiny::uiOutput(RM_STARTER_OUTPUT)
         )
       },
 
@@ -533,11 +771,14 @@ rm_sidecar_server <- function(input, output, session,
     sync_turn_state(cur)
   }
 
-  # --- "Ask RM" actually asks (UAT-RM-01) ---------------------------------
+  # --- Opening RM, and asking it something (UAT-RM-01 / UAT2-RM-01) -------
   #
-  # Attaching a chip and stopping was the defect: the user pressed a button
-  # named "Ask RM" and RM said nothing. The action now attaches, opens the
-  # panel, and initiates EXACTLY ONE contextual turn.
+  # THE TWO ARE NOW SEPARATE ACTIONS.
+  #
+  # `present()` is what a contextual launcher does: attach the verified
+  # record, show the panel, and render the deterministic starter. It makes
+  # NO provider call. `ask()` is what a starter button does: submit one
+  # prompt, once.
   #
   # THE TURN GOES THROUGH THE ORDINARY COMPOSER, deliberately.
   # `shinychat::update_chat_user_input(submit = TRUE)` fills and submits the
@@ -548,10 +789,11 @@ rm_sidecar_server <- function(input, output, session,
   # transcript. Appending a synthesised exchange instead would have been a
   # second assistant path, which is the thing this design most needs not to
   # have.
-  #
-  # The wording is referential on purpose ("Explain this ..."): that is what
-  # `assistant_explanation_requested()` recognises, so the bridge resolves
-  # it against the record just attached rather than coding the sentence.
+  present <- function() {
+    rm_sidecar_open(session)
+    invisible(NULL)
+  }
+
   ask <- function(prompt) {
     shiny::req(is.character(prompt), nzchar(prompt))
     rm_sidecar_open(session)
@@ -573,6 +815,29 @@ rm_sidecar_server <- function(input, output, session,
     rm_context_chip_ui(attached())
   })
   shiny::outputOptions(output, RM_CONTEXT_OUTPUT, suspendWhenHidden = FALSE)
+
+  # The deterministic starter. Same single source of truth as the chips, so
+  # it appears, changes and disappears exactly with them -- removing the
+  # last chip removes the starter, and New chat clears both.
+  output[[RM_STARTER_OUTPUT]] <- shiny::renderUI({
+    rm_context_starter_ui(attached())
+  })
+  shiny::outputOptions(output, RM_STARTER_OUTPUT, suspendWhenHidden = FALSE)
+
+  # FOUR observers, created once. Each resolves its prompt at CLICK time
+  # from whatever is attached then, so the buttons follow the newest record
+  # without any observer being rebuilt. `ask()` is the only thing they do:
+  # one composer submission, one provider call, no local branch that could
+  # answer instead.
+  lapply(seq_along(RM_STARTER_INPUTS), function(i) {
+    shiny::observeEvent(input[[RM_STARTER_INPUTS[[i]]]], {
+      items <- attached()
+      shiny::req(length(items) > 0L)
+      actions <- rm_context_starter_actions(items[[length(items)]]$descriptor)
+      shiny::req(length(actions) >= i)
+      ask(actions[[i]])
+    })
+  })
 
   shiny::observeEvent(input[[RM_CONTEXT_REMOVE]], {
     key <- input[[RM_CONTEXT_REMOVE]]$key
@@ -611,7 +876,7 @@ rm_sidecar_server <- function(input, output, session,
           system = entry$system, version = entry$version, code = entry$code
         )
       )
-      ask(RM_INTENT_ENTRY)
+      present()
     })
   }
 
@@ -638,7 +903,7 @@ rm_sidecar_server <- function(input, output, session,
           to_version = ctx$to_version, to_code = ctx$to_code
         )
       )
-      ask(RM_INTENT_CORRESPONDENCE)
+      present()
     })
   }
 
@@ -665,7 +930,7 @@ rm_sidecar_server <- function(input, output, session,
           psic_version = ind$version, psic_code = ind$code
         )
       )
-      ask(RM_INTENT_CODING_PAIR)
+      present()
     })
   }
 
